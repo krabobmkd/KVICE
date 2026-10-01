@@ -109,6 +109,24 @@ void vsyncarch_postsync(void)
         last_slept = slept;
     }
 #endif
+#ifdef VICE_AMIGA_DIV64_STATS
+    {
+        /* 64 bit division counters (amiga_div64.c), every 250 frames */
+        extern void amiga_div64_report(uint32_t elapsed_us);
+        static unsigned int div64_frames = 0;
+        static tick_t div64_last = 0;
+
+        if (++div64_frames >= 250) {
+            tick_t now = tick_now();
+
+            if (div64_last != 0) {
+                amiga_div64_report((uint32_t)(now - div64_last));
+            }
+            div64_last = now;
+            div64_frames = 0;
+        }
+    }
+#endif
     /* this function is called once a frame, so this
        handles single frame advance */
     if (pause_pending) {
