@@ -280,6 +280,33 @@ static tick_t sync_target_tick;
 
 static int timer_speed = 0;
 static bool sync_reset = true;
+
+#ifdef AMIGA_COMPILE
+/* An Amiga too slow for the emulated machine falls behind every second: one
+ * log line each time means a write to the log file each second. The first
+ * ones are logged, then a count at most once a minute. */
+static int amiga_sync_behind_log_allowed(void)
+{
+    static unsigned int logged = 0;
+    static unsigned int hidden = 0;
+    static tick_t last = 0;
+    tick_t now = tick_now();
+
+    if (logged < 3) {
+        logged++;
+        last = now;
+        return 1;
+    }
+    hidden++;
+    if (now - last >= 60 * tick_per_second()) {
+        log_warning(LOG_DEFAULT, "Sync fell behind %u more times in the last minute: "
+                    "the emulation is too slow for this Amiga.", hidden);
+        hidden = 0;
+        last = now;
+    }
+    return 0;
+}
+#endif
 static bool metrics_reset = false;
 
 /* Initialize vsync timers and set relative speed of emulation in percent. */
@@ -526,7 +553,11 @@ void vsync_do_end_of_line(void)
     tick_now = tick_now_after(last_sync_tick);
 
     if (sync_reset) {
+#ifndef AMIGA_COMPILE
+        /* Amiga: also happens at each menu use, window move, fullscreen
+         * switch... a log write each time for nothing */
         log_message(vsync_log, "Sync reset");
+#endif
         sync_reset = false;
         metrics_reset = true;
 
@@ -588,6 +619,9 @@ void vsync_do_end_of_line(void)
 
                 mainlock_yield();
 
+#ifdef AMIGA_COMPILE
+                if (amiga_sync_behind_log_allowed())
+#endif
                 log_warning(LOG_DEFAULT, "Sync is %.3f ms behind", (double)TICK_TO_MICRO((tick_t)0 - ticks_until_target) / 1000);
                 sync_reset = true;
             } else {

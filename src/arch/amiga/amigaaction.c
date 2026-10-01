@@ -218,7 +218,7 @@ static BOOL Action_Quit(void)
 /* ------------------------------------------------------------------------- */
 /* Display menu */
 
-/* unchecking "Window" goes fullscreen, like F10 */
+/* unchecking "Window" goes fullscreen (Amiga+F) */
 static BOOL Action_DisplayWindow(void)
 {
     amiga_video_set_fullscreen(!amiga_video_is_fullscreen());

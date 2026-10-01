@@ -114,7 +114,7 @@ static int window_geometry_changed = 0;
 static struct Screen *fs_screen = NULL;
 static UWORD *fs_pointer = NULL;        /* blank mouse pointer, chip RAM */
 static int fullscreen = 0;
-/* switch asked by F10, a menu or a setting, done between IDCMP rounds:
+/* switch asked by Amiga+F, a menu or a setting, done between IDCMP rounds:
  * -1 nothing, 0 window, 1 fullscreen */
 static int fullscreen_request = -1;
 static int fullscreen_reopen = 0;       /* screen mode setting changed */
@@ -906,7 +906,7 @@ static void amiga_process_fullscreen_request(void)
 }
 
 /** \brief  Ask a switch between window and fullscreen, done at the next
- *          event round (F10, Display menu)
+ *          event round (Amiga+F, Display menu)
  */
 void amiga_video_set_fullscreen(int on)
 {
@@ -920,7 +920,7 @@ int amiga_video_is_fullscreen(void)
 
 /* rawkey codes */
 #define AMIGA_RAWKEY_F9 0x58
-#define AMIGA_RAWKEY_F10 0x59
+#define AMIGA_RAWKEY_F 0x23
 
 /** \brief  Signal mask of the emulator window IDCMP port, 0 if no window
  */
@@ -1055,8 +1055,10 @@ void amiga_video_handle_events(void)
                     }
                     break;
                 }
-                /* F10: window <-> fullscreen */
-                if ((code & 0x7f) == AMIGA_RAWKEY_F10) {
+                /* Amiga+F: window <-> fullscreen. In the window it comes as
+                 * the menu shortcut, the fullscreen window has no menu. */
+                if ((code & 0x7f) == AMIGA_RAWKEY_F
+                        && (qualifier & (IEQUALIFIER_LCOMMAND | IEQUALIFIER_RCOMMAND))) {
                     if (!(code & IECODE_UP_PREFIX)) {
                         fullscreen_request = !fullscreen;
                     }

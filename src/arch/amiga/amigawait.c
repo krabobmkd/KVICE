@@ -134,6 +134,15 @@ ULONG amiga_wait_vblank_count(void)
  *
  * \param[in]   deadline    E-clock based tick (see archdep_tick.c)
  */
+/* CTRL-C from the Shell: quit like the close gadget, VICE shutdown and all */
+static void amiga_check_ctrl_c(ULONG sigs)
+{
+    if (sigs & SIGBREAKF_CTRL_C) {
+        AMIGA_TRACE(("CTRL-C"));
+        archdep_vice_exit(0);
+    }
+}
+
 void amiga_wait_until(tick_t deadline)
 {
     ULONG ui_mask;
@@ -156,27 +165,39 @@ void amiga_wait_until(tick_t deadline)
         if (sigs & mui_mask) {
             amiga_mui_handle_events();
         }
-        if (sigs & SIGBREAKF_CTRL_C) {
-            AMIGA_TRACE(("CTRL-C"));
-            archdep_vice_exit(0);
-        }
+        amiga_check_ctrl_c(sigs);
     }
+}
+
+/** \brief  libnix CTRL-C check, replaced by an empty one
+ *
+ * libnix calls it in every read() and write() (printf, log lines): it would
+ * eat the CTRL-C signal and raise(SIGINT), an exit without the VICE
+ * shutdown. CTRL-C is handled by the main loop instead (see below).
+ */
+void __chkabort(void)
+{
 }
 
 /** \brief  Per frame UI polling, for when the emulation never waits
  *
  * When nothing happened: one GetMsg() on the emulator window port (empty),
- * one SetSignal() for MUI, which is only called when one of its signals is
- * set (never when its window is closed: its mask is 0 then).
+ * one SetSignal() for CTRL-C and MUI. A too slow emulation never sleeps in
+ * Wait(): CTRL-C must be seen here too.
  */
 void amiga_wait_poll_events(void)
 {
     ULONG mui_mask;
+    ULONG sigs;
 
     amiga_video_handle_events();
 
+    /* clears CTRL-C, returns the signals as they were */
+    sigs = SetSignal(0, SIGBREAKF_CTRL_C);
+    amiga_check_ctrl_c(sigs);
+
     mui_mask = amiga_mui_signal_mask();
-    if (mui_mask != 0 && (SetSignal(0, 0) & mui_mask) != 0) {
+    if (mui_mask != 0 && (sigs & mui_mask) != 0) {
         amiga_mui_handle_events();
     }
 }
@@ -203,8 +224,5 @@ void amiga_wait_events(void)
     if (sigs & mui_mask) {
         amiga_mui_handle_events();
     }
-    if (sigs & SIGBREAKF_CTRL_C) {
-        AMIGA_TRACE(("CTRL-C"));
-        archdep_vice_exit(0);
-    }
+    amiga_check_ctrl_c(sigs);
 }
