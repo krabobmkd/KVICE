@@ -408,7 +408,13 @@ static resource_int_t resources_int_basicload_pet[] = {
 static resource_int_t resources_int[] = {
     { "AutostartRunWithColon", 0, RES_EVENT_NO, (resource_value_t)1,
       &AutostartRunWithColon, set_autostart_run_with_colon, NULL },
+#ifdef AMIGA_COMPILE
+    /* on: the virtual drive loads, true drive emulation is only restored for
+     * the program. A real speed 1541 load is far too long on most Amigas. */
+    { "AutostartHandleTrueDriveEmulation", 1, RES_EVENT_NO, (resource_value_t)0,
+#else
     { "AutostartHandleTrueDriveEmulation", 0, RES_EVENT_NO, (resource_value_t)0,
+#endif
       &AutostartHandleTrueDriveEmulation, set_autostart_handle_tde, NULL },
     { "AutostartWarp", 1, RES_EVENT_NO, (resource_value_t)0,
       &AutostartWarp, set_autostart_warp, NULL },

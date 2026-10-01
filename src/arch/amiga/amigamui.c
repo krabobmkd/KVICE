@@ -368,6 +368,7 @@ static void build_settings(void)
     setting_add_entry(s, "2000", DRIVE_TYPE_2000);
     setting_add_entry(s, "4000", DRIVE_TYPE_4000);
     new_setting(PAGE_DRIVE8, BIND_CHECK, "Drive8TrueEmulation", MSG_DRIVE_TRUE_EMULATION);
+    new_setting(PAGE_DRIVE8, BIND_CHECK, "AutostartHandleTrueDriveEmulation", MSG_AUTOSTART_FAST_LOAD);
     /* drawer before the switch: applied in this order on Use */
     drawer_setting = new_setting(PAGE_DRIVE8, BIND_DRAWER, "FSDevice8Dir", MSG_DRIVE8_DRAWER);
     s = new_setting(PAGE_DRIVE8, BIND_CHECK, NULL, MSG_DRIVE8_USE_DRAWER);
