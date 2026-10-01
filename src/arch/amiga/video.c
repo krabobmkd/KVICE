@@ -43,6 +43,7 @@
 #include <proto/exec.h>
 #include <proto/intuition.h>
 #include <proto/graphics.h>
+#include <proto/layers.h>
 #include <proto/cybergraphics.h>
 #include <graphics/view.h>
 #include <graphics/gfxbase.h>
@@ -1206,6 +1207,79 @@ void video_canvas_destroy(struct video_canvas_s *canvas)
  * converts it with the palette table, on native screens it is remapped to
  * pens. No VICE renderer involved either way.
  */
+/* draw a dirty rectangle (draw buffer coordinates) in the drawing area */
+static void amiga_draw_rect(const draw_buffer_t *db, unsigned int xs, unsigned int ys,
+                            unsigned int w, unsigned int h)
+{
+    /* dirty rectangle (draw buffer coordinates) inside the shown area */
+    int sx0 = (int)xs;
+    int sy0 = (int)ys;
+    int sx1 = (int)(xs + w);
+    int sy1 = (int)(ys + h);
+    int bw = (int)base_width;
+    int bh = (int)base_height;
+    int bl = draw_x;
+    int bt = draw_y;
+    int rx0, ry0, rx1, ry1;
+
+    if (sx0 < crop_x) {
+        sx0 = crop_x;
+    }
+    if (sy0 < crop_y) {
+        sy0 = crop_y;
+    }
+    if (sx1 > crop_x + bw) {
+        sx1 = crop_x + bw;
+    }
+    if (sy1 > crop_y + bh) {
+        sy1 = crop_y + bh;
+    }
+    if (sx0 >= sx1 || sy0 >= sy1 || bw <= 0 || bh <= 0) {
+        return;
+    }
+    /* relative to the shown area */
+    rx0 = sx0 - crop_x;
+    ry0 = sy0 - crop_y;
+    rx1 = sx1 - crop_x;
+    ry1 = sy1 - crop_y;
+
+    if (use_cgxscale || use_planarscale) {
+        int dw = (int)draw_width;
+        int dh = (int)draw_height;
+
+        /* shown area -> whole window inner area, dirty part only */
+        (use_cgxscale ? cgxscale_draw : planarscale_draw)(
+                      draw_rp, db->draw_buffer, db->draw_buffer_pitch,
+                      crop_x, crop_y, bw, bh,
+                      bl, bt, dw, dh,
+                      bl + rx0 * dw / bw,
+                      bt + ry0 * dh / bh,
+                      bl + (rx1 * dw + bw - 1) / bw,
+                      bt + (ry1 * dh + bh - 1) / bh);
+        return;
+    }
+    if (!use_rtg) {
+        /* no drawing route (OS 3.0 without cybergraphics) */
+        return;
+    }
+
+    /* 1x routes: clip to the window */
+    if (rx0 >= (int)draw_width || ry0 >= (int)draw_height) {
+        return;
+    }
+    if (rx1 > (int)draw_width) {
+        rx1 = (int)draw_width;
+    }
+    if (ry1 > (int)draw_height) {
+        ry1 = (int)draw_height;
+    }
+    WriteLUTPixelArray(db->draw_buffer, (UWORD)sx0, (UWORD)sy0,
+                       (UWORD)db->draw_buffer_pitch,
+                       draw_rp, amiga_ctab,
+                       (UWORD)(bl + rx0), (UWORD)(bt + ry0),
+                       (UWORD)(rx1 - rx0), (UWORD)(ry1 - ry0), CTABFMT_XRGB8);
+}
+
 void video_canvas_refresh(struct video_canvas_s *canvas,
                           unsigned int xs, unsigned int ys,
                           unsigned int xi, unsigned int yi,
@@ -1233,74 +1307,20 @@ void video_canvas_refresh(struct video_canvas_s *canvas,
         amiga_update_fs_border(db);
     }
 
-    {
-        /* dirty rectangle (draw buffer coordinates) inside the shown area */
-        int sx0 = (int)xs;
-        int sy0 = (int)ys;
-        int sx1 = (int)(xs + w);
-        int sy1 = (int)(ys + h);
-        int bw = (int)base_width;
-        int bh = (int)base_height;
-        int bl = draw_x;
-        int bt = draw_y;
-        int rx0, ry0, rx1, ry1;
+    if (!fullscreen && amiga_window != NULL) {
+        /* The size must be the current one: after a resize, Intuition has
+         * already drawn the borders before IDCMP_NEWSIZE reaches us, and the
+         * borders are in the same layer (not GimmeZeroZero): drawing with
+         * the old bigger size would cover them. Locked, the layer cannot be
+         * resized between reading the size and drawing. */
+        struct Layer *layer = amiga_window->WLayer;
 
-        if (sx0 < crop_x) {
-            sx0 = crop_x;
-        }
-        if (sy0 < crop_y) {
-            sy0 = crop_y;
-        }
-        if (sx1 > crop_x + bw) {
-            sx1 = crop_x + bw;
-        }
-        if (sy1 > crop_y + bh) {
-            sy1 = crop_y + bh;
-        }
-        if (sx0 >= sx1 || sy0 >= sy1 || bw <= 0 || bh <= 0) {
-            return;
-        }
-        /* relative to the shown area */
-        rx0 = sx0 - crop_x;
-        ry0 = sy0 - crop_y;
-        rx1 = sx1 - crop_x;
-        ry1 = sy1 - crop_y;
-
-        if (use_cgxscale || use_planarscale) {
-            int dw = (int)draw_width;
-            int dh = (int)draw_height;
-
-            /* shown area -> whole window inner area, dirty part only */
-            (use_cgxscale ? cgxscale_draw : planarscale_draw)(
-                          draw_rp, db->draw_buffer, db->draw_buffer_pitch,
-                          crop_x, crop_y, bw, bh,
-                          bl, bt, dw, dh,
-                          bl + rx0 * dw / bw,
-                          bt + ry0 * dh / bh,
-                          bl + (rx1 * dw + bw - 1) / bw,
-                          bt + (ry1 * dh + bh - 1) / bh);
-            return;
-        }
-        if (!use_rtg) {
-            /* no drawing route (OS 3.0 without cybergraphics) */
-            return;
-        }
-
-        /* 1x routes: clip to the window */
-        if (rx0 >= (int)draw_width || ry0 >= (int)draw_height) {
-            return;
-        }
-        if (rx1 > (int)draw_width) {
-            rx1 = (int)draw_width;
-        }
-        if (ry1 > (int)draw_height) {
-            ry1 = (int)draw_height;
-        }
-        WriteLUTPixelArray(db->draw_buffer, (UWORD)sx0, (UWORD)sy0,
-                           (UWORD)db->draw_buffer_pitch,
-                           draw_rp, amiga_ctab,
-                           (UWORD)(bl + rx0), (UWORD)(bt + ry0),
-                           (UWORD)(rx1 - rx0), (UWORD)(ry1 - ry0), CTABFMT_XRGB8);
+        LockLayer(0, layer);
+        amiga_update_inner_size();
+        amiga_draw_rect(db, xs, ys, w, h);
+        UnlockLayer(layer);
+    } else {
+        amiga_draw_rect(db, xs, ys, w, h);
     }
 }
 
