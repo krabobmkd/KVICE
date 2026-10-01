@@ -148,6 +148,8 @@ static const char *default_strings[] = {
     "None",
     /* MSG_DRIVE_TRUE_EMULATION */
     "True drive emulation:",
+    /* MSG_AUTOSTART_FAST_LOAD */
+    "Autostart loads without true drive emulation:",
     /* MSG_DRIVE8_USE_DRAWER */
     "Read an Amiga drawer:",
     /* MSG_DRIVE8_DRAWER */
