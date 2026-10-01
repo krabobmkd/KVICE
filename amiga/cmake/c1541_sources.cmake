@@ -1,0 +1,170 @@
+# Generated from a native autotools headless build of VICE 3.10: the objects
+# linked into each program ('ar t' of every linked library), mapped back to
+# their sources. arch/headless replaced by arch/amiga, C++ linenoise dropped.
+# VICE_SRC must point to vice-3.10/src.
+# All sources of the c1541 disk image tool (a subset: not linked with VICE_COMMON_SRC).
+set(VICE_C1541_SRC
+	# arch/amiga
+	${VICE_SRC}/arch/amiga/archdep.c
+	# arch/shared
+	${VICE_SRC}/arch/shared/archdep_access.c
+	${VICE_SRC}/arch/shared/archdep_boot_path.c
+	${VICE_SRC}/arch/shared/archdep_cbmfont.c
+	${VICE_SRC}/arch/shared/archdep_chdir.c
+	${VICE_SRC}/arch/shared/archdep_close.c
+	${VICE_SRC}/arch/shared/archdep_create_user_cache_dir.c
+	${VICE_SRC}/arch/shared/archdep_create_user_config_dir.c
+	${VICE_SRC}/arch/shared/archdep_create_user_state_dir.c
+	${VICE_SRC}/arch/shared/archdep_current_dir.c
+	${VICE_SRC}/arch/shared/archdep_default_autostart_disk_image_file_name.c
+	${VICE_SRC}/arch/shared/archdep_default_fliplist_file_name.c
+	${VICE_SRC}/arch/shared/archdep_default_joymap_file_name.c
+	${VICE_SRC}/arch/shared/archdep_default_logfile.c
+	${VICE_SRC}/arch/shared/archdep_default_logger.c
+	${VICE_SRC}/arch/shared/archdep_default_portable_resource_file_name.c
+	${VICE_SRC}/arch/shared/archdep_default_resource_file_name.c
+	${VICE_SRC}/arch/shared/archdep_default_rtc_file_name.c
+	${VICE_SRC}/arch/shared/archdep_default_sysfile_pathlist.c
+	${VICE_SRC}/arch/shared/archdep_dir.c
+	${VICE_SRC}/arch/shared/archdep_ethernet_available.c
+	${VICE_SRC}/arch/shared/archdep_exit.c
+	${VICE_SRC}/arch/shared/archdep_expand_path.c
+	${VICE_SRC}/arch/shared/archdep_extra_title_text.c
+	${VICE_SRC}/arch/shared/archdep_fdopen.c
+	${VICE_SRC}/arch/shared/archdep_file_exists.c
+	${VICE_SRC}/arch/shared/archdep_file_is_blockdev.c
+	${VICE_SRC}/arch/shared/archdep_file_is_chardev.c
+	${VICE_SRC}/arch/shared/archdep_file_size.c
+	${VICE_SRC}/arch/shared/archdep_filename_parameter.c
+	${VICE_SRC}/arch/shared/archdep_fix_permissions.c
+	${VICE_SRC}/arch/shared/archdep_fix_streams.c
+	${VICE_SRC}/arch/shared/archdep_fseeko.c
+	${VICE_SRC}/arch/shared/archdep_ftello.c
+	${VICE_SRC}/arch/shared/archdep_get_current_drive.c
+	${VICE_SRC}/arch/shared/archdep_get_hvsc_dir.c
+	${VICE_SRC}/arch/shared/archdep_get_runtime_info.c
+	${VICE_SRC}/arch/shared/archdep_get_vice_datadir.c
+	${VICE_SRC}/arch/shared/archdep_get_vice_docsdir.c
+	${VICE_SRC}/arch/shared/archdep_get_vice_drivesdir.c
+	${VICE_SRC}/arch/shared/archdep_get_vice_hotkeysdir.c
+	${VICE_SRC}/arch/shared/archdep_get_vice_machinedir.c
+	${VICE_SRC}/arch/shared/archdep_getcwd.c
+	${VICE_SRC}/arch/shared/archdep_glob.c
+	${VICE_SRC}/arch/shared/archdep_home_path.c
+	${VICE_SRC}/arch/shared/archdep_icon_path.c
+	${VICE_SRC}/arch/shared/archdep_is_haiku.c
+	${VICE_SRC}/arch/shared/archdep_is_macos_bindist.c
+	${VICE_SRC}/arch/shared/archdep_is_windows_nt.c
+	${VICE_SRC}/arch/shared/archdep_kbd_get_host_mapping.c
+	${VICE_SRC}/arch/shared/archdep_list_drives.c
+	${VICE_SRC}/arch/shared/archdep_make_backup_filename.c
+	${VICE_SRC}/arch/shared/archdep_mkdir.c
+	${VICE_SRC}/arch/shared/archdep_mkstemp_fd.c
+	${VICE_SRC}/arch/shared/archdep_open_default_log_file.c
+	${VICE_SRC}/arch/shared/archdep_path_is_relative.c
+	${VICE_SRC}/arch/shared/archdep_program_name.c
+	${VICE_SRC}/arch/shared/archdep_program_path.c
+	${VICE_SRC}/arch/shared/archdep_quote_parameter.c
+	${VICE_SRC}/arch/shared/archdep_quote_unzip.c
+	${VICE_SRC}/arch/shared/archdep_rawnet_capability.c
+	${VICE_SRC}/arch/shared/archdep_real_path.c
+	${VICE_SRC}/arch/shared/archdep_remove.c
+	${VICE_SRC}/arch/shared/archdep_rename.c
+	${VICE_SRC}/arch/shared/archdep_require_vkbd.c
+	${VICE_SRC}/arch/shared/archdep_rmdir.c
+	${VICE_SRC}/arch/shared/archdep_rtc_get_centisecond.c
+	${VICE_SRC}/arch/shared/archdep_sanitize_filename.c
+	${VICE_SRC}/arch/shared/archdep_set_current_drive.c
+	${VICE_SRC}/arch/shared/archdep_set_openmp_wait_policy.c
+	${VICE_SRC}/arch/shared/archdep_signals.c
+	${VICE_SRC}/arch/shared/archdep_sleep.c
+	${VICE_SRC}/arch/shared/archdep_socketpeek.c
+	${VICE_SRC}/arch/shared/archdep_sound.c
+	${VICE_SRC}/arch/shared/archdep_spawn.c
+	${VICE_SRC}/arch/shared/archdep_startup_log_error.c
+	${VICE_SRC}/arch/shared/archdep_stat.c
+	${VICE_SRC}/arch/shared/archdep_tick.c
+	${VICE_SRC}/arch/shared/archdep_tmpnam.c
+	${VICE_SRC}/arch/shared/archdep_user_cache_path.c
+	${VICE_SRC}/arch/shared/archdep_user_config_path.c
+	${VICE_SRC}/arch/shared/archdep_user_state_path.c
+	${VICE_SRC}/arch/shared/archdep_usleep.c
+	${VICE_SRC}/arch/shared/archdep_xdg.c
+	${VICE_SRC}/arch/shared/console.c
+	${VICE_SRC}/arch/shared/coproc.c
+	${VICE_SRC}/arch/shared/dynlib.c
+	${VICE_SRC}/arch/shared/rawnetarch.c
+	${VICE_SRC}/arch/shared/rawnetarch_tuntap.c
+	${VICE_SRC}/arch/shared/rawnetarch_unix.c
+	${VICE_SRC}/arch/shared/rs232dev.c
+	${VICE_SRC}/arch/shared/signals.c
+	# arch/shared/socketdrv
+	${VICE_SRC}/arch/shared/socketdrv/socketdrv.c
+	# (src)
+	${VICE_SRC}/c1541-stubs.c
+	${VICE_SRC}/c1541.c
+	${VICE_SRC}/cbmdos.c
+	${VICE_SRC}/cbmimage.c
+	${VICE_SRC}/charset.c
+	${VICE_SRC}/findpath.c
+	${VICE_SRC}/gcr.c
+	${VICE_SRC}/info.c
+	${VICE_SRC}/lib.c
+	${VICE_SRC}/log.c
+	${VICE_SRC}/opencbmlib.c
+	${VICE_SRC}/rawfile.c
+	${VICE_SRC}/resources.c
+	${VICE_SRC}/util.c
+	${VICE_SRC}/zfile.c
+	${VICE_SRC}/zipcode.c
+	# diskimage
+	${VICE_SRC}/diskimage/diskimage.c
+	${VICE_SRC}/diskimage/fsimage-check.c
+	${VICE_SRC}/diskimage/fsimage-create.c
+	${VICE_SRC}/diskimage/fsimage-dxx.c
+	${VICE_SRC}/diskimage/fsimage-gcr.c
+	${VICE_SRC}/diskimage/fsimage-p64.c
+	${VICE_SRC}/diskimage/fsimage-probe.c
+	${VICE_SRC}/diskimage/fsimage.c
+	${VICE_SRC}/diskimage/realimage.c
+	# fileio
+	${VICE_SRC}/fileio/cbmfile.c
+	${VICE_SRC}/fileio/fileio.c
+	${VICE_SRC}/fileio/p00.c
+	# imagecontents
+	${VICE_SRC}/imagecontents/diskcontents-block.c
+	${VICE_SRC}/imagecontents/diskcontents-iec.c
+	${VICE_SRC}/imagecontents/diskcontents.c
+	${VICE_SRC}/imagecontents/imagecontents.c
+	${VICE_SRC}/imagecontents/tapecontents.c
+	# lib/p64
+	${VICE_SRC}/lib/p64/p64.c
+	# serial
+	${VICE_SRC}/serial/fsdrive.c
+	${VICE_SRC}/serial/iec-ieee488-shared.c
+	${VICE_SRC}/serial/realdevice.c
+	${VICE_SRC}/serial/serial-device.c
+	${VICE_SRC}/serial/serial-iec-bus.c
+	${VICE_SRC}/serial/serial-iec-device.c
+	${VICE_SRC}/serial/serial-iec-lib.c
+	${VICE_SRC}/serial/serial-iec.c
+	${VICE_SRC}/serial/serial-realdevice.c
+	${VICE_SRC}/serial/serial-trap.c
+	${VICE_SRC}/serial/serial.c
+	# tape
+	${VICE_SRC}/tape/t64.c
+	${VICE_SRC}/tape/tap.c
+	${VICE_SRC}/tape/tape-internal.c
+	${VICE_SRC}/tape/tape-snapshot.c
+	${VICE_SRC}/tape/tape.c
+	${VICE_SRC}/tape/tapeimage.c
+	# vdrive
+	${VICE_SRC}/vdrive/vdrive-bam.c
+	${VICE_SRC}/vdrive/vdrive-command.c
+	${VICE_SRC}/vdrive/vdrive-dir.c
+	${VICE_SRC}/vdrive/vdrive-iec.c
+	${VICE_SRC}/vdrive/vdrive-internal.c
+	${VICE_SRC}/vdrive/vdrive-rel.c
+	${VICE_SRC}/vdrive/vdrive-snapshot.c
+	${VICE_SRC}/vdrive/vdrive.c
+)

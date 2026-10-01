@@ -1,0 +1,236 @@
+# CMakeLists.txt for the AmigaOS 3.x m68k port of VICE 3.10.
+#
+# Cross compile with bebbo gcc 6.5 and the amigacommonlibs cmake platform:
+#
+#   mkdir build && cd build
+#   cmake .. -DCMAKE_TOOLCHAIN_FILE=$(realpath ../../../amigacommonlibs/cmake/Modules/Platform/m68k-amigaos.cmake) -DCMAKE_BUILD_TYPE=Release
+#   cmake --build . -j8
+#
+# (the toolchain file path must be absolute)
+#
+# Programs of the Amiga package (one option each):
+#   x64     C64 (the fast VIC-II emulation)       ON  (ported)
+#   xvic    VIC-20                                OFF (not ported yet)
+#   xplus4  Plus/4, C16, C116 (TED machines)      OFF (not ported yet)
+#   xpet    PET / CBM                             OFF (not ported yet)
+#   c1541   disk image tool                       OFF (not ported yet)
+#
+# Pure C, FastSID only (reSID is C++ and too slow for a 68030).
+#
+# Sources (cmake/*.cmake, generated from a native build of each program):
+#   vice_common_sources.cmake  shared by the 4 emulators, compiled once into
+#                              the vice_common object library, with the Amiga
+#                              arch layer (src/arch/amiga)
+#   <program>_sources.cmake    what only that emulator uses
+#   c1541_sources.cmake        all of c1541 (a subset, not vice_common)
+
+cmake_minimum_required (VERSION 3.13)
+
+project(ViceAmiga LANGUAGES C VERSION 3.10)
+
+option(VICE_BUILD_X64    "build x64, the C64 emulator" ON)
+option(VICE_BUILD_XVIC   "build xvic, the VIC-20 emulator (not ported yet)" OFF)
+option(VICE_BUILD_XPLUS4 "build xplus4, the Plus/4 C16 C116 emulator (not ported yet)" OFF)
+option(VICE_BUILD_XPET   "build xpet, the PET CBM emulator (not ported yet)" OFF)
+option(VICE_BUILD_C1541  "build c1541, the disk image tool (not ported yet)" OFF)
+
+option(AMIGA_USE_68020 "compile for 68020" OFF)
+option(AMIGA_USE_68030 "compile for 68030" ON)
+option(AMIGA_USE_68040 "compile for 68040" OFF)
+option(AMIGA_USE_68060 "compile for 68060" OFF)
+option(VICE_USE_HARDFLOAT "use 6888x/040/060 FPU instructions" OFF)
+option(VICE_AMIGA_TRACE "print startup traces to stdout (arch/amiga/amigatrace.h)" ON)
+
+set(VICE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../src")
+set(VICE_DATA "${CMAKE_CURRENT_SOURCE_DIR}/../data")
+set(COMMONLIBS "${CMAKE_CURRENT_SOURCE_DIR}/../../amigacommonlibs")
+
+# "cmake --install ." or "make install": a runnable folder to copy to the Amiga.
+# The data dir is the program dir (PROGDIR:), ROMs are searched in
+# PROGDIR:<machine> and PROGDIR:DRIVES, then in PROGDIR://data/<machine> and
+# PROGDIR://data/DRIVES (the source tree, for an executable in amiga/build).
+set(VICE_DIST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dist/VICE" CACHE PATH "where make install puts the Amiga distribution")
+
+if(AMIGA)
+	if(AMIGA_USE_68060)
+		list(APPEND AMIGA_COMPILER_OPTIONS -m68060)
+	elseif(AMIGA_USE_68040)
+		list(APPEND AMIGA_COMPILER_OPTIONS -m68040)
+	elseif(AMIGA_USE_68030)
+		list(APPEND AMIGA_COMPILER_OPTIONS -m68030)
+	else()
+		list(APPEND AMIGA_COMPILER_OPTIONS -m68020)
+	endif()
+	if(VICE_USE_HARDFLOAT)
+		list(APPEND AMIGA_COMPILER_OPTIONS -mhard-float)
+	else()
+		list(APPEND AMIGA_COMPILER_OPTIONS -msoft-float)
+	endif()
+endif()
+
+# zlib from amigacommonlibs (target: z)
+add_subdirectory(${COMMONLIBS}/zlib zlib EXCLUDE_FROM_ALL)
+
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/vice_common_sources.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/x64_sources.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/xvic_sources.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/xplus4_sources.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/xpet_sources.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/c1541_sources.cmake)
+
+# ---------------------------------------------------------------------------
+# source list adjustments for AmigaOS 3.x
+
+# not usable on AmigaOS 3.x for now
+set(VICE_AMIGA_EXCLUDED_SRC
+	${VICE_SRC}/arch/shared/socketdrv/socketdrv.c	# no HAVE_NETWORK (bsdsocket.library later)
+	${VICE_SRC}/gfxoutputdrv/ffmpegexedrv.c		# needs an external ffmpeg process + sockets
+	${VICE_SRC}/vicii/vicii-clock-stretch.c		# x128 only, never linked in x64
+)
+foreach(list_name VICE_COMMON_SRC VICE_X64_SRC VICE_XVIC_SRC VICE_XPLUS4_SRC VICE_XPET_SRC VICE_C1541_SRC)
+	list(REMOVE_ITEM ${list_name} ${VICE_AMIGA_EXCLUDED_SRC})
+endforeach()
+
+# needed by hvsc, header-only in the autotools build list
+list(APPEND VICE_COMMON_SRC ${VICE_SRC}/lib/md5/md5.c)
+
+# The Amiga arch layer, shared by all the emulators.
+# TODO when porting another emulator: amigamui.c "Machine" page uses the C64
+# model API (c64model.c), it must become machine specific.
+list(APPEND VICE_COMMON_SRC
+	${VICE_SRC}/arch/amiga/amigatrace.c
+	${VICE_SRC}/arch/amiga/soundahi.c
+	${VICE_SRC}/arch/amiga/joy.c
+	${VICE_SRC}/arch/amiga/amigawait.c
+	${VICE_SRC}/arch/amiga/amigalocale.c
+	${VICE_SRC}/arch/amiga/amigaaction.c
+	${VICE_SRC}/arch/amiga/amigamenu.c
+	${VICE_SRC}/arch/amiga/amigamui.c
+	${VICE_SRC}/arch/amiga/amigafile.c
+	${VICE_SRC}/arch/amiga/amiga_cgxscale.c
+	${VICE_SRC}/arch/amiga/amiga_planarscale.c
+	${VICE_SRC}/arch/amiga/amiga_screenmode.c
+	# replaces the slow libgcc (68000 multilib) 64 bit divisions
+	${VICE_SRC}/arch/amiga/amiga_div64.c
+	${VICE_SRC}/arch/amiga/amiga_propjoy.c
+)
+
+set(VICE_INCLUDE_DIRS
+	${CMAKE_CURRENT_SOURCE_DIR}/include
+	${VICE_SRC}
+	${VICE_SRC}/arch/amiga
+	${VICE_SRC}/arch/shared
+	${VICE_SRC}/arch
+	${VICE_SRC}/arch/shared/hotkeys
+	${VICE_SRC}/arch/shared/socketdrv
+	${VICE_SRC}/arch/shared/sounddrv
+	${VICE_SRC}/c64
+	${VICE_SRC}/c64/cart
+	${VICE_SRC}/c64dtv
+	${VICE_SRC}/plus4
+	${VICE_SRC}/core
+	${VICE_SRC}/core/rtc
+	${VICE_SRC}/datasette
+	${VICE_SRC}/diag
+	${VICE_SRC}/diskimage
+	${VICE_SRC}/drive
+	${VICE_SRC}/drive/iec
+	${VICE_SRC}/drive/iec/c64exp
+	${VICE_SRC}/drive/ieee
+	${VICE_SRC}/drive/tcbm
+	${VICE_SRC}/fileio
+	${VICE_SRC}/fsdevice
+	${VICE_SRC}/gfxoutputdrv
+	${VICE_SRC}/hvsc
+	${VICE_SRC}/imagecontents
+	${VICE_SRC}/joyport
+	${VICE_SRC}/lib
+	${VICE_SRC}/lib/p64
+	${VICE_SRC}/lib/libzmbv
+	${VICE_SRC}/lib/md5
+	${VICE_SRC}/monitor
+	${VICE_SRC}/printerdrv
+	${VICE_SRC}/raster
+	${VICE_SRC}/rs232drv
+	${VICE_SRC}/samplerdrv
+	${VICE_SRC}/serial
+	${VICE_SRC}/sid
+	${VICE_SRC}/tape
+	${VICE_SRC}/tapeport
+	${VICE_SRC}/userport
+	${VICE_SRC}/vdrive
+	${VICE_SRC}/vicii
+	${VICE_SRC}/video
+	${COMMONLIBS}/zlib
+	${COMMONLIBS}/extrasdk/CGX/include
+	${COMMONLIBS}/extrasdk/AHI/include
+	${COMMONLIBS}/extrasdk/MUI38/include
+)
+
+# same compile settings for every target
+function(vice_amiga_setup_target target)
+	set_property(TARGET ${target} PROPERTY C_STANDARD 11)
+	target_include_directories(${target} PRIVATE ${VICE_INCLUDE_DIRS})
+	target_compile_definitions(${target} PRIVATE HAVE_CONFIG_H=1)
+	if(VICE_AMIGA_TRACE)
+		target_compile_definitions(${target} PRIVATE VICE_AMIGA_TRACE=1)
+	endif()
+	target_compile_options(${target} PRIVATE
+		-O2 -fomit-frame-pointer -Wno-unused-parameter
+		${AMIGA_COMPILER_OPTIONS})
+endfunction()
+
+# an emulator: vice_common objects + its own sources
+function(vice_amiga_emulator target)
+	add_executable(${target} $<TARGET_OBJECTS:vice_common> ${ARGN})
+	vice_amiga_setup_target(${target})
+	target_link_options(${target} PRIVATE ${AMIGA_COMPILER_OPTIONS})
+	target_link_libraries(${target} PRIVATE z m)
+	install(TARGETS ${target} DESTINATION "${VICE_DIST_DIR}")
+endfunction()
+
+# ROMs, keymaps... of a machine: next to the executable in the build dir
+# (runnable from there) and in the distribution
+function(vice_amiga_data)
+	foreach(dir ${ARGN})
+		# ROMs and data files are not in the KVICE repository: copy them to
+		# ../data from an official VICE 3.10 archive to get a runnable build
+		if(NOT EXISTS ${VICE_DATA}/${dir})
+			message(WARNING "${VICE_DATA}/${dir} not found: no ROMs nor data files copied")
+			continue()
+		endif()
+		file(COPY ${VICE_DATA}/${dir}
+			DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
+			PATTERN "gtk3_*" EXCLUDE
+			PATTERN "sdl_*" EXCLUDE
+			PATTERN "Makefile*" EXCLUDE)
+		install(DIRECTORY ${VICE_DATA}/${dir}
+			DESTINATION "${VICE_DIST_DIR}"
+			PATTERN "gtk3_*" EXCLUDE
+			PATTERN "sdl_*" EXCLUDE
+			PATTERN "Makefile*" EXCLUDE)
+	endforeach()
+endfunction()
+
+# ---------------------------------------------------------------------------
+# targets
+
+if(VICE_BUILD_X64 OR VICE_BUILD_XVIC OR VICE_BUILD_XPLUS4 OR VICE_BUILD_XPET)
+	# compiled once, linked in each emulator
+	add_library(vice_common OBJECT ${VICE_COMMON_SRC})
+	vice_amiga_setup_target(vice_common)
+	vice_amiga_data(DRIVES)
+endif()
+
+if(VICE_BUILD_X64)
+	vice_amiga_emulator(x64 ${VICE_X64_SRC})
+	vice_amiga_data(C64)
+endif()
+
+foreach(prog XVIC XPLUS4 XPET C1541)
+	if(VICE_BUILD_${prog})
+		string(TOLOWER ${prog} prog_name)
+		message(WARNING "${prog_name} is not ported to AmigaOS yet: skipped. "
+		                "Its sources are listed in cmake/${prog_name}_sources.cmake.")
+	endif()
+endforeach()
