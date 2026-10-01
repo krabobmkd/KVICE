@@ -162,7 +162,7 @@ static const char *default_strings[] = {
     /* MSG_FS_SCREEN_MODE */
     "Screen mode:",
     /* MSG_FS_NOTE */
-    "F10 switches between the window and the fullscreen.",
+    "Amiga+F switches between the window and the fullscreen.",
 
     /* MSG_REQ_AUTOSTART */
     "Autostart a program, disk, tape or cartridge",

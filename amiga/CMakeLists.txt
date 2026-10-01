@@ -191,24 +191,32 @@ endfunction()
 
 # ROMs, keymaps... of a machine: next to the executable in the build dir
 # (runnable from there) and in the distribution
+# Amiga specific data of KVICE (keymaps...), in this repository
+set(KVICE_DATA "${CMAKE_CURRENT_SOURCE_DIR}/data")
+
 function(vice_amiga_data)
 	foreach(dir ${ARGN})
 		# ROMs and data files are not in the KVICE repository: copy them to
 		# ../data from an official VICE 3.10 archive to get a runnable build
-		if(NOT EXISTS ${VICE_DATA}/${dir})
+		if(EXISTS ${VICE_DATA}/${dir})
+			file(COPY ${VICE_DATA}/${dir}
+				DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
+				PATTERN "gtk3_*" EXCLUDE
+				PATTERN "sdl_*" EXCLUDE
+				PATTERN "Makefile*" EXCLUDE)
+			install(DIRECTORY ${VICE_DATA}/${dir}
+				DESTINATION "${VICE_DIST_DIR}"
+				PATTERN "gtk3_*" EXCLUDE
+				PATTERN "sdl_*" EXCLUDE
+				PATTERN "Makefile*" EXCLUDE)
+		else()
 			message(WARNING "${VICE_DATA}/${dir} not found: no ROMs nor data files copied")
-			continue()
 		endif()
-		file(COPY ${VICE_DATA}/${dir}
-			DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-			PATTERN "gtk3_*" EXCLUDE
-			PATTERN "sdl_*" EXCLUDE
-			PATTERN "Makefile*" EXCLUDE)
-		install(DIRECTORY ${VICE_DATA}/${dir}
-			DESTINATION "${VICE_DIST_DIR}"
-			PATTERN "gtk3_*" EXCLUDE
-			PATTERN "sdl_*" EXCLUDE
-			PATTERN "Makefile*" EXCLUDE)
+		# then the KVICE files: they replace VICE ones of the same name
+		if(EXISTS ${KVICE_DATA}/${dir})
+			file(COPY ${KVICE_DATA}/${dir} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+			install(DIRECTORY ${KVICE_DATA}/${dir} DESTINATION "${VICE_DIST_DIR}")
+		endif()
 	endforeach()
 endfunction()
 
