@@ -37,6 +37,7 @@
  */
 
 #include <stdint.h>
+#include <string.h>
 
 #if defined(__mc68020__) || defined(__mc68030__) || defined(__mc68040__)
 #define HAVE_DIVU64_32 1
@@ -47,12 +48,105 @@ uint64_t __umoddi3(uint64_t n, uint64_t d);
 int64_t __divdi3(int64_t n, int64_t d);
 int64_t __moddi3(int64_t n, int64_t d);
 
+#ifdef VICE_AMIGA_DIV64_STATS
+/* Measurement build only: how many 64 bit divisions, and who calls them.
+ * Callers are kept by return address in a small hash table, printed as
+ * offsets from __udivdi3 (one code hunk: "nm -n x64" maps them back, see
+ * amiga/tools/div64_sites.sh). */
+#include <stdio.h>
+#include <stdlib.h>
+
+#define DIV64_SITES 128
+
+typedef struct div64_site_s {
+    uint32_t addr;
+    uint32_t count;
+} div64_site_t;
+
+static div64_site_t div64_sites[DIV64_SITES];
+static uint32_t div64_calls = 0;
+static uint32_t div64_calls_hi = 0;     /* dividend >= 2^32 */
+static uint32_t div64_slow = 0;         /* shift and subtract loop */
+static uint32_t div64_other = 0;        /* table full */
+
+static void div64_count(void *ret, uint64_t n)
+{
+    uint32_t addr = (uint32_t)ret;
+    uint32_t i = (addr >> 1) & (DIV64_SITES - 1);
+    int probe;
+
+    div64_calls++;
+    if ((n >> 32) != 0) {
+        div64_calls_hi++;
+    }
+    for (probe = 0; probe < DIV64_SITES; probe++) {
+        div64_site_t *site = &div64_sites[(i + probe) & (DIV64_SITES - 1)];
+
+        if (site->addr == addr) {
+            site->count++;
+            return;
+        }
+        if (site->addr == 0) {
+            site->addr = addr;
+            site->count = 1;
+            return;
+        }
+    }
+    div64_other++;
+}
+
+#define DIV64_COUNT(n) div64_count(__builtin_return_address(0), (n))
+#define DIV64_COUNT_SLOW() div64_slow++
+
+static int div64_site_cmp(const void *a, const void *b)
+{
+    const div64_site_t *sa = a;
+    const div64_site_t *sb = b;
+
+    return (sb->count > sa->count) - (sb->count < sa->count);
+}
+
+/** \brief  Print the counters (per second) and the top callers, then reset
+ *
+ * \param[in]   elapsed_us  time since the previous report
+ */
+void amiga_div64_report(uint32_t elapsed_us)
+{
+    static div64_site_t sorted[DIV64_SITES];
+    uint32_t secs_x10 = elapsed_us / 100000;
+    int i;
+
+    if (secs_x10 == 0) {
+        secs_x10 = 1;
+    }
+    memcpy(sorted, div64_sites, sizeof sorted);
+    qsort(sorted, DIV64_SITES, sizeof sorted[0], div64_site_cmp);
+    printf("div64: %lu calls/s (%lu/s dividend >= 2^32, %lu/s slow loop, %lu/s untracked)\n",
+           (unsigned long)(div64_calls * 10 / secs_x10),
+           (unsigned long)(div64_calls_hi * 10 / secs_x10),
+           (unsigned long)(div64_slow * 10 / secs_x10),
+           (unsigned long)(div64_other * 10 / secs_x10));
+    for (i = 0; i < 12 && sorted[i].count != 0; i++) {
+        printf("div64:   %8lu/s from __udivdi3%+ld\n",
+               (unsigned long)(sorted[i].count * 10 / secs_x10),
+               (long)(sorted[i].addr - (uint32_t)__udivdi3));
+    }
+    fflush(stdout);
+    memset(div64_sites, 0, sizeof div64_sites);
+    div64_calls = div64_calls_hi = div64_slow = div64_other = 0;
+}
+#else
+#define DIV64_COUNT(n)
+#define DIV64_COUNT_SLOW()
+#endif
+
 /* any 64 bit divisor: shift and subtract */
 static uint64_t __attribute__((noinline)) udivmod_slow(uint64_t n, uint64_t d, uint64_t *rem)
 {
     uint64_t q = 0;
     int shift = 0;
 
+    DIV64_COUNT_SLOW();
     if (d == 0) {
         /* like the 68k: no sensible result, do not loop forever */
         *rem = n;
@@ -129,6 +223,7 @@ uint64_t __udivdi3(uint64_t n, uint64_t d)
 {
     uint64_t r;
 
+    DIV64_COUNT(n);
     return udivmod(n, d, &r);
 }
 
@@ -136,6 +231,7 @@ uint64_t __umoddi3(uint64_t n, uint64_t d)
 {
     uint64_t r;
 
+    DIV64_COUNT(n);
     udivmod(n, d, &r);
     return r;
 }
@@ -146,7 +242,10 @@ int64_t __divdi3(int64_t n, int64_t d)
     uint64_t un = (n < 0) ? -(uint64_t)n : (uint64_t)n;
     uint64_t ud = (d < 0) ? -(uint64_t)d : (uint64_t)d;
     uint64_t r;
-    uint64_t q = udivmod(un, ud, &r);
+    uint64_t q;
+
+    DIV64_COUNT(un);
+    q = udivmod(un, ud, &r);
 
     return ((n < 0) != (d < 0)) ? -(int64_t)q : (int64_t)q;
 }
@@ -157,6 +256,7 @@ int64_t __moddi3(int64_t n, int64_t d)
     uint64_t ud = (d < 0) ? -(uint64_t)d : (uint64_t)d;
     uint64_t r;
 
+    DIV64_COUNT(un);
     udivmod(un, ud, &r);
     return (n < 0) ? -(int64_t)r : (int64_t)r;
 }
