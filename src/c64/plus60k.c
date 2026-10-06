@@ -423,27 +423,27 @@ void plus60k_shutdown(void)
 
 /* ------------------------------------------------------------------------- */
 
-static void plus60k_memory_store(uint16_t addr, uint8_t value)
+static void plus60k_memory_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     plus60k_ram[addr - 0x1000] = value;
 }
 
-static void vicii_mem_vbank_store_wrapper(uint16_t addr, uint8_t value)
+static void vicii_mem_vbank_store_wrapper(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     vicii_mem_vbank_store(addr, value);
 }
 
-static void vicii_mem_vbank_39xx_store_wrapper(uint16_t addr, uint8_t value)
+static void vicii_mem_vbank_39xx_store_wrapper(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     vicii_mem_vbank_39xx_store(addr, value);
 }
 
-static void vicii_mem_vbank_3fxx_store_wrapper(uint16_t addr, uint8_t value)
+static void vicii_mem_vbank_3fxx_store_wrapper(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     vicii_mem_vbank_3fxx_store(addr, value);
 }
 
-static void ram_hi_store_wrapper(uint16_t addr, uint8_t value)
+static void ram_hi_store_wrapper(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     ram_hi_store(addr, value);
 }
@@ -459,27 +459,27 @@ static store_func_ptr_t plus60k_mem_write_tab[] = {
     plus60k_memory_store
 };
 
-void plus60k_vicii_mem_vbank_store(uint16_t addr, uint8_t value)
+void plus60k_vicii_mem_vbank_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     plus60k_mem_write_tab[plus60k_reg](addr, value);
 }
 
-void plus60k_vicii_mem_vbank_39xx_store(uint16_t addr, uint8_t value)
+void plus60k_vicii_mem_vbank_39xx_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     plus60k_mem_write_tab[plus60k_reg + 2](addr, value);
 }
 
-void plus60k_vicii_mem_vbank_3fxx_store(uint16_t addr, uint8_t value)
+void plus60k_vicii_mem_vbank_3fxx_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     plus60k_mem_write_tab[plus60k_reg + 4](addr, value);
 }
 
-void plus60k_ram_hi_store(uint16_t addr, uint8_t value)
+void plus60k_ram_hi_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     plus60k_mem_write_tab[plus60k_reg + 6](addr, value);
 }
 
-uint8_t plus60k_ram_read(uint16_t addr)
+uint8_t plus60k_ram_read(uint16_t addr PARAMREG(d0))
 {
     if (plus60k_enabled && addr >= 0x1000 && plus60k_reg == 1) {
         return plus60k_ram[addr - 0x1000];
@@ -488,7 +488,7 @@ uint8_t plus60k_ram_read(uint16_t addr)
     }
 }
 
-void plus60k_ram_store(uint16_t addr, uint8_t value)
+void plus60k_ram_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     if (plus60k_enabled && addr >= 0x1000 && plus60k_reg == 1) {
         plus60k_ram[addr - 0x1000] = value;

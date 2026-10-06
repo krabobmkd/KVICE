@@ -401,7 +401,7 @@ void c64_256k_shutdown(void)
 
 /* ------------------------------------------------------------------------- */
 
-void c64_256k_ram_segment0_store(uint16_t addr, uint8_t value)
+void c64_256k_ram_segment0_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     c64_256k_ram[(c64_256k_segment0 * 0x4000) + (addr & 0x3fff)] = value;
     if (addr == 0xff00) {
@@ -409,7 +409,7 @@ void c64_256k_ram_segment0_store(uint16_t addr, uint8_t value)
     }
 }
 
-void c64_256k_ram_segment1_store(uint16_t addr, uint8_t value)
+void c64_256k_ram_segment1_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     c64_256k_ram[(c64_256k_segment1 * 0x4000) + (addr & 0x3fff)] = value;
     if (addr == 0xff00) {
@@ -417,7 +417,7 @@ void c64_256k_ram_segment1_store(uint16_t addr, uint8_t value)
     }
 }
 
-void c64_256k_ram_segment2_store(uint16_t addr, uint8_t value)
+void c64_256k_ram_segment2_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     c64_256k_ram[(c64_256k_segment2 * 0x4000) + (addr & 0x3fff)] = value;
     if (addr == 0xff00) {
@@ -425,7 +425,7 @@ void c64_256k_ram_segment2_store(uint16_t addr, uint8_t value)
     }
 }
 
-void c64_256k_ram_segment3_store(uint16_t addr, uint8_t value)
+void c64_256k_ram_segment3_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     c64_256k_ram[(c64_256k_segment3 * 0x4000) + (addr & 0x3fff)] = value;
     if (addr == 0xff00) {
@@ -446,22 +446,22 @@ void c64_256k_ram_inject(uint16_t addr, uint8_t value)
     }
 }
 
-uint8_t c64_256k_ram_segment0_read(uint16_t addr)
+uint8_t c64_256k_ram_segment0_read(uint16_t addr PARAMREG(d0))
 {
     return c64_256k_ram[(c64_256k_segment0 * 0x4000) + (addr & 0x3fff)];
 }
 
-uint8_t c64_256k_ram_segment1_read(uint16_t addr)
+uint8_t c64_256k_ram_segment1_read(uint16_t addr PARAMREG(d0))
 {
     return c64_256k_ram[(c64_256k_segment1 * 0x4000) + (addr & 0x3fff)];
 }
 
-uint8_t c64_256k_ram_segment2_read(uint16_t addr)
+uint8_t c64_256k_ram_segment2_read(uint16_t addr PARAMREG(d0))
 {
     return c64_256k_ram[(c64_256k_segment2 * 0x4000) + (addr & 0x3fff)];
 }
 
-uint8_t c64_256k_ram_segment3_read(uint16_t addr)
+uint8_t c64_256k_ram_segment3_read(uint16_t addr PARAMREG(d0))
 {
     return c64_256k_ram[(c64_256k_segment3 * 0x4000) + (addr & 0x3fff)];
 }

@@ -30,11 +30,12 @@
 #define VICE_MEM_H_
 
 #include "types.h"
+#include "paramreg.h"
 
-
-typedef uint8_t read_func_t(uint16_t addr);
+/* the CPU memory handlers, see paramreg.h */
+typedef uint8_t read_func_t(uint16_t addr PARAMREG(d0));
 typedef read_func_t *read_func_ptr_t;
-typedef void store_func_t(uint16_t addr, uint8_t value);
+typedef void store_func_t(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
 typedef store_func_t *store_func_ptr_t;
 
 extern read_func_ptr_t *_mem_read_tab_ptr;

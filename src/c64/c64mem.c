@@ -133,27 +133,27 @@ static int watchpoints_active = 0;
 
 /* ------------------------------------------------------------------------- */
 
-static uint8_t zero_read_watch(uint16_t addr)
+static uint8_t zero_read_watch(uint16_t addr PARAMREG(d0))
 {
     addr &= 0xff;
     monitor_watch_push_load_addr(addr, e_comp_space);
     return mem_read_tab[mem_config][0](addr);
 }
 
-static void zero_store_watch(uint16_t addr, uint8_t value)
+static void zero_store_watch(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     addr &= 0xff;
     monitor_watch_push_store_addr(addr, e_comp_space);
     mem_write_tab[vbank][mem_config][0](addr, value);
 }
 
-static uint8_t read_watch(uint16_t addr)
+static uint8_t read_watch(uint16_t addr PARAMREG(d0))
 {
     monitor_watch_push_load_addr(addr, e_comp_space);
     return mem_read_tab[mem_config][addr >> 8](addr);
 }
 
-static void store_watch(uint16_t addr, uint8_t value)
+static void store_watch(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     monitor_watch_push_store_addr(addr, e_comp_space);
     mem_write_tab[vbank][mem_config][addr >> 8](addr, value);
@@ -231,7 +231,7 @@ void mem_pla_config_changed(void)
 }
 
 /* reads zeropage, 0/1 comes from RAM */
-uint8_t zero_read_dma(uint16_t addr)
+uint8_t zero_read_dma(uint16_t addr PARAMREG(d0))
 {
     addr &= 0xff;
 #ifdef FEATURE_CPUMEMHISTORY
@@ -253,7 +253,7 @@ uint8_t zero_read_dma(uint16_t addr)
 }
 
 /* reads zeropage, 0/1 comes from CPU port */
-uint8_t zero_read(uint16_t addr)
+uint8_t zero_read(uint16_t addr PARAMREG(d0))
 {
     uint8_t retval;
 
@@ -342,7 +342,7 @@ uint8_t zero_read(uint16_t addr)
 }
 
 /* store zeropage, 0/1 goes to RAM */
-void zero_store_dma(uint16_t addr, uint8_t value)
+void zero_store_dma(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     addr &= 0xff;
 #ifdef FEATURE_CPUMEMHISTORY
@@ -367,7 +367,7 @@ void zero_store_dma(uint16_t addr, uint8_t value)
 #define FALLOFF_RANDOM_SX (SX64_CPU6510_DATA_PORT_FALL_OFF_CYCLES / 5)
 
 /* store zeropage, 0/1 goes to CPU port */
-void zero_store(uint16_t addr, uint8_t value)
+void zero_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     addr &= 0xff;
 #ifdef FEATURE_CPUMEMHISTORY
@@ -501,7 +501,7 @@ void zero_store(uint16_t addr, uint8_t value)
 
 /* ------------------------------------------------------------------------- */
 
-uint8_t chargen_read(uint16_t addr)
+uint8_t chargen_read(uint16_t addr PARAMREG(d0))
 {
     return mem_chargen_rom[addr & 0xfff];
 }
@@ -511,17 +511,17 @@ void chargen_store(uint16_t addr, uint8_t value)
     mem_chargen_rom[addr & 0xfff] = value;
 }
 
-uint8_t ram_read(uint16_t addr)
+uint8_t ram_read(uint16_t addr PARAMREG(d0))
 {
     return mem_ram[addr];
 }
 
-void ram_store(uint16_t addr, uint8_t value)
+void ram_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     mem_ram[addr] = value;
 }
 
-void ram_hi_store(uint16_t addr, uint8_t value)
+void ram_hi_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     if (vbank == 3) {
         vicii_mem_vbank_3fxx_store(addr, value);
@@ -535,12 +535,12 @@ void ram_hi_store(uint16_t addr, uint8_t value)
 }
 
 /* unconnected memory space */
-static uint8_t void_read(uint16_t addr)
+static uint8_t void_read(uint16_t addr PARAMREG(d0))
 {
     return vicii_read_phi1();
 }
 
-static void void_store(uint16_t addr, uint8_t value)
+static void void_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     return;
 }
@@ -550,7 +550,7 @@ static void void_store(uint16_t addr, uint8_t value)
 /* DMA memory access, this is the same as generic memory access, but needs to
    bypass the CPU port, so it accesses RAM at $00/$01 */
 
-void mem_dma_store(uint16_t addr, uint8_t value)
+void mem_dma_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     if ((addr & 0xff00) == 0) {
         /* exception: 0/1 accesses RAM! */
@@ -560,7 +560,7 @@ void mem_dma_store(uint16_t addr, uint8_t value)
     }
 }
 
-uint8_t mem_dma_read(uint16_t addr)
+uint8_t mem_dma_read(uint16_t addr PARAMREG(d0))
 {
     if ((addr & 0xff00) == 0) {
         /* exception: 0/1 accesses RAM! */
@@ -573,12 +573,12 @@ uint8_t mem_dma_read(uint16_t addr)
 
 /* Generic memory access.  */
 
-void mem_store(uint16_t addr, uint8_t value)
+void mem_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     _mem_write_tab_ptr[addr >> 8](addr, value);
 }
 
-uint8_t mem_read(uint16_t addr)
+uint8_t mem_read(uint16_t addr PARAMREG(d0))
 {
     return _mem_read_tab_ptr[addr >> 8](addr);
 }
@@ -612,12 +612,12 @@ void mem_store_without_romlh(uint16_t addr, uint8_t value)
 
 /* ------------------------------------------------------------------------- */
 
-void colorram_store(uint16_t addr, uint8_t value)
+void colorram_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     mem_color_ram[addr & 0x3ff] = value & 0xf;
 }
 
-uint8_t colorram_read(uint16_t addr)
+uint8_t colorram_read(uint16_t addr PARAMREG(d0))
 {
     return mem_color_ram[addr & 0x3ff] | (vicii_read_phi1() & 0xf0);
 }

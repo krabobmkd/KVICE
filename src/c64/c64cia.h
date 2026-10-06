@@ -28,6 +28,7 @@
 #define VICE_C64_CIA_H
 
 #include "types.h"
+#include "paramreg.h"
 
 struct cia_context_s;
 struct machine_context_s;
@@ -36,8 +37,8 @@ void cia1_setup_context(struct machine_context_s *machine_context);
 void cia2_setup_context(struct machine_context_s *machine_context);
 
 void cia1_init(struct cia_context_s *cia_context);
-void cia1_store(uint16_t addr, uint8_t value);
-uint8_t cia1_read(uint16_t addr);
+void cia1_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t cia1_read(uint16_t addr PARAMREG(d0));
 uint8_t cia1_peek(uint16_t addr);
 void cia1_set_extended_keyboard_rows_mask(uint8_t value);
 

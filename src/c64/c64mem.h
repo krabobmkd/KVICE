@@ -31,6 +31,7 @@
 
 #include "mem.h"
 #include "types.h"
+#include "paramreg.h"
 
 #ifndef C64_RAM_SIZE
 #define C64_RAM_SIZE 0x10000
@@ -45,15 +46,15 @@ int c64_mem_init_cmdline_options(void);
 
 void mem_set_vbank(int new_vbank);
 
-uint8_t ram_read(uint16_t addr);
-void ram_store(uint16_t addr, uint8_t value);
-void ram_hi_store(uint16_t addr, uint8_t value);
+uint8_t ram_read(uint16_t addr PARAMREG(d0));
+void ram_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+void ram_hi_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
 
-uint8_t chargen_read(uint16_t addr);
+uint8_t chargen_read(uint16_t addr PARAMREG(d0));
 void chargen_store(uint16_t addr, uint8_t value);
 
-void colorram_store(uint16_t addr, uint8_t value);
-uint8_t colorram_read(uint16_t addr);
+void colorram_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t colorram_read(uint16_t addr PARAMREG(d0));
 
 void mem_pla_config_changed(void);
 void mem_set_tape_sense(int sense);
