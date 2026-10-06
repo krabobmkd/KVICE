@@ -29,6 +29,7 @@
 #define VICE_MAINCPU_H
 
 #include "mainlock.h"
+#include "maincpuattention.h"
 #include "types.h"
 #include "vsyncapi.h"
 

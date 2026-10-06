@@ -55,7 +55,8 @@
 
 z80_regs_t z80_regs;
 
-static int z80_started = 0;
+/* one byte of the main CPU attention word, see maincpuattention.h */
+#define z80_started (maincpu_attention.flags.z80)
 static int cpmcart_enabled = 0;
 
 static uint8_t cpmcart_wrap_read(uint16_t addr)
@@ -424,7 +425,7 @@ int cpmcart_snapshot_read_module(snapshot_t *s)
         || SMR_B(m, &reg_f2) < 0
         || SMR_B(m, &reg_h2) < 0
         || SMR_B(m, &reg_l2) < 0
-        || SMR_B_INT(m, &z80_started) < 0
+        || SMR_B(m, &z80_started) < 0
         || SMR_DW_UINT(m, &z80_last_opcode_info) < 0
         || SMR_DW_UINT(m, &z80_last_opcode_addr) < 0) {
         goto fail;

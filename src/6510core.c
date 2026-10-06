@@ -135,6 +135,16 @@
 
 /* ------------------------------------------------------------------------- */
 
+/* Rare per opcode work (profiler...): when CPU_ATTENTION is defined, it is
+   only done when CPU_ATTENTION is true, CPU_ATTENTION_EPILOGUE is then the
+   other rare work done after each opcode. */
+#ifndef CPU_ATTENTION
+#define CPU_ATTENTION 1
+#endif
+#ifndef CPU_ATTENTION_EPILOGUE
+#define CPU_ATTENTION_EPILOGUE
+#endif
+
 #ifndef CYCLE_EXACT_ALARM
 #define PROCESS_ALARMS                                             \
     while (CLK >= alarm_context_next_pending_clk(ALARM_CONTEXT)) { \
@@ -2318,7 +2328,8 @@ static const uint8_t rewind_fetch_tab[] = {
         }
     }
 
-    {
+    /* one test when nothing is pending, the usual case */
+    if (CPU_INT_STATUS->global_pending_int != IK_NONE) {
         enum cpu_int pending_interrupt;
 
         if (!(CPU_INT_STATUS->global_pending_int & IK_IRQ)
@@ -3467,8 +3478,11 @@ trap_skipped:
         }
 
 #if !defined(DRIVE_CPU)
-        if (maincpu_profiling) {
-            profile_sample_finish(CLK - profiling_clock_start, 0 /* stolen_cycles */);
+        if (CPU_ATTENTION) {
+            if (maincpu_profiling) {
+                profile_sample_finish(CLK - profiling_clock_start, 0 /* stolen_cycles */);
+            }
+            CPU_ATTENTION_EPILOGUE
         }
 #endif
 

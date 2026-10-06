@@ -115,6 +115,15 @@ static enum {
     AUTOSTART_DONE
 } autostartmode = AUTOSTART_NONE;
 
+/* The main CPU calls autostart_advance() only while this byte of its
+   attention word is set (see maincpuattention.h): set at each mode change,
+   cleared by autostart_advance() when there is nothing to do. */
+#define AUTOSTART_SET_MODE(mode)                    \
+    do {                                            \
+        autostartmode = (mode);                     \
+        maincpu_attention.flags.autostart = 1;      \
+    } while (0)
+
 #define AUTOSTART_WAIT_BLINK   0
 #define AUTOSTART_NOWAIT_BLINK 1
 
@@ -965,7 +974,7 @@ void autostart_disable(void)
 
     DBG(("autostart_disable (ERROR)"));
 
-    autostartmode = AUTOSTART_ERROR;
+    AUTOSTART_SET_MODE(AUTOSTART_ERROR);
     trigger_monitor = 0;
     deallocate_program_name();
     log_error(autostart_log, "Turned off.");
@@ -1007,7 +1016,7 @@ static void autostart_done(void)
 
     restore_drive_emulation_state(autostart_disk_unit, autostart_disk_drive);
 
-    autostartmode = AUTOSTART_DONE;
+    AUTOSTART_SET_MODE(AUTOSTART_DONE);
 
     log_message(autostart_log, "Done.");
 }
@@ -1108,7 +1117,7 @@ static void advance_hastape(void)
             }
             kbdbuf_feed(tmp);
             lib_free(tmp);
-            autostartmode = AUTOSTART_PRESSPLAYONTAPE;
+            AUTOSTART_SET_MODE(AUTOSTART_PRESSPLAYONTAPE);
             entered_rom = 0;
             deallocate_program_name();
             break;
@@ -1126,7 +1135,7 @@ static void advance_pressplayontape(void)
     int port = (autostart_tape_unit == 2) ? TAPEPORT_PORT_2 : TAPEPORT_PORT_1;
     switch (check2("PRESS PLAY ON TAPE", AUTOSTART_NOWAIT_BLINK, 0, AUTOSTART_CHECK_ANY_COLUMN)) {
         case YES:
-            autostartmode = AUTOSTART_LOADINGTAPE;
+            AUTOSTART_SET_MODE(AUTOSTART_LOADINGTAPE);
             datasette_control(port, DATASETTE_CONTROL_START);
             break;
         case NO:
@@ -1222,7 +1231,7 @@ static void advance_hasdisk(int unit, int drive)
 
             /* switch to next state ("searching...") */
 #if 1
-            autostartmode = AUTOSTART_WAITSEARCHINGFOR;
+            AUTOSTART_SET_MODE(AUTOSTART_WAITSEARCHINGFOR);
 #endif
 
 #if 0
@@ -1243,14 +1252,14 @@ static void advance_hasdisk(int unit, int drive)
             /* this is what the code did before the rework. but why? */
             if (!traps) {
                 if (AutostartWarp) {
-                    autostartmode = AUTOSTART_WAITSEARCHINGFOR;
+                    AUTOSTART_SET_MODE(AUTOSTART_WAITSEARCHINGFOR);
                 } else {
                     /* be most compatible if warp is disabled */
                     autostart_finish();
                     autostart_done(); /* -> AUTOSTART_DONE */
                 }
             } else {
-                 autostartmode = AUTOSTART_LOADINGDISK;
+                 AUTOSTART_SET_MODE(AUTOSTART_LOADINGDISK);
                  machine_bus_attention_callback_set(disk_attention_callback);
             }
 #endif
@@ -1294,7 +1303,7 @@ static void advance_waitsearchingfor(void)
     switch (check2("SEARCHING FOR", AUTOSTART_NOWAIT_BLINK, 0, AUTOSTART_CHECK_ANY_COLUMN)) {
         case YES:
             log_message(autostart_log, "Searching for ...");
-            autostartmode = AUTOSTART_WAITLOADING;
+            AUTOSTART_SET_MODE(AUTOSTART_WAITLOADING);
             break;
         case NO:
 #if 0
@@ -1309,7 +1318,7 @@ static void advance_waitsearchingfor(void)
                 log_message(autostart_log, "Searching for ... missed, got LOADING");
                 /* proceed as if mode was AUTOSTART_WAITLOADING */
                 entered_rom = 0;
-                autostartmode = AUTOSTART_WAITLOADREADY;
+                AUTOSTART_SET_MODE(AUTOSTART_WAITLOADREADY);
                 break;
             }
             /* if we are already way ahead and basically missed everything until
@@ -1350,7 +1359,7 @@ static void advance_waitloading(void)
         case YES:
             log_message(autostart_log, "Loading");
             entered_rom = 0;
-            autostartmode = AUTOSTART_WAITLOADREADY;
+            AUTOSTART_SET_MODE(AUTOSTART_WAITLOADREADY);
             break;
         case NO:
 #if 0
@@ -1366,7 +1375,7 @@ static void advance_waitloading(void)
                 if (check2("LOADING", AUTOSTART_NOWAIT_BLINK, -2) == YES) {
                     log_message(autostart_log, "Loading missed, got Ready");
                     entered_rom = 0;
-                    autostartmode = AUTOSTART_WAITLOADREADY;
+                    AUTOSTART_SET_MODE(AUTOSTART_WAITLOADREADY);
                     break;
                 }
             }
@@ -1384,7 +1393,7 @@ static void advance_waitloading(void)
                 if (check2("LOADING", AUTOSTART_NOWAIT_BLINK, -2) == YES) {
                     log_message(autostart_log, "Loading missed, got Ready");
                     entered_rom = 0;
-                    autostartmode = AUTOSTART_WAITLOADREADY;
+                    AUTOSTART_SET_MODE(AUTOSTART_WAITLOADREADY);
                     break;
                 }
             }
@@ -1425,7 +1434,7 @@ static void advance_inject(void)
         autostart_disable();
     } else {
         /* wait for ready cursor and type RUN */
-        autostartmode = AUTOSTART_WAITLOADREADY;
+        AUTOSTART_SET_MODE(AUTOSTART_WAITLOADREADY);
     }
 }
 
@@ -1434,6 +1443,7 @@ static void advance_inject(void)
 void autostart_advance(void)
 {
     if (!autostart_enabled) {
+        maincpu_attention.flags.autostart = 0;
         return;
     }
 
@@ -1483,10 +1493,13 @@ void autostart_advance(void)
         case AUTOSTART_ERROR:
             log_message(autostart_log, "Error");
             restore_drive_emulation_state(autostart_disk_unit, autostart_disk_drive);
-            autostartmode = AUTOSTART_DONE;
+            AUTOSTART_SET_MODE(AUTOSTART_DONE);
             break;
 
         default:
+            /* AUTOSTART_NONE, AUTOSTART_DONE...: nothing to do until the
+               next mode change */
+            maincpu_attention.flags.autostart = 0;
             return;
     }
 }
@@ -1527,7 +1540,7 @@ static void reboot_for_autostart(const char *program_name, unsigned int mode,
         autostart_program_name = lib_strdup(program_name);
     }
 
-    autostartmode = mode;
+    AUTOSTART_SET_MODE(mode);
     autostart_run_mode = runmode;
     autostart_wait_for_reset = 1;
 
@@ -1568,7 +1581,7 @@ int autostart_snapshot(const char *file_name, const char *program_name)
     deallocate_program_name();  /* not needed at all */
 
     if (!(snap = snapshot_open(file_name, &vmajor, &vminor, machine_get_name()))) {
-        autostartmode = AUTOSTART_ERROR;
+        AUTOSTART_SET_MODE(AUTOSTART_ERROR);
         return -1;
     }
 
@@ -1639,7 +1652,7 @@ int autostart_tape(const char *file_name, const char *program_name,
     }
 
     DBG(("autostart_tape (ERROR)"));
-    autostartmode = AUTOSTART_ERROR;
+    AUTOSTART_SET_MODE(AUTOSTART_ERROR);
     deallocate_program_name();
 
     /* restore_drive_emulation_state(DRIVE_UNIT_MIN); */
@@ -1852,7 +1865,7 @@ int autostart_disk(int unit, int drive, const char *file_name, const char *progr
     }
 exiterror:
     DBG(("autostart_disk: ERROR"));
-    autostartmode = AUTOSTART_ERROR;
+    AUTOSTART_SET_MODE(AUTOSTART_ERROR);
     deallocate_program_name();
     lib_free(name);
 
@@ -2259,12 +2272,12 @@ void autostart_reset(void)
         && autostartmode != AUTOSTART_NONE
         && autostartmode != AUTOSTART_ERROR) {
         oldmode = autostartmode;
-        autostartmode = AUTOSTART_NONE;
+        AUTOSTART_SET_MODE(AUTOSTART_NONE);
         if (oldmode != AUTOSTART_DONE) {
             DBG(("autostart_reset oldmode != AUTOSTART_DONE"));
             disk_eof_callback();
         }
-        autostartmode = AUTOSTART_NONE;
+        AUTOSTART_SET_MODE(AUTOSTART_NONE);
         trigger_monitor = 0;
         deallocate_program_name();
         log_message(autostart_log, "Turned off.");

@@ -284,6 +284,7 @@ static int cmdline_limitcycles(const char *param, void *extra_param)
         return -1;
     }
     maincpu_clk_limit = (CLOCK)clk_limit;
+    maincpu_attention.flags.clk_limit = (maincpu_clk_limit != 0);
     return 0;
 }
 

@@ -52,7 +52,6 @@ uint8_t  callstack_sp[MAX_CALLSTACK_SIZE];
 uint16_t callstack_memory_bank_config[MAX_CALLSTACK_SIZE];
 unsigned callstack_size = 0;
 bool     context_dirty = true;
-bool     maincpu_profiling = false;
 
 /* (fragile) flags if the current command is a JSR/INT or RTS/RTI */
 bool     entered_context = false;
