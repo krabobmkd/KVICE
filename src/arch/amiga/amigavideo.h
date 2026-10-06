@@ -31,7 +31,9 @@
 
 void amiga_video_handle_events(void);
 void amiga_video_close_all(void);
-ULONG amiga_video_signal_mask(void);
+//ULONG amiga_video_signal_mask(void);
+extern ULONG currentUIWaitBit;
+
 struct Window *amiga_video_window(void);
 
 /* window scale (1 to 3) from the Display menu */

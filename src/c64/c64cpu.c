@@ -51,6 +51,7 @@
  - DMA_FUNC
  - DMA_ON_RESET
  - CHECK_AND_RUN_ALTERNATE_CPU
+ - ALTERNATE_CPU_ON_ATTENTION
 
 */
 
@@ -131,12 +132,9 @@ static uint8_t memmap_mem_read_dummy(unsigned int addr)
 }
 #endif
 
-static void check_and_run_alternate_cpu(void)
-{
-    cpmcart_check_and_run_z80();
-}
-
-#define CHECK_AND_RUN_ALTERNATE_CPU check_and_run_alternate_cpu();
+/* the CP/M cartridge Z80 runs from the maincpu_attention epilogue, after an
+   opcode, only while it is started: no call before each opcode */
+#define ALTERNATE_CPU_ON_ATTENTION cpmcart_check_and_run_z80();
 
 #define HAVE_Z80_REGS
 

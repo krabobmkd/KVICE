@@ -135,7 +135,7 @@ ULONG amiga_wait_vblank_count(void)
  * \param[in]   deadline    E-clock based tick (see archdep_tick.c)
  */
 /* CTRL-C from the Shell: quit like the close gadget, VICE shutdown and all */
-static void amiga_check_ctrl_c(ULONG sigs)
+static inline void amiga_check_ctrl_c(ULONG sigs)
 {
     if (sigs & SIGBREAKF_CTRL_C) {
         AMIGA_TRACE(("CTRL-C"));
@@ -145,8 +145,6 @@ static void amiga_check_ctrl_c(ULONG sigs)
 
 void amiga_wait_until(tick_t deadline)
 {
-    ULONG ui_mask;
-    ULONG mui_mask;
     ULONG sigs;
 
     if (vblank_data == NULL) {
@@ -155,14 +153,16 @@ void amiga_wait_until(tick_t deadline)
     }
     /* tick_t wraps: compare the signed distance */
     while ((int32_t)(deadline - tick_now()) > 0) {
-        /* both may change after handling events: read them at each round */
-        ui_mask = amiga_video_signal_mask();
-        mui_mask = amiga_mui_signal_mask();
-        sigs = Wait(vblank_data->sigmask | ui_mask | mui_mask | SIGBREAKF_CTRL_C);
-        if (sigs & ui_mask) {
+        /* both may change after handling events: read them at each round */       
+        sigs = Wait(vblank_data->sigmask |
+                        currentUIWaitBit |
+                        mui_sigs |
+                        SIGBREAKF_CTRL_C
+                        );
+        if (sigs & currentUIWaitBit) {
             amiga_video_handle_events();
         }
-        if (sigs & mui_mask) {
+        if (sigs & mui_sigs) {
             amiga_mui_handle_events();
         }
         amiga_check_ctrl_c(sigs);
@@ -187,7 +187,6 @@ void __chkabort(void)
  */
 void amiga_wait_poll_events(void)
 {
-    ULONG mui_mask;
     ULONG sigs;
 
     amiga_video_handle_events();
@@ -196,8 +195,7 @@ void amiga_wait_poll_events(void)
     sigs = SetSignal(0, SIGBREAKF_CTRL_C);
     amiga_check_ctrl_c(sigs);
 
-    mui_mask = amiga_mui_signal_mask();
-    if (mui_mask != 0 && (sigs & mui_mask) != 0) {
+    if ((sigs & mui_sigs) != 0) {
         amiga_mui_handle_events();
     }
 }
@@ -208,20 +206,18 @@ void amiga_wait_poll_events(void)
  */
 void amiga_wait_events(void)
 {
-    ULONG ui_mask = amiga_video_signal_mask();
-    ULONG mui_mask = amiga_mui_signal_mask();
-    ULONG wait_mask = ui_mask | mui_mask | SIGBREAKF_CTRL_C;
+    ULONG wait_mask = currentUIWaitBit | mui_sigs | SIGBREAKF_CTRL_C;
     ULONG sigs;
 
-    if (ui_mask == 0 && vblank_data != NULL) {
+    if (currentUIWaitBit == 0 && vblank_data != NULL) {
         /* no window: do not wait forever */
         wait_mask |= vblank_data->sigmask;
     }
     sigs = Wait(wait_mask);
-    if (sigs & ui_mask) {
+    if (sigs & currentUIWaitBit) {
         amiga_video_handle_events();
     }
-    if (sigs & mui_mask) {
+    if (sigs & mui_sigs) {
         amiga_mui_handle_events();
     }
     amiga_check_ctrl_c(sigs);

@@ -600,7 +600,7 @@ static const char *category_names[PAGE_COUNT + 1];
 static Object *mui_app = NULL;
 static Object *mui_win = NULL;
 /* signals MUI wants to be woken up for, 0 when nothing to do */
-static ULONG mui_sigs = 0;
+ULONG mui_sigs = 0;
 static int mui_win_open = 0;
 
 static void apply_settings(void)
@@ -791,13 +791,6 @@ void amiga_settings_open(void)
 
     /* first input round: gives the signals MUI waits for */
     amiga_mui_handle_events();
-}
-
-/** \brief  Signals to add to the main loop Wait(), 0 when MUI is idle
- */
-ULONG amiga_mui_signal_mask(void)
-{
-    return mui_sigs;
 }
 
 /** \brief  Process MUI input: call when one of amiga_mui_signal_mask() is set

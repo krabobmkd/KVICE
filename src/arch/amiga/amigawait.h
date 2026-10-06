@@ -32,7 +32,9 @@
 
 int amiga_wait_init(void);
 void amiga_wait_shutdown(void);
+/* emulation wait loop */
 void amiga_wait_until(tick_t deadline);
+/* pause loop */
 void amiga_wait_events(void);
 void amiga_wait_poll_events(void);
 ULONG amiga_wait_vblank_count(void);

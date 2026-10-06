@@ -28,8 +28,10 @@
 #define VICE_PROFILER_H
 
 #include "types.h"
+#include "maincpuattention.h"
 
-extern bool maincpu_profiling;
+/* one byte of the main CPU attention word, see maincpuattention.h */
+#define maincpu_profiling (maincpu_attention.flags.profiling)
 
 /* resets sample statistics and starts profiling sample collection */
 void profile_start(void);

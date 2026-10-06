@@ -40,6 +40,7 @@
 #include "log.h"
 #include "machine.h"
 #include "main65816cpu.h"
+#include "maincpuattention.h"
 #include "mem.h"
 #include "monitor.h"
 #include "resources.h"
@@ -131,6 +132,9 @@ int maincpu_rmw_flag = 0;
 CLOCK maincpu_clk = 0L;
 /* if != 0, exit when this many cycles have been executed */
 CLOCK maincpu_clk_limit = 0L;
+
+/* rare per opcode work (profiler, autostart...), see maincpuattention.h */
+maincpu_attention_t maincpu_attention;
 
 /* Information about the last executed opcode.  This is used to know the
    number of write cycles in the last executed opcode and to delay interrupts

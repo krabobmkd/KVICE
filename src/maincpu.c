@@ -246,6 +246,9 @@ CLOCK maincpu_clk = 0L;
 /* if != 0, exit when this many cycles have been executed */
 CLOCK maincpu_clk_limit = 0L;
 
+/* rare per opcode work (profiler, autostart...), see maincpuattention.h */
+maincpu_attention_t maincpu_attention;
+
 /* This is flag is set to 1 each time a Read-Modify-Write instructions that
    accesses memory is executed.  We can emulate the RMW behaviour of the 6510
    this way.  VERY important notice: Always assign 1 for true, 0 for false!
@@ -523,6 +526,28 @@ void maincpu_resync_limits(void)
     }
 }
 
+/* The rare work done after an opcode, when one of the maincpu_attention
+   flags is set. Not inlined: it stays out of the main loop code. */
+static void __attribute__((noinline)) maincpu_attention_epilogue(void)
+{
+    if (maincpu_attention.flags.clk_limit && (maincpu_clk > maincpu_clk_limit)) {
+        log_error(LOG_DEFAULT, "cycle limit reached.");
+        archdep_vice_exit(1);
+    }
+
+    if (maincpu_attention.flags.autostart) {
+        autostart_advance();
+    }
+
+#ifdef ALTERNATE_CPU_ON_ATTENTION
+    /* the machine runs its alternate CPU from here instead of from
+       CHECK_AND_RUN_ALTERNATE_CPU before each opcode */
+    if (maincpu_attention.flags.z80) {
+        ALTERNATE_CPU_ON_ATTENTION
+    }
+#endif
+}
+
 void maincpu_mainloop(void)
 {
 #define ORIGIN_MEMSPACE (e_comp_space)
@@ -633,16 +658,14 @@ void maincpu_mainloop(void)
 
 #define GLOBAL_REGS maincpu_regs
 
+/* one test of the attention word after each opcode, for the profiler, the
+   cycle limit, autostart and the alternate CPU */
+#define CPU_ATTENTION (maincpu_attention.any != 0)
+#define CPU_ATTENTION_EPILOGUE maincpu_attention_epilogue();
+
 #include "6510core.c"
 
         maincpu_int_status->num_dma_per_opcode = 0;
-
-        if (maincpu_clk_limit && (maincpu_clk > maincpu_clk_limit)) {
-            log_error(LOG_DEFAULT, "cycle limit reached.");
-            archdep_vice_exit(1);
-        }
-
-        autostart_advance();
 #if 0
         if (CLK > 246171754) {
             debug.maincpu_traceflg = 1;

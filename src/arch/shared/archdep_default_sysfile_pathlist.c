@@ -100,7 +100,7 @@ char *archdep_default_sysfile_pathlist(const char *emu_id)
     /* The program drawer (release: PROGDIR:C64, PROGDIR:DRIVES), then the
      * source tree data drawer for an executable in vice-3.10/amiga/build
      * ("/" is the parent directory in AmigaDOS paths) */
-    sysfile_path = lib_strdup("PROGDIR:" ARCHDEP_FINDPATH_SEPARATOR_STRING "PROGDIR://data");
+    sysfile_path = lib_strdup("PROGDIR:" ARCHDEP_FINDPATH_SEPARATOR_STRING "PROGDIR:/data");
     return lib_strdup(sysfile_path);
 #endif
 

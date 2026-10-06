@@ -31,10 +31,12 @@
 /* open the settings window (non-modal) */
 void amiga_settings_open(void);
 /* signals to add to the main loop Wait(), 0 when MUI is idle */
-ULONG amiga_mui_signal_mask(void);
+//ULONG amiga_mui_signal_mask(void);
 /* process MUI input, when one of amiga_mui_signal_mask() is set */
 void amiga_mui_handle_events(void);
 /* free MUI resources, safe to call more than once */
 void amiga_mui_close_all(void);
+
+extern ULONG mui_sigs;
 
 #endif

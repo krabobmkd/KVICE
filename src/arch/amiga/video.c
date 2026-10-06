@@ -99,6 +99,10 @@ static int use_rtg = 0;
 /* The window is kept outside of the canvas: the atexit() cleanup must never
  * touch a canvas the core may already have freed. */
 static struct Window *amiga_window = NULL;
+
+/* bit of either fullscreen window user port, or WB window user port. */
+ULONG currentUIWaitBit = 0;
+
 /* Window geometry, kept across fullscreen switches and saved in vicerc at
  * exit: position, and inner size (without the borders: the window is not
  * GimmeZeroZero, Width includes them). -1 / 0: not known yet. */
@@ -290,6 +294,7 @@ static void amiga_close_window(void)
         }
         CloseWindow(amiga_window);
         amiga_window = NULL;
+        currentUIWaitBit = 0;
     }
     draw_rp = NULL;
     draw_width = 0;
@@ -602,11 +607,15 @@ static void amiga_open_window(unsigned int width, unsigned int height)
         log_error(amiga_video_log, "cannot open a %ux%u window.", width, height);
         return;
     }
+
     amiga_update_inner_size();
     amiga_set_window_limits();
 
     AmigaMenu_Create(amiga_window);
     amiga_add_app_window();
+
+    currentUIWaitBit = (1UL << amiga_window->UserPort->mp_SigBit);
+    if(app_port) currentUIWaitBit |= (1UL << app_port->mp_SigBit);
 
     amiga_select_route(amiga_window->RPort->BitMap, amiga_window->WScreen->ViewPort.ColorMap);
     if (use_cgxscale || use_planarscale) {
@@ -872,6 +881,10 @@ static int amiga_open_fullscreen(void)
     amiga_fullscreen_layout();
     log_message(amiga_video_log, "fullscreen: %s, %dx%d, %d colors.", name, sw, sh,
                 1 << (depth > 24 ? 24 : depth));
+
+    currentUIWaitBit = 1UL << amiga_window->UserPort->mp_SigBit;
+
+
     return 0;
 }
 
@@ -925,18 +938,18 @@ int amiga_video_is_fullscreen(void)
 
 /** \brief  Signal mask of the emulator window IDCMP port, 0 if no window
  */
-ULONG amiga_video_signal_mask(void)
-{
-    ULONG mask = 0;
+// ULONG amiga_video_signal_mask(void)
+// {
+//     ULONG mask = 0;
 
-    if (amiga_window != NULL) {
-        mask |= 1UL << amiga_window->UserPort->mp_SigBit;
-    }
-    if (app_window != NULL) {
-        mask |= 1UL << app_port->mp_SigBit;
-    }
-    return mask;
-}
+//     if (amiga_window != NULL) {
+//         mask |= 1UL << amiga_window->UserPort->mp_SigBit;
+//     }
+//     if (app_window != NULL) {
+//         mask |= 1UL << app_port->mp_SigBit;
+//     }
+//     return mask;
+// }
 
 /** \brief  The emulator window, for requesters (may be NULL)
  */
@@ -1065,8 +1078,10 @@ void amiga_video_handle_events(void)
                     }
                     break;
                 }
+                /*
                 AMIGA_TRACE(("rawkey 0x%02x %s qualifier 0x%04x", code & 0x7f,
                              (code & IECODE_UP_PREFIX) ? "up" : "down", qualifier));
+                */
                 if (code & IECODE_UP_PREFIX) {
                     keyboard_key_released((signed long)(code & 0x7f), amiga_key_mods(qualifier));
                 } else {

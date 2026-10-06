@@ -40,6 +40,7 @@ option(AMIGA_USE_68040 "compile for 68040" OFF)
 option(AMIGA_USE_68060 "compile for 68060" OFF)
 option(VICE_USE_HARDFLOAT "use 6888x/040/060 FPU instructions" OFF)
 option(VICE_AMIGA_TRACE "print startup traces to stdout (arch/amiga/amigatrace.h)" ON)
+option(VICE_AMIGA_SAVE_ASM "keep the generated assembler (.s) and preprocessed (.i) files next to the objects in the build dir" ON)
 option(VICE_AMIGA_DIV64_STATS "measure: print 64 bit divisions per second and their callers every 5 s" OFF)
 
 set(VICE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../src")
@@ -180,8 +181,12 @@ function(vice_amiga_setup_target target)
 		target_compile_definitions(${target} PRIVATE VICE_AMIGA_TRACE=1)
 	endif()
 	target_compile_options(${target} PRIVATE
-		-O2 -fomit-frame-pointer -Wno-unused-parameter
+		-O3 -fomit-frame-pointer -Wno-unused-parameter
 		${AMIGA_COMPILER_OPTIONS})
+	if(VICE_AMIGA_SAVE_ASM)
+		# CMakeFiles/<target>.dir/.../<file>.s, with the C variable names
+		target_compile_options(${target} PRIVATE -save-temps=obj -fverbose-asm)
+	endif()
 endfunction()
 
 # an emulator: vice_common objects + its own sources
