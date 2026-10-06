@@ -35,7 +35,7 @@ uint8_t c64memrom_kernal64_rom[C64_KERNAL_ROM_SIZE];
 
 uint8_t c64memrom_kernal64_trap_rom[C64_KERNAL_ROM_SIZE];
 
-uint8_t c64memrom_kernal64_read(uint16_t addr)
+uint8_t c64memrom_kernal64_read(uint16_t addr PARAMREG(d0))
 {
     return c64memrom_kernal64_rom[addr & 0x1fff];
 }
@@ -45,7 +45,7 @@ static void c64memrom_kernal64_store(uint16_t addr, uint8_t value)
     c64memrom_kernal64_rom[addr & 0x1fff] = value;
 }
 
-uint8_t c64memrom_basic64_read(uint16_t addr)
+uint8_t c64memrom_basic64_read(uint16_t addr PARAMREG(d0))
 {
     return c64memrom_basic64_rom[addr & 0x1fff];
 }
@@ -55,7 +55,7 @@ static void c64memrom_basic64_store(uint16_t addr, uint8_t value)
     c64memrom_basic64_rom[addr & 0x1fff] = value;
 }
 
-uint8_t c64memrom_trap_read(uint16_t addr)
+uint8_t c64memrom_trap_read(uint16_t addr PARAMREG(d0))
 {
     switch (addr & 0xf000) {
         case 0xe000:
@@ -66,7 +66,7 @@ uint8_t c64memrom_trap_read(uint16_t addr)
     return 0;
 }
 
-void c64memrom_trap_store(uint16_t addr, uint8_t value)
+void c64memrom_trap_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     switch (addr & 0xf000) {
         case 0xe000:

@@ -28,6 +28,7 @@
 #define VICE_CARTIO_H
 
 #include "types.h"
+#include "paramreg.h"
 
 #define IO_DETACH_CART     0
 #define IO_DETACH_RESOURCE 1
@@ -49,39 +50,39 @@
 #define IO_MIRROR_OTHER 1   /*!< registered area contains mirrors of another registered area */
 #define IO_MIRROR_MASK  2   /*!< registered area contains mirrors of itself, determined by address_mask */
 
-uint8_t c64io_d000_read(uint16_t addr);
+uint8_t c64io_d000_read(uint16_t addr PARAMREG(d0));
 uint8_t c64io_d000_peek(uint16_t addr);
-void c64io_d000_store(uint16_t addr, uint8_t value);
-uint8_t c64io_d100_read(uint16_t addr);
+void c64io_d000_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t c64io_d100_read(uint16_t addr PARAMREG(d0));
 uint8_t c64io_d100_peek(uint16_t addr);
-void c64io_d100_store(uint16_t addr, uint8_t value);
-uint8_t c64io_d200_read(uint16_t addr);
+void c64io_d100_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t c64io_d200_read(uint16_t addr PARAMREG(d0));
 uint8_t c64io_d200_peek(uint16_t addr);
-void c64io_d200_store(uint16_t addr, uint8_t value);
-uint8_t c64io_d300_read(uint16_t addr);
+void c64io_d200_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t c64io_d300_read(uint16_t addr PARAMREG(d0));
 uint8_t c64io_d300_peek(uint16_t addr);
-void c64io_d300_store(uint16_t addr, uint8_t value);
-uint8_t c64io_d400_read(uint16_t addr);
+void c64io_d300_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t c64io_d400_read(uint16_t addr PARAMREG(d0));
 uint8_t c64io_d400_peek(uint16_t addr);
-void c64io_d400_store(uint16_t addr, uint8_t value);
-uint8_t c64io_d500_read(uint16_t addr);
+void c64io_d400_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t c64io_d500_read(uint16_t addr PARAMREG(d0));
 uint8_t c64io_d500_peek(uint16_t addr);
-void c64io_d500_store(uint16_t addr, uint8_t value);
-uint8_t c64io_d600_read(uint16_t addr);
+void c64io_d500_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t c64io_d600_read(uint16_t addr PARAMREG(d0));
 uint8_t c64io_d600_peek(uint16_t addr);
-void c64io_d600_store(uint16_t addr, uint8_t value);
-uint8_t c64io_d700_read(uint16_t addr);
+void c64io_d600_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t c64io_d700_read(uint16_t addr PARAMREG(d0));
 uint8_t c64io_d700_peek(uint16_t addr);
-void c64io_d700_store(uint16_t addr, uint8_t value);
-uint8_t c64io_dd00_read(uint16_t addr);
+void c64io_d700_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t c64io_dd00_read(uint16_t addr PARAMREG(d0));
 uint8_t c64io_dd00_peek(uint16_t addr);
-void c64io_dd00_store(uint16_t addr, uint8_t value);
-uint8_t c64io_de00_read(uint16_t addr);
+void c64io_dd00_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t c64io_de00_read(uint16_t addr PARAMREG(d0));
 uint8_t c64io_de00_peek(uint16_t addr);
-void c64io_de00_store(uint16_t addr, uint8_t value);
-uint8_t c64io_df00_read(uint16_t addr);
+void c64io_de00_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t c64io_df00_read(uint16_t addr PARAMREG(d0));
 uint8_t c64io_df00_peek(uint16_t addr);
-void c64io_df00_store(uint16_t addr, uint8_t value);
+void c64io_df00_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
 
 uint8_t vic20io0_read(uint16_t addr);
 uint8_t vic20io0_peek(uint16_t addr);

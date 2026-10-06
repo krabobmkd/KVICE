@@ -29,13 +29,14 @@
 #define VICE_VICII_MEM_H
 
 #include "types.h"
+#include "paramreg.h"
 
 void vicii_store(uint16_t addr, uint8_t value);
 uint8_t vicii_read(uint16_t addr);
 uint8_t vicii_peek(uint16_t addr);
-void vicii_mem_vbank_store(uint16_t addr, uint8_t value);
-void vicii_mem_vbank_39xx_store(uint16_t addr, uint8_t value);
-void vicii_mem_vbank_3fxx_store(uint16_t addr, uint8_t value);
+void vicii_mem_vbank_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+void vicii_mem_vbank_39xx_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+void vicii_mem_vbank_3fxx_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
 void vicii_palette_store(uint16_t addr, uint8_t value);
 uint8_t vicii_palette_read(uint16_t addr);
 int vicii_extended_regs(void);

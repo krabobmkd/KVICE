@@ -28,6 +28,7 @@
 #define VICE_PLUS60K_H
 
 #include "types.h"
+#include "paramreg.h"
 
 extern int plus60k_enabled;
 extern int plus60k_base;
@@ -40,12 +41,12 @@ void plus60k_reset(void);
 void plus60k_shutdown(void);
 
 void plus60k_ram_inject(uint16_t addr, uint8_t value);
-void plus60k_vicii_mem_vbank_store(uint16_t addr, uint8_t value);
-void plus60k_vicii_mem_vbank_39xx_store(uint16_t addr, uint8_t value);
-void plus60k_vicii_mem_vbank_3fxx_store(uint16_t addr, uint8_t value);
-void plus60k_ram_hi_store(uint16_t addr, uint8_t value);
-uint8_t plus60k_ram_read(uint16_t addr);
-void plus60k_ram_store(uint16_t addr, uint8_t value);
+void plus60k_vicii_mem_vbank_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+void plus60k_vicii_mem_vbank_39xx_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+void plus60k_vicii_mem_vbank_3fxx_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+void plus60k_ram_hi_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t plus60k_ram_read(uint16_t addr PARAMREG(d0));
+void plus60k_ram_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
 
 int set_plus60k_enabled(int value, int disable_reset);
 

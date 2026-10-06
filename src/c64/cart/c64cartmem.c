@@ -749,7 +749,7 @@ static uint8_t roml_read_slot1(uint16_t addr)
 }
 
 /* ROML read - mapped to 8000 in 8k,16k,ultimax */
-uint8_t roml_read(uint16_t addr)
+uint8_t roml_read(uint16_t addr PARAMREG(d0))
 {
     int res = CART_READ_THROUGH;
     uint8_t value;
@@ -790,7 +790,7 @@ uint8_t roml_read(uint16_t addr)
 }
 
 /* ROML store - mapped to 8000 in ultimax mode */
-void roml_store(uint16_t addr, uint8_t value)
+void roml_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     /* DBG(("ultimax w 8000: %04x %02x\n", addr, value)); */
 
@@ -1004,7 +1004,7 @@ static uint8_t romh_read_slot1(uint16_t addr)
     return romh_read_slotmain(addr);
 }
 
-uint8_t romh_read(uint16_t addr)
+uint8_t romh_read(uint16_t addr PARAMREG(d0))
 {
     int res = CART_READ_THROUGH;
     uint8_t value;
@@ -1144,7 +1144,7 @@ static uint8_t ultimax_romh_read_hirom_slot1(uint16_t addr)
     return ultimax_romh_read_hirom_slotmain(addr);
 }
 
-uint8_t ultimax_romh_read_hirom(uint16_t addr)
+uint8_t ultimax_romh_read_hirom(uint16_t addr PARAMREG(d0))
 {
     int res;
     uint8_t value;
@@ -1179,7 +1179,7 @@ uint8_t ultimax_romh_read_hirom(uint16_t addr)
 /* ROMH store - mapped to E000 in ultimax mode
    - carts that use "external kernal" mode must wrap to ram_store here
 */
-void romh_store(uint16_t addr, uint8_t value)
+void romh_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     /* DBG(("ultimax w e000: %04x %02x\n", addr, value)); */
 
@@ -1246,7 +1246,7 @@ void romh_store(uint16_t addr, uint8_t value)
    a write select. some carts however map RAM here and also
    accept writes in this mode.
 */
-void romh_no_ultimax_store(uint16_t addr, uint8_t value)
+void romh_no_ultimax_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     /* DBG(("game    w a000: %04x %02x\n", addr, value)); */
 
@@ -1294,7 +1294,7 @@ void romh_no_ultimax_store(uint16_t addr, uint8_t value)
    a write select. some carts however map ram here and also
    accept writes in this mode.
 */
-void roml_no_ultimax_store(uint16_t addr, uint8_t value)
+void roml_no_ultimax_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     /* DBG(("game rom    w 8000: %04x %02x\n", addr, value)); */
     /* "Slot 0" */
@@ -1369,7 +1369,7 @@ void roml_no_ultimax_store(uint16_t addr, uint8_t value)
       must NOT be called by any functions called here, as this will cause an
       endless loop
 */
-void raml_no_ultimax_store(uint16_t addr, uint8_t value)
+void raml_no_ultimax_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     /* DBG(("game ram    w 8000: %04x %02x\n", addr, value)); */
     /* "Slot 0" */
@@ -1426,7 +1426,7 @@ void raml_no_ultimax_store(uint16_t addr, uint8_t value)
       must NOT be called by any functions called here, as this will cause an
       endless loop
 */
-void ramh_no_ultimax_store(uint16_t addr, uint8_t value)
+void ramh_no_ultimax_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     /* DBG(("game ram    w 8000: %04x %02x\n", addr, value)); */
 
@@ -1450,7 +1450,7 @@ void ramh_no_ultimax_store(uint16_t addr, uint8_t value)
 }
 
 /* ultimax read - 0800 to 0fff (MAX-Machine only) */
-uint8_t ultimax_0800_0fff_read(uint16_t addr)
+uint8_t ultimax_0800_0fff_read(uint16_t addr PARAMREG(d0))
 {
     /* "Main Slot" */
     switch (mem_cartridge_type) {
@@ -1467,7 +1467,7 @@ uint8_t ultimax_0800_0fff_read(uint16_t addr)
 }
 
 /* ultimax store - 0800 to 0fff (MAX-Machine only) */
-void ultimax_0800_0fff_store(uint16_t addr, uint8_t value)
+void ultimax_0800_0fff_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     /* "Main Slot" */
     switch (mem_cartridge_type) {
@@ -1533,7 +1533,7 @@ static uint8_t ultimax_1000_7fff_read_slot1(uint16_t addr)
     return vicii_read_phi1();
 }
 
-uint8_t ultimax_1000_7fff_read(uint16_t addr)
+uint8_t ultimax_1000_7fff_read(uint16_t addr PARAMREG(d0))
 {
     int res;
     uint8_t value;
@@ -1569,7 +1569,7 @@ uint8_t ultimax_1000_7fff_read(uint16_t addr)
 }
 
 /* ultimax store - 1000 to 7fff */
-void ultimax_1000_7fff_store(uint16_t addr, uint8_t value)
+void ultimax_1000_7fff_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     DBG(("ultimax_1000_7fff_store()\n"));
 
@@ -1699,7 +1699,7 @@ static uint8_t ultimax_a000_bfff_read_slot1(uint16_t addr)
     return vicii_read_phi1();
 }
 
-uint8_t ultimax_a000_bfff_read(uint16_t addr)
+uint8_t ultimax_a000_bfff_read(uint16_t addr PARAMREG(d0))
 {
     int res;
     uint8_t value;
@@ -1733,7 +1733,7 @@ uint8_t ultimax_a000_bfff_read(uint16_t addr)
 }
 
 /* ultimax store - a000 to bfff */
-void ultimax_a000_bfff_store(uint16_t addr, uint8_t value)
+void ultimax_a000_bfff_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     /* "Slot 0" */
     if (magicvoice_cart_enabled() ||
@@ -1837,7 +1837,7 @@ static uint8_t ultimax_c000_cfff_read_slot1(uint16_t addr)
     return vicii_read_phi1();
 }
 
-uint8_t ultimax_c000_cfff_read(uint16_t addr)
+uint8_t ultimax_c000_cfff_read(uint16_t addr PARAMREG(d0))
 {
     int res;
     uint8_t value;
@@ -1873,7 +1873,7 @@ uint8_t ultimax_c000_cfff_read(uint16_t addr)
 }
 
 /* ultimax store - c000 to cfff */
-void ultimax_c000_cfff_store(uint16_t addr, uint8_t value)
+void ultimax_c000_cfff_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     /* "Slot 0" */
     if (magicvoice_cart_enabled() ||
@@ -1955,7 +1955,7 @@ static uint8_t ultimax_d000_dfff_read_slot1(uint16_t addr)
     return read_bank_io(addr);
 }
 
-uint8_t ultimax_d000_dfff_read(uint16_t addr)
+uint8_t ultimax_d000_dfff_read(uint16_t addr PARAMREG(d0))
 {
     int res = CART_READ_THROUGH;
     uint8_t value;
@@ -1990,7 +1990,7 @@ uint8_t ultimax_d000_dfff_read(uint16_t addr)
 }
 
 /* ultimax store - d000 to dfff */
-void ultimax_d000_dfff_store(uint16_t addr, uint8_t value)
+void ultimax_d000_dfff_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     /* "Slot 0" */
     if (magicvoice_cart_enabled() ||

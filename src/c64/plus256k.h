@@ -29,6 +29,7 @@
 
 #include "snapshot.h"
 #include "types.h"
+#include "paramreg.h"
 
 extern int plus256k_enabled;
 
@@ -40,10 +41,10 @@ void plus256k_reset(void);
 void plus256k_shutdown(void);
 
 void plus256k_ram_inject(uint16_t addr, uint8_t value);
-void plus256k_ram_low_store(uint16_t addr, uint8_t value);
-void plus256k_ram_high_store(uint16_t addr, uint8_t value);
-uint8_t plus256k_ram_low_read(uint16_t addr);
-uint8_t plus256k_ram_high_read(uint16_t addr);
+void plus256k_ram_low_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+void plus256k_ram_high_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t plus256k_ram_low_read(uint16_t addr PARAMREG(d0));
+uint8_t plus256k_ram_high_read(uint16_t addr PARAMREG(d0));
 
 int set_plus256k_enabled(int value, int disable_reset);
 

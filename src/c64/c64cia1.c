@@ -65,7 +65,7 @@
 
 static uint8_t cia1_cra = 0;    /* last value written to control register A */
 
-void cia1_store(uint16_t addr, uint8_t data)
+void cia1_store(uint16_t addr PARAMREG(d0), uint8_t data PARAMREG(d1))
 {
     if ((addr & 0xf) == CIA_CRA) {
         cia1_cra = data;
@@ -75,7 +75,7 @@ void cia1_store(uint16_t addr, uint8_t data)
     ciacore_store(machine_context.cia1, addr, data);
 }
 
-uint8_t cia1_read(uint16_t addr)
+uint8_t cia1_read(uint16_t addr PARAMREG(d0))
 {
     return ciacore_read(machine_context.cia1, addr);
 }

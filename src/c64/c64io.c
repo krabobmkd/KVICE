@@ -586,7 +586,7 @@ void cartio_set_highest_order(unsigned int nr)
 
 /* ---------------------------------------------------------------------------------------------------------- */
 
-uint8_t c64io_d000_read(uint16_t addr)
+uint8_t c64io_d000_read(uint16_t addr PARAMREG(d0))
 {
     DBGRW(("IO: io-d000 r %04x", addr));
     return io_read(&c64io_d000_head, addr);
@@ -598,13 +598,13 @@ uint8_t c64io_d000_peek(uint16_t addr)
     return io_peek(&c64io_d000_head, addr);
 }
 
-void c64io_d000_store(uint16_t addr, uint8_t value)
+void c64io_d000_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     DBGRW(("IO: io-d000 w %04x %02x", addr, value));
     io_store(&c64io_d000_head, addr, value);
 }
 
-uint8_t c64io_d100_read(uint16_t addr)
+uint8_t c64io_d100_read(uint16_t addr PARAMREG(d0))
 {
     DBGRW(("IO: io-d100 r %04x", addr));
     return io_read(&c64io_d100_head, addr);
@@ -616,13 +616,13 @@ uint8_t c64io_d100_peek(uint16_t addr)
     return io_peek(&c64io_d100_head, addr);
 }
 
-void c64io_d100_store(uint16_t addr, uint8_t value)
+void c64io_d100_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     DBGRW(("IO: io-d100 w %04x %02x", addr, value));
     io_store(&c64io_d100_head, addr, value);
 }
 
-uint8_t c64io_d200_read(uint16_t addr)
+uint8_t c64io_d200_read(uint16_t addr PARAMREG(d0))
 {
     DBGRW(("IO: io-d200 r %04x", addr));
     return io_read(&c64io_d200_head, addr);
@@ -634,13 +634,13 @@ uint8_t c64io_d200_peek(uint16_t addr)
     return io_peek(&c64io_d200_head, addr);
 }
 
-void c64io_d200_store(uint16_t addr, uint8_t value)
+void c64io_d200_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     DBGRW(("IO: io-d200 w %04x %02x", addr, value));
     io_store(&c64io_d200_head, addr, value);
 }
 
-uint8_t c64io_d300_read(uint16_t addr)
+uint8_t c64io_d300_read(uint16_t addr PARAMREG(d0))
 {
     DBGRW(("IO: io-d300 r %04x", addr));
     return io_read(&c64io_d300_head, addr);
@@ -652,13 +652,13 @@ uint8_t c64io_d300_peek(uint16_t addr)
     return io_peek(&c64io_d300_head, addr);
 }
 
-void c64io_d300_store(uint16_t addr, uint8_t value)
+void c64io_d300_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     DBGRW(("IO: io-d300 w %04x %02x", addr, value));
     io_store(&c64io_d300_head, addr, value);
 }
 
-uint8_t c64io_d400_read(uint16_t addr)
+uint8_t c64io_d400_read(uint16_t addr PARAMREG(d0))
 {
     DBGRW(("IO: io-d400 r %04x", addr));
     return io_read(&c64io_d400_head, addr);
@@ -670,13 +670,13 @@ uint8_t c64io_d400_peek(uint16_t addr)
     return io_peek(&c64io_d400_head, addr);
 }
 
-void c64io_d400_store(uint16_t addr, uint8_t value)
+void c64io_d400_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     DBGRW(("IO: io-d400 w %04x %02x", addr, value));
     io_store(&c64io_d400_head, addr, value);
 }
 
-uint8_t c64io_d500_read(uint16_t addr)
+uint8_t c64io_d500_read(uint16_t addr PARAMREG(d0))
 {
     DBGRW(("IO: io-d500 r %04x", addr));
     return io_read(&c64io_d500_head, addr);
@@ -688,13 +688,13 @@ uint8_t c64io_d500_peek(uint16_t addr)
     return io_peek(&c64io_d500_head, addr);
 }
 
-void c64io_d500_store(uint16_t addr, uint8_t value)
+void c64io_d500_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     DBGRW(("IO: io-d500 w %04x %02x", addr, value));
     io_store(&c64io_d500_head, addr, value);
 }
 
-uint8_t c64io_d600_read(uint16_t addr)
+uint8_t c64io_d600_read(uint16_t addr PARAMREG(d0))
 {
     DBGRW(("IO: io-d600 r %04x", addr));
     return io_read(&c64io_d600_head, addr);
@@ -706,13 +706,13 @@ uint8_t c64io_d600_peek(uint16_t addr)
     return io_peek(&c64io_d600_head, addr);
 }
 
-void c64io_d600_store(uint16_t addr, uint8_t value)
+void c64io_d600_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     DBGRW(("IO: io-d600 w %04x %02x", addr, value));
     io_store(&c64io_d600_head, addr, value);
 }
 
-uint8_t c64io_d700_read(uint16_t addr)
+uint8_t c64io_d700_read(uint16_t addr PARAMREG(d0))
 {
     DBGRW(("IO: io-d700 r %04x", addr));
     return io_read(&c64io_d700_head, addr);
@@ -724,13 +724,13 @@ uint8_t c64io_d700_peek(uint16_t addr)
     return io_peek(&c64io_d700_head, addr);
 }
 
-void c64io_d700_store(uint16_t addr, uint8_t value)
+void c64io_d700_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     DBGRW(("IO: io-d700 w %04x %02x", addr, value));
     io_store(&c64io_d700_head, addr, value);
 }
 
-uint8_t c64io_dd00_read(uint16_t addr)
+uint8_t c64io_dd00_read(uint16_t addr PARAMREG(d0))
 {
     DBGRW(("IO: io-dd00 r %04x", addr));
     return io_read(&c64io_dd00_head, addr);
@@ -742,13 +742,13 @@ uint8_t c64io_dd00_peek(uint16_t addr)
     return io_peek(&c64io_dd00_head, addr);
 }
 
-void c64io_dd00_store(uint16_t addr, uint8_t value)
+void c64io_dd00_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     DBGRW(("IO: io-dd00 w %04x %02x", addr, value));
     io_store(&c64io_dd00_head, addr, value);
 }
 
-uint8_t c64io_de00_read(uint16_t addr)
+uint8_t c64io_de00_read(uint16_t addr PARAMREG(d0))
 {
     DBGRW(("IO: io-de00 r %04x", addr));
     return io_read(&c64io_de00_head, addr);
@@ -760,13 +760,13 @@ uint8_t c64io_de00_peek(uint16_t addr)
     return io_peek(&c64io_de00_head, addr);
 }
 
-void c64io_de00_store(uint16_t addr, uint8_t value)
+void c64io_de00_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     DBGRW(("IO: io-de00 w %04x %02x", addr, value));
     io_store(&c64io_de00_head, addr, value);
 }
 
-uint8_t c64io_df00_read(uint16_t addr)
+uint8_t c64io_df00_read(uint16_t addr PARAMREG(d0))
 {
     DBGRW(("IO: io-df00 r %04x", addr));
     return io_read(&c64io_df00_head, addr);
@@ -778,7 +778,7 @@ uint8_t c64io_df00_peek(uint16_t addr)
     return io_peek(&c64io_df00_head, addr);
 }
 
-void c64io_df00_store(uint16_t addr, uint8_t value)
+void c64io_df00_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     DBGRW(("IO: io-df00 w %04x %02x", addr, value));
     io_store(&c64io_df00_head, addr, value);

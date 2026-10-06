@@ -29,6 +29,7 @@
 
 #include "snapshot.h"
 #include "types.h"
+#include "paramreg.h"
 
 extern int c64_256k_start;
 extern int c64_256k_enabled;
@@ -43,14 +44,14 @@ void c64_256k_cia_set_vbank(int ciabank);
 void c64_256k_shutdown(void);
 
 void c64_256k_ram_inject(uint16_t addr, uint8_t value);
-void c64_256k_ram_segment0_store(uint16_t addr, uint8_t value);
-void c64_256k_ram_segment1_store(uint16_t addr, uint8_t value);
-void c64_256k_ram_segment2_store(uint16_t addr, uint8_t value);
-void c64_256k_ram_segment3_store(uint16_t addr, uint8_t value);
-uint8_t c64_256k_ram_segment0_read(uint16_t addr);
-uint8_t c64_256k_ram_segment1_read(uint16_t addr);
-uint8_t c64_256k_ram_segment2_read(uint16_t addr);
-uint8_t c64_256k_ram_segment3_read(uint16_t addr);
+void c64_256k_ram_segment0_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+void c64_256k_ram_segment1_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+void c64_256k_ram_segment2_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+void c64_256k_ram_segment3_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t c64_256k_ram_segment0_read(uint16_t addr PARAMREG(d0));
+uint8_t c64_256k_ram_segment1_read(uint16_t addr PARAMREG(d0));
+uint8_t c64_256k_ram_segment2_read(uint16_t addr PARAMREG(d0));
+uint8_t c64_256k_ram_segment3_read(uint16_t addr PARAMREG(d0));
 
 int set_c64_256k_enabled(int value, int disable_reset);
 
