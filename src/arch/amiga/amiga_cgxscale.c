@@ -2,7 +2,7 @@
  * \brief   AmigaOS 3.x port: scaled drawing into cybergraphics bitmaps
  *
  * See amiga_cgxscale.h. The pixel format only changes the color table:
- * the drawing hooks are per pixel size (1, 2, 3, 4 bytes).
+ * the rows are per pixel size (1, 2, 3, 4 bytes), see amiga_scalerow.h.
  */
 
 /*
@@ -43,6 +43,7 @@
 #include <proto/cybergraphics.h>
 
 #include "amiga_cgxscale.h"
+#include "amiga_scalerow.h"
 
 /* opened by video.c, may be NULL */
 extern struct Library *CyberGfxBase;
@@ -59,7 +60,7 @@ static int src_count = 0;
 
 static UBYTE clut8[256];                /* 1 byte per pixel: pens */
 static UWORD clut16[256];               /* 2 bytes per pixel */
-static UBYTE clut24[256][3];            /* 3 bytes per pixel, in memory order */
+static ULONG clut24[256];               /* 3 bytes per pixel, memory order 0x00aabbcc */
 static ULONG clut32[256];               /* 4 bytes per pixel */
 
 static UWORD swap16(UWORD v)
@@ -95,12 +96,8 @@ static void build_tables(void)
             case PIXFMT_BGR16:   clut16[i] = bgr16; break;
             case PIXFMT_RGB16PC: clut16[i] = swap16(rgb16); break;
             case PIXFMT_BGR16PC: clut16[i] = swap16(bgr16); break;
-            case PIXFMT_RGB24:
-                clut24[i][0] = (UBYTE)r; clut24[i][1] = (UBYTE)g; clut24[i][2] = (UBYTE)b;
-                break;
-            case PIXFMT_BGR24:
-                clut24[i][0] = (UBYTE)b; clut24[i][1] = (UBYTE)g; clut24[i][2] = (UBYTE)r;
-                break;
+            case PIXFMT_RGB24: clut24[i] = (r << 16) | (g << 8) | b; break;
+            case PIXFMT_BGR24: clut24[i] = (b << 16) | (g << 8) | r; break;
             case PIXFMT_ARGB32: clut32[i] = 0xff000000UL | (r << 16) | (g << 8) | b; break;
             case PIXFMT_BGRA32: clut32[i] = (b << 24) | (g << 16) | (r << 8) | 0xffUL; break;
             case PIXFMT_RGBA32: clut32[i] = (r << 24) | (g << 16) | (b << 8) | 0xffUL; break;
@@ -176,89 +173,15 @@ struct cliprect_msg {
     LONG offsety;
 };
 
-/* one row of destination pixels, per pixel size */
-
-/* The bitmap is in graphics card memory, behind the Zorro bus: the 8 and
- * 16 bit rows are written as aligned 32 bit words (4 or 2 pixels per bus
- * write), the unaligned pixels at the start and the end one by one. */
-
-static void row8(UBYTE *d, const UBYTE *s, ULONG ax, ULONG step, int n)
-{
-    ULONG *dl;
-
-    while (n > 0 && ((ULONG)d & 3) != 0) {
-        *d++ = clut8[s[ax >> 16]];
-        ax += step;
-        n--;
+/* the rows of one part, nl destination lines at a time (amiga_scalerow.h):
+ * one loop per pixel size and line count */
+#define CGX_ROWS(nl)                                                            \
+    switch (dst_bpp) {                                                          \
+        case 1: scalerow8(line, s, ax0, p->step_x, w, clut8, nl, bpr); break;   \
+        case 2: scalerow16(line, s, ax0, p->step_x, w, clut16, nl, bpr); break; \
+        case 3: scalerow24(line, s, ax0, p->step_x, w, clut24, nl, bpr); break; \
+        default: scalerow32(line, s, ax0, p->step_x, w, clut32, nl, bpr); break; \
     }
-    dl = (ULONG *)d;
-    while (n >= 4) {
-        ULONG p;
-
-        p = (ULONG)clut8[s[ax >> 16]] << 24;
-        ax += step;
-        p |= (ULONG)clut8[s[ax >> 16]] << 16;
-        ax += step;
-        p |= (ULONG)clut8[s[ax >> 16]] << 8;
-        ax += step;
-        p |= (ULONG)clut8[s[ax >> 16]];
-        ax += step;
-        *dl++ = p;
-        n -= 4;
-    }
-    d = (UBYTE *)dl;
-    while (n-- > 0) {
-        *d++ = clut8[s[ax >> 16]];
-        ax += step;
-    }
-}
-
-static void row16(UWORD *d, const UBYTE *s, ULONG ax, ULONG step, int n)
-{
-    ULONG *dl;
-
-    if (n > 0 && ((ULONG)d & 2) != 0) {
-        *d++ = clut16[s[ax >> 16]];
-        ax += step;
-        n--;
-    }
-    dl = (ULONG *)d;
-    while (n >= 2) {
-        ULONG p;
-
-        /* big endian: the first pixel is the high word */
-        p = (ULONG)clut16[s[ax >> 16]] << 16;
-        ax += step;
-        p |= (ULONG)clut16[s[ax >> 16]];
-        ax += step;
-        *dl++ = p;
-        n -= 2;
-    }
-    if (n > 0) {
-        *(UWORD *)dl = clut16[s[ax >> 16]];
-    }
-}
-
-static void row24(UBYTE *d, const UBYTE *s, ULONG ax, ULONG step, int n)
-{
-    while (n-- > 0) {
-        const UBYTE *c = clut24[s[ax >> 16]];
-
-        d[0] = c[0];
-        d[1] = c[1];
-        d[2] = c[2];
-        d += 3;
-        ax += step;
-    }
-}
-
-static void row32(ULONG *d, const UBYTE *s, ULONG ax, ULONG step, int n)
-{
-    while (n-- > 0) {
-        *d++ = clut32[s[ax >> 16]];
-        ax += step;
-    }
-}
 
 /* called by layers.library for each visible part of the update rectangle */
 static ULONG cliprect_hook(register struct Hook *hook __asm("a0"),
@@ -275,7 +198,7 @@ static ULONG cliprect_hook(register struct Hook *hook __asm("a0"),
     LONG win_y = msg->bounds.MinY;
     ULONG ax0, ay;
     UBYTE *line;
-    int y;
+    int y, nl, multi;
 
     if (w <= 0 || h <= 0) {
         return 0;
@@ -300,18 +223,23 @@ static ULONG cliprect_hook(register struct Hook *hook __asm("a0"),
         return 0;
     }
     line = base + (ULONG)msg->bounds.MinY * bpr + (ULONG)msg->bounds.MinX * (ULONG)dst_bpp;
+    /* lines written together: aligned words on each of them */
+    multi = (bpr & 3) == 0;
 
-    for (y = 0; y < h; y++) {
+    for (y = 0; y < h; y += nl) {
         const UBYTE *s = p->src + (ay >> 16) * p->src_pitch;
 
-        switch (dst_bpp) {
-            case 1: row8(line, s, ax0, p->step_x, w); break;
-            case 2: row16((UWORD *)line, s, ax0, p->step_x, w); break;
-            case 3: row24(line, s, ax0, p->step_x, w); break;
-            default: row32((ULONG *)line, s, ax0, p->step_x, w); break;
+        /* up to 3 lines of the same source row, inside this part */
+        nl = scalerow_lines(ay, p->step_y, h - y, multi);
+        if (nl == 3) {
+            CGX_ROWS(3)
+        } else if (nl == 2) {
+            CGX_ROWS(2)
+        } else {
+            CGX_ROWS(1)
         }
-        line += bpr;
-        ay += p->step_y;
+        line += bpr * (ULONG)nl;
+        ay += p->step_y * (ULONG)nl;
     }
     UnLockBitMap(lock);
     return 0;

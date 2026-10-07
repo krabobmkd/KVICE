@@ -133,7 +133,7 @@ static const char *default_strings[] = {
     "Positional keymap file:",
     /* MSG_KEYMAP_STANDARD */
     "Standard (amiga_positional.vkm)",
-    /* MSG_KEYBOARD_MAPPING */
+    /* MSG_KEYBOARD_MAPPING: not used any more (Keyboard menu), slot kept */
     "Keyboard mapping:",
     /* MSG_KEYMAP_CUSTOM */
     "Custom file",
@@ -193,7 +193,7 @@ static const char *default_strings[] = {
     /* MSG_DRIVE_TRUE_EMULATION */
     "True drive emulation:",
     /* MSG_AUTOSTART_FAST_LOAD */
-    "Autostart loads without true drive emulation:",
+    "Autostart without true drive emu:",
     /* MSG_DRIVE8_USE_DRAWER */
     "Read an Amiga drawer:",
     /* MSG_DRIVE8_DRAWER */
@@ -210,9 +210,9 @@ static const char *default_strings[] = {
     /* MSG_FS_MENU */
     "Allow menu in fullscreen mode:",
     /* MSG_FS_NOTE */
-    "Amiga+F switches between the window and the fullscreen.\n"
+    "Amiga+F switches between window and fullscreen.\n"
     "Without menu: Amiga+P pause, Amiga+R reset,\n"
-    "Amiga+A autostart, Amiga+L/W load/save snapshot, Amiga+Q quit.",
+    "Amiga+A autostart, Amiga+L/W load/save snapshot,\n Amiga+Q quit.",
 
     /* MSG_REQ_AUTOSTART */
     "Autostart a program, disk, tape or cartridge",
@@ -268,7 +268,7 @@ static const char *default_strings[] = {
     /* MSG_KEYBOARD_POSITIONAL */
     "Positional",
     /* MSG_KEYBOARD_NOTE */
-    "Symbolic: the keys type the characters of the Amiga keymap.\n"
+    "Keyboard menu, Symbolic:\n the keys type the characters of the Amiga keymap.\n"
     "Positional: the C64 key positions (keymap file), for games.\n"
     "Symbolic only takes the special keys from the keymap file\n"
     "(Shift, C=, CTRL, Run/Stop, Clr/Home, Restore, F-keys...).",
