@@ -81,8 +81,28 @@ static int iec_reset = 0;
 
 static log_t res_log = LOG_DEFAULT;
 
+#ifdef AMIGA_COMPILE
+/* the model's ROMs are chosen in the settings: the C64 model shown there
+   (-1: found from the machine settings) */
+static int amiga_c64_model = -1;
+
+static int set_amiga_c64_model(int val, void *param)
+{
+    amiga_c64_model = val;
+    return 0;
+}
+
+/* an empty ROM name (configuration file): the default file */
+static const char *kernal_rev_file_name(int rev);
+#endif
+
 static int set_chargen_rom_name(const char *val, void *param)
 {
+#ifdef AMIGA_COMPILE
+    if (val == NULL || val[0] == '\0') {
+        val = C64_CHARGEN_NAME;
+    }
+#endif
     if (util_string_set(&chargen_rom_name, val)) {
         return 0;
     }
@@ -97,6 +117,11 @@ static int set_kernal_rom_name(const char *val, void *param)
                 AND it was not null before (in that case we are setting the
                 default value) */
     int changed = 0;
+#ifdef AMIGA_COMPILE
+    if (val == NULL || val[0] == '\0') {
+        val = kernal_rev_file_name(kernal_revision);
+    }
+#endif
     log_verbose(res_log, "set_kernal_rom_name val:%s.", val);
     if ((val != NULL) && (kernal_rom_name != NULL)) {
         changed = (strcmp(val, kernal_rom_name) != 0);
@@ -119,6 +144,11 @@ static int set_basic_rom_name(const char *val, void *param)
                 AND it was not null before (in that case we are setting the
                 default value) */
     int changed = 0;
+#ifdef AMIGA_COMPILE
+    if (val == NULL || val[0] == '\0') {
+        val = C64_BASIC_NAME;
+    }
+#endif
     if ((val != NULL) && (basic_rom_name != NULL)) {
         changed = (strcmp(val, basic_rom_name) != 0);
     }
@@ -251,6 +281,20 @@ static struct kernal_s kernal_match[] = {
     { NULL, C64_KERNAL_UNKNOWN }
 };
 
+#ifdef AMIGA_COMPILE
+static const char *kernal_rev_file_name(int rev)
+{
+    int n;
+
+    for (n = 0; kernal_match[n].name != NULL; n++) {
+        if (kernal_match[n].rev == rev) {
+            return kernal_match[n].name;
+        }
+    }
+    return C64_KERNAL_REV3_NAME;
+}
+#endif
+
 static int set_kernal_revision(int val, void *param)
 {
     int n = 0, rev = C64_KERNAL_UNKNOWN;
@@ -297,11 +341,17 @@ static int set_kernal_revision(int val, void *param)
 
     log_verbose(res_log, "set_kernal_revision found rev:%d name: %s", rev, name);
 
+#ifndef AMIGA_COMPILE
     if (resources_set_string("KernalName", name) < 0) {
         log_error(res_log, "failed to set kernal name (%s)", name);
         restore_trapflags(flags);
         return -1;
     }
+#else
+    /* the revision follows the kernal file loaded (c64rom_load_kernal()),
+       it never replaces the file chosen in the settings: the model ROMs
+       are set there by "Set ROM defaults for this model" only */
+#endif
 
     memcpy(c64memrom_kernal64_trap_rom, c64memrom_kernal64_rom, C64_KERNAL_ROM_SIZE);
 
@@ -399,6 +449,10 @@ static const resource_int_t resources_int[] = {
       &cia2_model, set_cia2_model, NULL },
     { "KernalRev", C64_KERNAL_REV3, RES_EVENT_SAME, NULL,
       &kernal_revision, set_kernal_revision, NULL },
+#ifdef AMIGA_COMPILE
+    { "AmigaC64Model", -1, RES_EVENT_NO, NULL,
+      &amiga_c64_model, set_amiga_c64_model, NULL },
+#endif
     { "Sid2AddressStart", 0xde00, RES_EVENT_SAME, NULL,
       (int *)&sid2_address_start, sid_set_sid2_address, NULL },
     { "Sid3AddressStart", 0xdf00, RES_EVENT_SAME, NULL,

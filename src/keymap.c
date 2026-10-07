@@ -124,6 +124,12 @@ int key_flags_caps = 0;   /* default is locked! */
 
 /* Is the resource code ready to load the keymap?  */
 static int load_keymap_ok = 0;
+/* the last keymap file load succeeded (keyboard_keymap_loaded()) */
+static int keymap_file_loaded = 0;
+#ifdef AMIGA_COMPILE
+/* the keymap in use is the built-in one (no file found) */
+static int keymap_builtin = 0;
+#endif
 
 static int machine_keyboard_mapping = 0;
 static int machine_keyboard_type = 0;
@@ -782,6 +788,62 @@ static int keyboard_keymap_load(const char *filename)
     return keyboard_parse_keymap(filename, 0);
 }
 
+#ifdef AMIGA_COMPILE
+/* the lines of a keymap held in memory, as keyboard_parse_keymap() */
+static void keyboard_parse_keymap_text(const char *text, const char *name)
+{
+    char buffer[1024];
+    int line = 0;
+
+    while (*text != '\0') {
+        size_t len = strcspn(text, "\r\n");
+        char *p;
+
+        if (len >= sizeof buffer) {
+            len = sizeof buffer - 1;
+        }
+        memcpy(buffer, text, len);
+        buffer[len] = '\0';
+        text += strcspn(text, "\r\n");
+        text += strspn(text, "\r\n");
+        line++;
+
+        if ((p = strchr(buffer, '#'))) {
+            *p = 0;
+        }
+        switch (*buffer) {
+            case 0:
+                break;
+            case '!':
+                keyboard_parse_keyword(buffer, line, name);
+                break;
+            default:
+                keyboard_parse_entry(buffer, line, name);
+                break;
+        }
+    }
+    check_modifiers(name);
+}
+
+/* the standard keymap file is not on disk: the copy built in (kbd.c) */
+static void keyboard_keymap_load_builtin(void)
+{
+    if (!load_keymap_ok) {
+        return;
+    }
+    log_message(keyboard_log, "Keymap file not found: using the built-in amiga_positional.vkm.");
+    keymap_builtin = 1;
+    if (keyconvmap != NULL) {
+        keyboard_keyconvmap_free();
+    }
+    keyboard_keyconvmap_alloc();
+    keyboard_parse_keymap_text(kbd_arch_builtin_keymap(), "amiga_positional.vkm (built-in)");
+    keymap_file_loaded = 1;
+    /* the symbolic mode characters, after the file entries */
+    kbd_arch_keymap_loaded();
+}
+#endif
+
 /*-----------------------------------------------------------------------*/
 
 void keyboard_set_map_any(signed long sym, int row, int col, int shift)
@@ -1063,12 +1125,27 @@ static int load_keymap_file(int val)
         }
 
         DBG(("load_keymap_file(%d) calls keyboard_keymap_load(%s)", val, name));
+#ifdef AMIGA_COMPILE
         if (keyboard_keymap_load(name) >= 0) {
-
+            keymap_file_loaded = 1;
+            keymap_builtin = 0;
+            /* the symbolic mode characters, after the file entries */
+            kbd_arch_keymap_loaded();
         } else {
+            /* standard or custom file not on disk: the built-in copy, the
+               keyboard always works */
+            log_warning(keyboard_log, "Cannot load keymap `%s'.", name ? name : "<none/null>");
+            keyboard_keymap_load_builtin();
+        }
+#else
+        if (keyboard_keymap_load(name) >= 0) {
+            keymap_file_loaded = 1;
+        } else {
+            keymap_file_loaded = 0;
             log_error(keyboard_log, "Cannot load keymap `%s'.", name ? name : "<none/null>");
             return -1;
         }
+#endif
     }
     return 0;
 }
@@ -1117,6 +1194,15 @@ int keyboard_set_keymap_index(int val, void *param)
     if ((val < 0) || (val > KBD_INDEX_LAST)) {
         return -1;
     }
+#ifdef AMIGA_COMPILE
+    /* keymap files are positional only: the symbolic mapping comes from
+       the Amiga keymap (MapRawKey(), kbd.c), not from a file */
+    if (val == KBD_INDEX_SYM) {
+        val = KBD_INDEX_POS;
+    } else if (val == KBD_INDEX_USERSYM) {
+        val = KBD_INDEX_USERPOS;
+    }
+#endif
 
     mapping = machine_keyboard_mapping;
     type = machine_keyboard_type;
@@ -1126,7 +1212,12 @@ int keyboard_set_keymap_index(int val, void *param)
     if (val < 2) {
         if (switch_keymap_file(KBD_SWITCH_INDEX, &val, &mapping, &type) < 0) {
             DBG(("<keyboard_set_keymap_index switch_keymap_file ERROR"));
+            keymap_file_loaded = 0;
+#ifdef AMIGA_COMPILE
+            keyboard_keymap_load_builtin();
+#else
             log_error(keyboard_log, "Default keymap not found, this should be fixed. Going on anyway...");
+#endif
             /* return -1; */
             return 0; /* HACK: allow to start up when default keymap is missing */
         }
@@ -1156,7 +1247,12 @@ static int keyboard_set_keyboard_type(int val, void *param)
     DBG((">keyboard_set_keyboard_type(idx:%d mapping:%d type:%d)", idx, mapping, val));
     if (idx < 2) {
         if (switch_keymap_file(KBD_SWITCH_TYPE, &idx, &mapping, &val) < 0) {
+            keymap_file_loaded = 0;
+#ifdef AMIGA_COMPILE
+            keyboard_keymap_load_builtin();
+#else
             log_error(keyboard_log, "Default keymap not found, this should be fixed. Going on anyway...");
+#endif
             /* return -1; */
             return 0; /* HACK: allow to start up when default keymap is missing */
         }
@@ -1189,7 +1285,12 @@ static int keyboard_set_keyboard_mapping(int val, void *param)
 
     if (idx < 2) {
         if (switch_keymap_file(KBD_SWITCH_MAPPING, &idx, &val, &type) < 0) {
+            keymap_file_loaded = 0;
+#ifdef AMIGA_COMPILE
+            keyboard_keymap_load_builtin();
+#else
             log_error(keyboard_log, "Default keymap not found, this should be fixed. Going on anyway...");
+#endif
             /* return -1; */
             return 0; /* HACK: allow to start up when default keymap is missing */
         }
@@ -1254,7 +1355,13 @@ static char *keyboard_get_mapping_name(int mapping)
 
 static char *keyboard_get_keymap_name(int idx, int mapping, int type)
 {
+#ifdef AMIGA_COMPILE
+    /* one positional file: the symbolic mode translates the characters of
+       the Amiga keymap itself (kbd.c), the file gives the special keys */
+    static const char * const sympos[2] = { "positional", "positional"};
+#else
     static const char * const sympos[2] = { "sym", "pos"};
+#endif
     const char *mapname;
     char *name = NULL, *tstr = NULL;
 
@@ -1477,7 +1584,11 @@ static const resource_int_t resources_int[] = {
        and may block/adjust the index depending on available keymaps */
     { "KeyboardMapping", 0, RES_EVENT_NO, NULL,
       &machine_keyboard_mapping, keyboard_set_keyboard_mapping, NULL },
+#ifdef AMIGA_COMPILE
+    { "KeymapIndex", KBD_INDEX_POS, RES_EVENT_NO, NULL,
+#else
     { "KeymapIndex", KBD_INDEX_SYM, RES_EVENT_NO, NULL,
+#endif
       &machine_keymap_index, keyboard_set_keymap_index, NULL },
     { "KeyboardType", 0, RES_EVENT_NO, NULL,
       &machine_keyboard_type, keyboard_set_keyboard_type, NULL },
@@ -1520,7 +1631,11 @@ int keymap_resources_init(void)
         mapping = archdep_kbd_get_host_mapping();
         log_verbose(keyboard_log, "Setting up default keyboard mapping for host type %d (%s)",
                     mapping, keyboard_get_mapping_name(mapping));
+#ifdef AMIGA_COMPILE
+        if (resources_set_int("KeymapIndex", KBD_INDEX_POS) < 0) {
+#else
         if (resources_set_int("KeymapIndex", KBD_INDEX_SYM) < 0) {
+#endif
             /* return -1; */
         }
         /* host keyboard mapping */
@@ -1638,6 +1753,20 @@ void keymap_init(void)
     }
 #endif
 }
+
+/* 1 when the last keymap file load succeeded */
+int keyboard_keymap_loaded(void)
+{
+    return keymap_file_loaded;
+}
+
+#ifdef AMIGA_COMPILE
+/* 1 when the keymap in use is the built-in one (no file found) */
+int keyboard_keymap_builtin(void)
+{
+    return keymap_builtin;
+}
+#endif
 
 void keymap_shutdown(void)
 {

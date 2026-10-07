@@ -47,9 +47,25 @@ int amiga_video_get_scale(void);
 void amiga_video_set_borders(int mode);
 int amiga_video_get_borders(void);
 
-/* "no rom" state: the emulator screen shows "(no rom)", the emulated
-   screen is not drawn */
-void amiga_video_show_no_rom(int on);
+/* "no rom" state: the emulator screen shows a report instead of the
+   emulated screen, one line per entry: "label  value", the value in red
+   when bad. A NULL label is an empty line. The strings must stay valid
+   while shown (localized ones). count 0: back to the emulated screen. */
+typedef struct amiga_report_line_s {
+    const char *label;
+    const char *value;
+    int bad;
+} amiga_report_line_t;
+
+#define AMIGA_REPORT_LINES_MAX 12
+void amiga_video_show_report(const amiga_report_line_t *lines, int count);
+
+/* menu check marks again from the states (a setting changed elsewhere) */
+void amiga_video_sync_menu(void);
+
+/* a message in a red box over the emulated screen, for \a frames refreshes
+   (the string must stay valid that long). Shown again: the time restarts. */
+void amiga_video_show_message(const char *text, int frames);
 
 /* around a requester or the settings window opened on the Workbench (or
    default public) screen: shown in front of the fullscreen, then back */

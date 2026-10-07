@@ -66,12 +66,17 @@
 #include "c64model.h"
 #include "c64rom.h"
 #include "drive.h"
+#include "drivetypes.h"
+#include "iecbus.h"
+#include "iecrom.h"
 #include "keyboard.h"
 #include "keymap.h"
 #include "joystick.h"
 #include "lib.h"
 #include "log.h"
+#include "machine.h"
 #include "resources.h"
+#include "sound.h"
 #include "sysfile.h"
 #include "util.h"
 
@@ -98,7 +103,9 @@ MUI_NewObjectB(const char *cl, Tag tags, ...)
 #define RID_USE     2
 #define RID_CANCEL  3
 #define RID_BROWSE  4   /* "..." of the drawer row */
-#define RID_ROM_DEFAULT 5   /* "Default ROMs" */
+#define RID_ROM_DEFAULT 5   /* "Set ROM defaults for this model" */
+#define RID_MODEL   7   /* the C64 model cycle changed: its description */
+#define RID_DRIVE_TYPE 8    /* the drive 8 type cycle changed: its ROM file */
 #define RID_BROWSE_ROM  10  /* + 0..2: "..." of a ROM file row */
 #define RID_BROWSE_FILE 6   /* "..." of the file row (custom keymap) */
 
@@ -134,10 +141,14 @@ typedef struct setting_s {
     int rom_size;               /* BIND_ROMFILE: the exact file size */
     const char *pattern;        /* BIND_FILE: requester pattern */
     ULONG req_msg;              /* BIND_FILE: requester title */
-    const char *rom_default;    /* BIND_ROMFILE: default file name */
     int initial_index;          /* index shown at open, -1 if unknown */
     char initial_string[MAX_PATH_LEN];  /* BIND_DRAWER, BIND_ROMFILE: value shown at open */
 } setting_t;
+
+/* Drive 8 page: the type cycle and, under it, the ROM file it needs */
+static setting_t *drive_type_setting = NULL;
+static Object *drive_rom_text = NULL;
+static char drive_rom_info[MAX_PATH_LEN + 40];
 
 /* the drawer row, for the "..." requester */
 static setting_t *drawer_setting = NULL;
@@ -149,11 +160,16 @@ static setting_t *file_setting = NULL;
 static amiga_key_row_t keys_rows[KEYS_ROWS_MAX];
 static Object *keys_list = NULL;
 
-/* Machine page: Kernal, BASIC, character ROM file rows, and their
- * "Default ROMs" button */
+/* Machine page: Kernal, BASIC, character ROM file rows, their "Set ROM
+ * defaults for this model" button, and the model cycle (the model does not
+ * change the ROM files, the button does) */
 #define ROM_COUNT 3
 static setting_t *rom_settings[ROM_COUNT];
 static Object *rom_default_button = NULL;
+static setting_t *model_setting = NULL;
+/* under the model cycle: video standard and SID of the model chosen */
+static Object *model_info_text = NULL;
+static char model_info[80];
 /* where the ROMs are searched by default (sysfile path, machine drawer) */
 #define ROM_DEFAULT_DRAWER "PROGDIR:C64/"
 
@@ -297,7 +313,7 @@ static void setting_to_ui(setting_t *s)
         }
     }
     /* unknown value: show the first entry, but do not apply it on Use */
-    set(s->obj, MUIA_Cycle_Active, s->initial_index >= 0 ? s->initial_index : 0);
+    nnset(s->obj, MUIA_Cycle_Active, s->initial_index >= 0 ? s->initial_index : 0);
 }
 
 /* gadget -> resource, only when the user changed something */
@@ -330,7 +346,9 @@ static void setting_from_ui(setting_t *s)
         return;
     }
     get(s->obj, MUIA_Cycle_Active, &v);
-    if ((int)v < s->count && (int)v != s->initial_index) {
+    /* unknown value: the first entry is shown, apply only a real choice */
+    if ((int)v < s->count
+            && (int)v != (s->initial_index >= 0 ? s->initial_index : 0)) {
         setting_set_value(s, s->values[v]);
     }
 }
@@ -391,14 +409,121 @@ static void add_joydev_entries(setting_t *s)
     }
 }
 
+/* 1 when the machine settings (video, CIA, SID, board) are the ones of
+ * \a model: the ROM files are not compared, they are chosen apart */
+static int c64model_matches(int model)
+{
+    c64model_details_t details;
+
+    memset(&details, 0, sizeof details);
+    if (resources_get_int("MachineVideoStandard", &details.vicii_model) < 0
+            || resources_get_int("SidModel", &details.sid_model) < 0
+            || resources_get_int("CIA1Model", &details.cia1_model) < 0
+            || resources_get_int("CIA2Model", &details.cia2_model) < 0
+            || resources_get_int("BoardType", &details.board) < 0
+            || resources_get_int("IECReset", &details.iecreset) < 0) {
+        return 0;
+    }
+    details.chargen = c64model_get_chargen_name(model);
+    details.kernalrev = c64model_get_kernal_rev(model);
+    return c64model_get_model(&details) == model;
+}
+
+/* the model chosen last ("AmigaC64Model", C64 and C64 old only differ by
+ * their kernal), else the first one the machine settings match */
 static int get_c64model(void)
 {
-    return c64model_get();
+    int stored = -1;
+    int i;
+
+    resources_get_int("AmigaC64Model", &stored);
+    if (stored >= 0 && c64model_matches(stored)) {
+        return stored;
+    }
+    for (i = 0; model_setting != NULL && i < model_setting->count; i++) {
+        if (c64model_matches(model_setting->values[i])) {
+            return model_setting->values[i];
+        }
+    }
+    return -1;
 }
 
 static void set_c64model(int model)
 {
     c64model_set(model);
+    resources_set_int("AmigaC64Model", model);
+}
+
+/* drive 8 type: the one chosen, even while its ROM is missing (the drive
+ * is then "none" in VICE, and the type is saved for when the ROM is found) */
+static int get_drive8_type(void)
+{
+    int type = DRIVE_TYPE_NONE;
+
+    if (drive_rom_missing_type[0] != 0) {
+        return (int)drive_rom_missing_type[0];
+    }
+    resources_get_int("Drive8Type", &type);
+    return type;
+}
+
+static void set_drive8_type(int type)
+{
+    if (type != DRIVE_TYPE_NONE && iecrom_check_loaded((unsigned int)type) < 0) {
+        int current = DRIVE_TYPE_NONE;
+
+        /* VICE would refuse it: the drive is off as after a restart, and
+           the type is kept ("none" first, it clears the kept type) */
+        resources_get_int("Drive8Type", &current);
+        if (current != DRIVE_TYPE_NONE) {
+            resources_set_int("Drive8Type", DRIVE_TYPE_NONE);
+        }
+        drive_rom_missing_type[0] = (unsigned int)type;
+        log_warning(LOG_DEFAULT, "settings: no ROM for drive 8 type %d, kept until its ROM is found.", type);
+        return;
+    }
+    if (resources_set_int("Drive8Type", type) < 0) {
+        log_error(LOG_DEFAULT, "settings: cannot set drive 8 type %d.", type);
+    }
+}
+
+/* keymap file: the standard positional one or a custom one. Both VICE
+ * indexes 0 and 1 give amiga_positional.vkm on Amiga (keymap.c). */
+static int get_keymap_file(void)
+{
+    int idx = KBD_INDEX_POS;
+
+    resources_get_int("KeymapIndex", &idx);
+    return idx < 2 ? KBD_INDEX_POS : KBD_INDEX_USERPOS;
+}
+
+static void set_keymap_file(int idx)
+{
+    if (resources_set_int("KeymapIndex", idx) < 0) {
+        log_error(LOG_DEFAULT, "settings: cannot load the keymap file.");
+    }
+}
+
+/* REU: one cycle, 0 is off, else the size in KB */
+static int get_reu(void)
+{
+    int on = 0, size = 0;
+
+    resources_get_int("REU", &on);
+    resources_get_int("REUsize", &size);
+    return on ? size : 0;
+}
+
+static void set_reu(int size_kb)
+{
+    /* off while the size changes: set again on, the memory is reallocated */
+    resources_set_int("REU", 0);
+    if (size_kb > 0) {
+        if (resources_set_int("REUsize", size_kb) < 0
+                || resources_set_int("REU", 1) < 0) {
+            log_error(LOG_DEFAULT, "settings: cannot enable a %d KB REU.", size_kb);
+        }
+    }
 }
 
 /* (re)build the tables: labels are localized, joystick devices may change */
@@ -419,33 +544,35 @@ static void build_settings(void)
     add_joydev_entries(s);
 
     /* Keyboard: the custom file is applied before the choice (Use) */
-    s = new_setting(PAGE_KEYBOARD, BIND_CYCLE, "KeymapIndex", MSG_KEYMAP);
-    setting_add_entry(s, LOC(MSG_KEYMAP_SYM), KBD_INDEX_SYM);
-    setting_add_entry(s, LOC(MSG_KEYMAP_POS), KBD_INDEX_POS);
-    setting_add_entry(s, LOC(MSG_KEYMAP_CUSTOM), KBD_INDEX_USERSYM);
-    file_setting = s = new_setting(PAGE_KEYBOARD, BIND_FILE, "KeymapUserSymFile", MSG_KEYMAP_FILE);
+    s = new_setting(PAGE_KEYBOARD, BIND_CYCLE, "AmigaKeyboardSymbolic", MSG_KEYBOARD_MAPPING);
+    setting_add_entry(s, LOC(MSG_KEYBOARD_SYMBOLIC), 1);
+    setting_add_entry(s, LOC(MSG_KEYBOARD_POSITIONAL), 0);
+    s = new_setting(PAGE_KEYBOARD, BIND_CYCLE, NULL, MSG_KEYMAP);
+    s->getter = get_keymap_file;
+    s->setter = set_keymap_file;
+    setting_add_entry(s, LOC(MSG_KEYMAP_STANDARD), KBD_INDEX_POS);
+    setting_add_entry(s, LOC(MSG_KEYMAP_CUSTOM), KBD_INDEX_USERPOS);
+    file_setting = s = new_setting(PAGE_KEYBOARD, BIND_FILE, "KeymapUserPosFile", MSG_KEYMAP_FILE);
     s->pattern = "#?.vkm";
     s->req_msg = MSG_REQ_KEYMAP;
 
     /* Sound */
     new_setting(PAGE_SOUND, BIND_CHECK, "Sound", MSG_SOUND_ENABLE);
     s = new_setting(PAGE_SOUND, BIND_CYCLE, "SoundSampleRate", MSG_SOUND_RATE);
+    /* 48 kHz: too much work for an Amiga */
     setting_add_entry(s, "11025 Hz", 11025);
+    setting_add_entry(s, "16000 Hz", 16000);
     setting_add_entry(s, "22050 Hz", 22050);
     setting_add_entry(s, "44100 Hz", 44100);
-    setting_add_entry(s, "48000 Hz", 48000);
 
     /* Machine: the ROM files, then the model */
     s = rom_settings[0] = new_setting(PAGE_MACHINE, BIND_ROMFILE, "KernalName", MSG_ROM_KERNAL);
     s->rom_size = C64_KERNAL_ROM_SIZE;
-    s->rom_default = C64_KERNAL_REV3_NAME;
     s = rom_settings[1] = new_setting(PAGE_MACHINE, BIND_ROMFILE, "BasicName", MSG_ROM_BASIC);
     s->rom_size = C64_BASIC_ROM_SIZE;
-    s->rom_default = C64_BASIC_NAME;
     s = rom_settings[2] = new_setting(PAGE_MACHINE, BIND_ROMFILE, "ChargenName", MSG_ROM_CHARGEN);
     s->rom_size = C64_CHARGEN_ROM_SIZE;
-    s->rom_default = C64_CHARGEN_NAME;
-    s = new_setting(PAGE_MACHINE, BIND_CYCLE, NULL, MSG_C64_MODEL);
+    s = model_setting = new_setting(PAGE_MACHINE, BIND_CYCLE, NULL, MSG_C64_MODEL);
     s->getter = get_c64model;
     s->setter = set_c64model;
     setting_add_entry(s, LOC(MSG_MODEL_C64_PAL), C64MODEL_C64_PAL);
@@ -455,9 +582,18 @@ static void build_settings(void)
     setting_add_entry(s, LOC(MSG_MODEL_C64C_NTSC), C64MODEL_C64C_NTSC);
     setting_add_entry(s, LOC(MSG_MODEL_C64_OLD_NTSC), C64MODEL_C64_OLD_NTSC);
     setting_add_entry(s, LOC(MSG_MODEL_DREAN), C64MODEL_C64_PAL_N);
+    s = new_setting(PAGE_MACHINE, BIND_CYCLE, NULL, MSG_REU);
+    s->getter = get_reu;
+    s->setter = set_reu;
+    setting_add_entry(s, LOC(MSG_REU_OFF), 0);
+    setting_add_entry(s, "128 KB (1700)", 128);
+    setting_add_entry(s, "256 KB (1764)", 256);
+    setting_add_entry(s, "512 KB (1750)", 512);
 
     /* Drive 8 */
-    s = new_setting(PAGE_DRIVE8, BIND_CYCLE, "Drive8Type", MSG_DRIVE_TYPE);
+    s = drive_type_setting = new_setting(PAGE_DRIVE8, BIND_CYCLE, NULL, MSG_DRIVE_TYPE);
+    s->getter = get_drive8_type;
+    s->setter = set_drive8_type;
     setting_add_entry(s, LOC(MSG_DRIVE_NONE), DRIVE_TYPE_NONE);
     setting_add_entry(s, "1541", DRIVE_TYPE_1541);
     setting_add_entry(s, "1541-II", DRIVE_TYPE_1541II);
@@ -714,8 +850,8 @@ static Object *make_page(int page)
             set(s->browse, MUIA_Weight, 0);
             DoMethod(columns, OM_ADDMEMBER, (ULONG)row);
             if (s == rom_settings[ROM_COUNT - 1]) {
-                /* after the last ROM row: "Default ROMs", aligned left */
-                rom_default_button = make_button(LOC(MSG_ROM_DEFAULT));
+                /* after the last ROM row: the model preset, aligned left */
+                rom_default_button = make_button(LOC(MSG_ROM_MODEL_DEFAULTS));
                 DoMethod(columns, OM_ADDMEMBER, (ULONG)make_label(""));
                 DoMethod(columns, OM_ADDMEMBER, (ULONG)MUI_NewObjectB(MUIC_Group,
                          MUIA_Group_Horiz, TRUE,
@@ -733,6 +869,18 @@ static Object *make_page(int page)
             DoMethod(columns, OM_ADDMEMBER, (ULONG)row);
         } else {
             DoMethod(columns, OM_ADDMEMBER, (ULONG)s->obj);
+            if (s == drive_type_setting) {
+                /* the ROM file of the type, under its cycle */
+                drive_rom_text = make_text("");
+                DoMethod(columns, OM_ADDMEMBER, (ULONG)make_label(LOC(MSG_DRIVE_ROM_FILE)));
+                DoMethod(columns, OM_ADDMEMBER, (ULONG)drive_rom_text);
+            }
+            if (s == model_setting) {
+                /* the model description, under its cycle */
+                model_info_text = make_text("");
+                DoMethod(columns, OM_ADDMEMBER, (ULONG)make_label(""));
+                DoMethod(columns, OM_ADDMEMBER, (ULONG)model_info_text);
+            }
         }
     }
 
@@ -754,6 +902,7 @@ static Object *make_page(int page)
     if (page == PAGE_KEYBOARD) {
         Object *view = make_keys_list();
 
+        DoMethod(group, OM_ADDMEMBER, (ULONG)make_text(LOC(MSG_KEYBOARD_NOTE)));
         if (view != NULL) {
             DoMethod(group, OM_ADDMEMBER, (ULONG)view);
             /* the list takes the free space */
@@ -834,9 +983,36 @@ static int apply_rom_settings(void)
 }
 
 /* Returns -1 when a ROM file was not accepted: the window stays open */
+static void drive_watch_update(void);
+
+/* the configuration file keeps the drive types set to "none" only for a
+ * missing ROM, and the sound turned off only because ahi.device could not
+ * be opened: they come back once the ROM or AHI is installed */
+static int save_resources(void)
+{
+    unsigned int types[NUM_DISK_UNITS];
+    unsigned int unit;
+    int ret;
+
+    for (unit = 0; unit < NUM_DISK_UNITS; unit++) {
+        types[unit] = diskunit_context[unit]->type;
+        if (drive_rom_missing_type[unit] != 0) {
+            /* the resource variable, no setter: only for the save */
+            diskunit_context[unit]->type = drive_rom_missing_type[unit];
+        }
+    }
+    sound_save_wanted_begin();
+    ret = resources_save(NULL);
+    sound_save_wanted_end();
+    for (unit = 0; unit < NUM_DISK_UNITS; unit++) {
+        diskunit_context[unit]->type = types[unit];
+    }
+    return ret;
+}
+
 static int apply_settings(void)
 {
-    int page, i;
+    int page, i, ret;
 
     /* the files first: a keymap file is then loaded by the keymap choice */
     for (page = 0; page < PAGE_COUNT; page++) {
@@ -854,8 +1030,18 @@ static int apply_settings(void)
             }
         }
     }
-    return apply_rom_settings();
+    ret = apply_rom_settings();
+    /* drive 8 type may have changed */
+    drive_watch_update();
+    /* the keyboard mapping is also in a menu */
+    amiga_video_sync_menu();
+    /* the keymap may have changed (file, or the built-in one) */
+    keys_list_fill();
+    return ret;
 }
+
+static void model_info_update(void);
+static void drive_rom_info_update(void);
 
 static void settings_to_ui(void)
 {
@@ -867,6 +1053,9 @@ static void settings_to_ui(void)
         }
     }
     keys_list_fill();
+    /* the cycles were set without notification */
+    model_info_update();
+    drive_rom_info_update();
     /* the notification only follows changes: initial state here */
     if (fs_auto_setting != NULL && fs_mode_setting != NULL) {
         ULONG automatic = FALSE;
@@ -1000,6 +1189,14 @@ static int create_app(void)
         DoMethod(rom_default_button, MUIM_Notify, MUIA_Pressed, FALSE,
                  (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_ROM_DEFAULT);
     }
+    if (model_setting != NULL && model_setting->obj != NULL) {
+        DoMethod(model_setting->obj, MUIM_Notify, MUIA_Cycle_Active, MUIV_EveryTime,
+                 (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_MODEL);
+    }
+    if (drive_type_setting != NULL && drive_type_setting->obj != NULL) {
+        DoMethod(drive_type_setting->obj, MUIM_Notify, MUIA_Cycle_Active, MUIV_EveryTime,
+                 (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_DRIVE_TYPE);
+    }
     return 0;
 }
 
@@ -1073,17 +1270,127 @@ static void browse_file(void)
     }
 }
 
-/* "Default ROMs": the standard files in the default drawer */
-static void rom_defaults(void)
+/* kernal file name of a kernal revision (the table of c64-resources.c) */
+static const char *kernal_rev_name(int rev)
 {
-    char path[MAX_PATH_LEN];
-    int i;
+    switch (rev) {
+        case C64_KERNAL_JAP:  return C64_KERNAL_JAP_NAME;
+        case C64_KERNAL_REV1: return C64_KERNAL_REV1_NAME;
+        case C64_KERNAL_REV2: return C64_KERNAL_REV2_NAME;
+        case C64_KERNAL_REV3: return C64_KERNAL_REV3_NAME;
+        case C64_KERNAL_GS64: return C64_KERNAL_GS64_NAME;
+        case C64_KERNAL_SX64: return C64_KERNAL_SX64_NAME;
+        case C64_KERNAL_4064: return C64_KERNAL_4064_NAME;
+        default:              return NULL;
+    }
+}
 
-    for (i = 0; i < ROM_COUNT; i++) {
-        if (rom_settings[i] != NULL && rom_settings[i]->obj != NULL) {
-            snprintf(path, sizeof path, "%s%s", ROM_DEFAULT_DRAWER, rom_settings[i]->rom_default);
-            set(rom_settings[i]->obj, MUIA_String_Contents, (ULONG)path);
+/* the line under the model cycle: video standard and SID of the model
+ * chosen in it (not applied yet) */
+static void model_info_update(void)
+{
+    const char *video;
+    ULONG v = 0;
+    int model;
+
+    if (model_setting == NULL || model_setting->obj == NULL || model_info_text == NULL) {
+        return;
+    }
+    get(model_setting->obj, MUIA_Cycle_Active, &v);
+    if ((int)v >= model_setting->count) {
+        return;
+    }
+    model = model_setting->values[v];
+    switch (c64model_get_video(model)) {
+        case MACHINE_SYNC_PAL:     video = "PAL 50 Hz"; break;
+        case MACHINE_SYNC_PALN:    video = "PAL-N 50 Hz"; break;
+        case MACHINE_SYNC_NTSC:    video = "NTSC 60 Hz"; break;
+        case MACHINE_SYNC_NTSCOLD: video = "old NTSC 60 Hz"; break;
+        default:                   video = "?"; break;
+    }
+    snprintf(model_info, sizeof model_info, LOC(MSG_MODEL_INFO), video,
+             c64model_get_new_sid(model) > 0 ? "MOS 8580" : "MOS 6581");
+    set(model_info_text, MUIA_Text_Contents, (ULONG)model_info);
+}
+
+/* ROM file resource of a drive type, NULL if none */
+static const char *drive_rom_resource(int type)
+{
+    switch (type) {
+        case DRIVE_TYPE_1540:   return "DosName1540";
+        case DRIVE_TYPE_1541:   return "DosName1541";
+        case DRIVE_TYPE_1541II: return "DosName1541ii";
+        case DRIVE_TYPE_1570:   return "DosName1570";
+        case DRIVE_TYPE_1571:   return "DosName1571";
+        case DRIVE_TYPE_1581:   return "DosName1581";
+        case DRIVE_TYPE_2000:   return "DosName2000";
+        case DRIVE_TYPE_4000:   return "DosName4000";
+        default:                return NULL;
+    }
+}
+
+/* the line under the drive type cycle: the ROM file the type chosen needs,
+ * where it is found, else where it is searched first (PROGDIR:DRIVES/) */
+static void drive_rom_info_update(void)
+{
+    const char *resource, *name = NULL;
+    char *found = NULL;
+    char path[MAX_PATH_LEN];
+    ULONG v = 0;
+
+    if (drive_type_setting == NULL || drive_type_setting->obj == NULL || drive_rom_text == NULL) {
+        return;
+    }
+    get(drive_type_setting->obj, MUIA_Cycle_Active, &v);
+    resource = (int)v < drive_type_setting->count
+               ? drive_rom_resource(drive_type_setting->values[v]) : NULL;
+    if (resource == NULL || resources_get_string(resource, &name) < 0 || name == NULL) {
+        drive_rom_info[0] = '\0';
+    } else if (sysfile_locate(name, "DRIVES", &found) >= 0 && found != NULL) {
+        snprintf(drive_rom_info, sizeof drive_rom_info, "%s %s",
+                 found, LOC(MSG_DRIVE_ROM_FOUND));
+    } else {
+        if (strchr(name, ':') != NULL || strchr(name, '/') != NULL) {
+            snprintf(path, sizeof path, "%s", name);
+        } else {
+            snprintf(path, sizeof path, "PROGDIR:DRIVES/%s", name);
         }
+        snprintf(drive_rom_info, sizeof drive_rom_info, "%s %s",
+                 path, LOC(MSG_DRIVE_ROM_MISSING));
+    }
+    if (found != NULL) {
+        lib_free(found);
+    }
+    set(drive_rom_text, MUIA_Text_Contents, (ULONG)drive_rom_info);
+}
+
+/* "Set ROM defaults for this model": the ROM rows show the files of the
+ * model chosen in the cycle, in the default drawer (applied on Use/Save,
+ * checked like a chosen file) */
+static void rom_model_defaults(void)
+{
+    const char *names[ROM_COUNT];
+    char path[MAX_PATH_LEN];
+    ULONG v = 0;
+    int model, i;
+
+    if (model_setting == NULL || model_setting->obj == NULL) {
+        return;
+    }
+    get(model_setting->obj, MUIA_Cycle_Active, &v);
+    if ((int)v >= model_setting->count) {
+        return;
+    }
+    model = model_setting->values[v];
+    names[0] = kernal_rev_name(c64model_get_kernal_rev(model));
+    names[1] = C64_BASIC_NAME;
+    names[2] = c64model_get_chargen_name(model);
+    for (i = 0; i < ROM_COUNT; i++) {
+        if (names[i] == NULL || rom_settings[i] == NULL || rom_settings[i]->obj == NULL) {
+            continue;
+        }
+        snprintf(path, sizeof path, "%s%s", ROM_DEFAULT_DRAWER, names[i]);
+        set(rom_settings[i]->obj, MUIA_String_Contents, (ULONG)path);
     }
 }
 
@@ -1129,7 +1436,7 @@ void amiga_mui_handle_events(void)
                     /* a ROM file to fix: the window stays open */
                     break;
                 }
-                if (resources_save(NULL) < 0) {
+                if (save_resources() < 0) {
                     log_error(LOG_DEFAULT, "settings: cannot save the configuration file.");
                 }
                 close_window();
@@ -1148,7 +1455,13 @@ void amiga_mui_handle_events(void)
                 browse_drawer();
                 break;
             case RID_ROM_DEFAULT:
-                rom_defaults();
+                rom_model_defaults();
+                break;
+            case RID_MODEL:
+                model_info_update();
+                break;
+            case RID_DRIVE_TYPE:
+                drive_rom_info_update();
                 break;
             case RID_BROWSE_FILE:
                 browse_file();
@@ -1185,27 +1498,129 @@ void amiga_mui_close_all(void)
     }
 }
 
+/* the startup report: Kernal, BASIC, character ROM, (empty), drive 8 ROM,
+ * (empty), keymap file. Returns the number of lines; *state gets a bit per
+ * missing file, to redraw only when it changes. */
+static int startup_report(amiga_report_line_t *lines, unsigned int *state)
+{
+    static const ULONG rom_labels[ROM_COUNT] = {
+        MSG_ROM_KERNAL, MSG_ROM_BASIC, MSG_ROM_CHARGEN
+    };
+    int ok[ROM_COUNT];
+    int drive_type = DRIVE_TYPE_NONE;
+    int n = 0, i;
+
+    *state = 0;
+    c64rom_get_loaded(&ok[0], &ok[1], &ok[2]);
+    for (i = 0; i < ROM_COUNT; i++) {
+        lines[n].label = LOC(rom_labels[i]);
+        lines[n].value = LOC(ok[i] ? MSG_REPORT_OK : MSG_REPORT_NOT_FOUND);
+        lines[n].bad = !ok[i];
+        *state |= ok[i] ? 0 : (1U << i);
+        n++;
+    }
+
+    memset(&lines[n++], 0, sizeof lines[0]);
+    resources_get_int("Drive8Type", &drive_type);
+    lines[n].label = LOC(MSG_REPORT_DRIVE8_ROM);
+    if (drive_rom_missing_type[0] != 0) {
+        /* drive_init() set it to "none": its ROM is missing */
+        lines[n].value = LOC(MSG_REPORT_NOT_FOUND);
+        lines[n].bad = 1;
+        *state |= 1U << 3;
+    } else if (drive_type == DRIVE_TYPE_NONE) {
+        lines[n].value = LOC(MSG_REPORT_NO_DRIVE);
+        lines[n].bad = 0;
+    } else {
+        int drive_ok = iecrom_check_loaded((unsigned int)drive_type) >= 0;
+
+        lines[n].value = LOC(drive_ok ? MSG_REPORT_OK : MSG_REPORT_NOT_FOUND);
+        lines[n].bad = !drive_ok;
+        *state |= drive_ok ? 0 : (1U << 3);
+    }
+    n++;
+
+    /* information only: without a file, the built-in keymap is used */
+    memset(&lines[n++], 0, sizeof lines[0]);
+    lines[n].label = LOC(MSG_REPORT_KEYMAP);
+    lines[n].bad = 0;
+    if (!keyboard_keymap_loaded()) {
+        lines[n].value = LOC(MSG_REPORT_NOT_FOUND);
+        lines[n].bad = 1;
+    } else if (keyboard_keymap_builtin()) {
+        lines[n].value = LOC(MSG_REPORT_BUILTIN);
+    } else {
+        lines[n].value = LOC(MSG_REPORT_OK);
+    }
+    n++;
+    return n;
+}
+
+/* the C64 talks to the bus (ATN) while no drive is on it: drive 8 off for
+ * its missing ROM is told. Without true drive emulation (also changed by
+ * the drawer menu and the autostart), the virtual drive (kernal traps)
+ * needs no drive ROM. */
+static void drive8_no_rom_used(void)
+{
+    int tde = 0;
+
+    if (drive_rom_missing_type[0] == 0) {
+        return;
+    }
+    resources_get_int("Drive8TrueEmulation", &tde);
+    if (tde) {
+        /* about 6 seconds */
+        amiga_video_show_message(LOC(MSG_DRIVE8_NO_ROM_USED), 300);
+    }
+}
+
+/* the hook decides itself: the missing ROM state may change anytime */
+static void drive_watch_update(void)
+{
+    iecbus_atn_hook = drive8_no_rom_used;
+}
+
+/* the emulation can start: the ROMs are loaded (a missing drive ROM is
+ * accepted, a missing keymap file has the built-in one) */
+static int startup_files_ok(void)
+{
+    return c64rom_all_loaded();
+}
+
 /** \brief  "No rom" state, before the CPU starts
  *
- * The ROMs were not all found at startup: the emulator screen shows
- * "(no rom)", the settings window opens on the Machine page, and the UI is
- * handled (menus, window, settings, CTRL-C) until the ROM files chosen there
- * are all loaded. The CPU then starts as usual, from the reset.
+ * A ROM was not found at startup: the emulator screen shows which files
+ * are found (drive ROM and keymap file as information), the settings window
+ * opens on the Machine page, and the UI is handled (menus, window, settings,
+ * CTRL-C) until the ROMs chosen there are all loaded. The report follows
+ * each change. The CPU then starts as usual, from the reset.
  */
 void amiga_wait_for_roms(void)
 {
-    if (c64rom_all_loaded()) {
+    amiga_report_line_t lines[AMIGA_REPORT_LINES_MAX];
+    unsigned int state, shown_state;
+    int count;
+
+    drive_watch_update();
+    if (startup_files_ok()) {
         return;
     }
-    log_warning(LOG_DEFAULT, "ROMs missing: choose them in Settings, Machine.");
-    amiga_video_show_no_rom(1);
+    log_warning(LOG_DEFAULT, "ROMs missing: choose them in Settings.");
+    count = startup_report(lines, &shown_state);
+    amiga_video_show_report(lines, count);
     amiga_settings_open();
     if (mui_category_list != NULL) {
         set(mui_category_list, MUIA_List_Active, PAGE_MACHINE);
     }
-    while (!c64rom_all_loaded()) {
+    while (!startup_files_ok()) {
         amiga_wait_events();
+        count = startup_report(lines, &state);
+        if (state != shown_state) {
+            shown_state = state;
+            amiga_video_show_report(lines, count);
+        }
     }
-    amiga_video_show_no_rom(0);
+    amiga_video_show_report(NULL, 0);
+    drive_watch_update();
     log_message(LOG_DEFAULT, "ROMs loaded: the emulation starts.");
 }

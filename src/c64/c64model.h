@@ -121,5 +121,11 @@ void c64model_set(int model);
 void c64model_set_details(c64model_details_t *details, int model);
 /* get model from details */
 int c64model_get_model(c64model_details_t *details);
+/* ROMs of a model: character ROM file name (NULL if unknown), kernal revision */
+const char *c64model_get_chargen_name(int model);
+int c64model_get_kernal_rev(int model);
+/* video standard (MACHINE_SYNC_*), SID (1: 8580, 0: 6581) of a model, -1 if unknown */
+int c64model_get_video(int model);
+int c64model_get_new_sid(int model);
 
 #endif

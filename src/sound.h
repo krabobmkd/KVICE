@@ -115,13 +115,9 @@ enum {
 #define SOUND_FRAGMENT_SIZE SOUND_FRAGMENT_MEDIUM
 #endif
 
-/* "Sound" resource default: sound output and SID sample generation */
-#if defined(AMIGA_COMPILE)
-/* off for now on Amiga, "x64 -sound" enables it */
-#define SOUND_ENABLED_DEFAULT 0
-#else
+/* "Sound" resource default: sound output and SID sample generation
+   ("x64 -nosound" or the settings turn it off) */
 #define SOUND_ENABLED_DEFAULT 1
-#endif
 
 #define SOUND_OUTPUT_CHANNELS_MAX 2
 
@@ -403,5 +399,12 @@ int sound_is_recording(void);
 #define MASTER_VOLUME_MAX       100 /* 100% */
 #define MASTER_VOLUME_ONE       100 /* 100% */
 #define MASTER_VOLUME_DEFAULT   MASTER_VOLUME_MAX
+
+#ifdef AMIGA_COMPILE
+/* around resources_save(): "Sound" saved as wanted when only a device error
+   (ahi.device not installed) turned it off */
+void sound_save_wanted_begin(void);
+void sound_save_wanted_end(void);
+#endif
 
 #endif

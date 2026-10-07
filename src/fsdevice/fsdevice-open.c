@@ -81,7 +81,11 @@ static uint8_t *makeshortheader(uint8_t *p)
         d = p + (n - 1); /* point to last char */
         /* scan backwards until path seperator */
         while (d != p) {
+#ifdef AMIGA_COMPILE
+            if (*d == ARCHDEP_DIR_SEP_CHR || *d == ':') {
+#else
             if (*d == ARCHDEP_DIR_SEP_CHR) {
+#endif
                 d++; n = 0;
                 /* copy last part to the beginning */
                 while (d) {

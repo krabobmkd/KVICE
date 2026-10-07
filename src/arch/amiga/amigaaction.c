@@ -28,6 +28,7 @@
 #include <stdlib.h>
 
 #include "amigaaction.h"
+#include "kbd.h"
 #include "amigalocale.h"
 #include "amigamui.h"
 #include "amigatrace.h"
@@ -46,6 +47,18 @@
 #include "sound.h"
 #include "ui.h"
 #include "util.h"
+#include "diskimage.h"
+#include "vdrive-internal.h"
+#include "cbmdos.h"
+#include "charset.h"
+#include "archdep_sanitize_filename.h"
+#include "imagecontents.h"
+#include "machine-drive.h"
+#include "mem.h"
+#include "vdrive.h"
+#include "vdrive-command.h"
+#include "vdrive-dir.h"
+#include "vdrive-iec.h"
 
 #include <string.h>
 #include <intuition/intuition.h>
@@ -113,6 +126,337 @@ static BOOL Action_AttachDisk8(void)
         }
         lib_free(path);
     }
+    return ok;
+}
+
+/* a requester with \a path in its text, on the requester screen in
+ * fullscreen. Returns the gadget chosen (1: first ... 0: last) */
+static LONG path_request(ULONG text_msg, ULONG gadgets_msg, const char *path)
+{
+    struct EasyStruct es;
+    ULONG args[1];
+    LONG ret;
+
+    es.es_StructSize = sizeof es;
+    es.es_Flags = 0;
+    es.es_Title = (UBYTE *)LOC(MSG_WINDOW_TITLE);
+    es.es_TextFormat = (UBYTE *)LOC(text_msg);
+    es.es_GadgetFormat = (UBYTE *)LOC(gadgets_msg);
+    args[0] = (ULONG)path;
+    amiga_video_requester_begin();
+    ret = EasyRequestArgs(amiga_video_window(), &es, NULL, args);
+    amiga_video_requester_end();
+    vsync_suspend_speed_eval();
+    return ret;
+}
+
+/* name of a new disk from its file: "NAME,01", up to 16 C64 characters in
+ * upper case (PETSCII letters), without the characters CBM DOS reserves */
+static void new_disk_name(const char *path, char *name, size_t size)
+{
+    const char *base = path;
+    const char *p;
+    size_t n = 0;
+
+    for (p = path; *p != '\0'; p++) {
+        if (*p == '/' || *p == ':') {
+            base = p + 1;
+        }
+    }
+    for (p = base; *p != '\0' && n < 16 && n + 4 < size; p++) {
+        char c = *p;
+
+        if (util_strcasecmp(p, ".d64") == 0) {
+            break;
+        }
+        if (c >= 'a' && c <= 'z') {
+            c = (char)(c - 'a' + 'A');
+        } else if (c == ',' || c == ':' || c == '"' || c == '*' || c == '?'
+                   || c == '=' || (unsigned char)c < 0x20 || (unsigned char)c > 0x7e) {
+            c = ' ';
+        }
+        name[n++] = c;
+    }
+    if (n == 0) {
+        name[n++] = 'E';
+    }
+    strcpy(name + n, ",01");
+}
+
+/* a new formatted .d64, then in drive 8 */
+static BOOL Action_CreateDisk8(void)
+{
+    char name[24];
+    char *path;
+    size_t len;
+    BOOL ok = FALSE;
+
+    amiga_video_requester_begin();
+    path = amiga_file_save_request(amiga_video_window(), LOC(MSG_REQ_CREATE_DISK8), "#?.d64");
+    amiga_video_requester_end();
+    vsync_suspend_speed_eval();
+    if (path == NULL) {
+        return FALSE;
+    }
+    /* ".d64" or ".D64" at the end, else added */
+    len = strlen(path);
+    if (len < 4 || util_strcasecmp(path + len - 4, ".d64") != 0) {
+        char *named = util_concat(path, ".d64", NULL);
+
+        lib_free(path);
+        path = named;
+    }
+    if (util_file_exists(path)
+            && path_request(MSG_CONFIRM_REPLACE, MSG_REPLACE_CANCEL, path) != 1) {
+        lib_free(path);
+        return FALSE;
+    }
+    new_disk_name(path, name, sizeof name);
+    if (vdrive_internal_create_format_disk_image(path, name, DISK_IMAGE_TYPE_D64) < 0) {
+        log_error(LOG_DEFAULT, "cannot create the disk image `%s'.", path);
+        path_request(MSG_ERROR_CREATE_DISK, MSG_ERROR_OK, path);
+    } else if (file_system_attach_disk(8, 0, path) < 0) {
+        log_error(LOG_DEFAULT, "cannot attach `%s' to drive 8.", path);
+    } else {
+        log_message(LOG_DEFAULT, "new disk `%s' (%s) in drive 8.", path, name);
+        ok = TRUE;
+    }
+    lib_free(path);
+    return ok;
+}
+
+/* a file of the disk: more bytes than any disk holds is a cyclic chain */
+#define EXTRACT_FILE_MAX (2 * 1024 * 1024)
+
+/* AmigaDOS path of \a name in \a drawer (lib_malloc'd) */
+static char *drawer_file(const char *drawer, const char *name)
+{
+    size_t len = strlen(drawer);
+
+    if (len == 0 || drawer[len - 1] == ':' || drawer[len - 1] == '/') {
+        return util_concat(drawer, name, NULL);
+    }
+    return util_concat(drawer, "/", name, NULL);
+}
+
+/* one directory entry of the disk to a file of the drawer ("name.prg",
+ * ".seq" or ".usr"), 0 if done */
+static int extract_file(vdrive_t *vdrive, const uint8_t *slot, const char *drawer)
+{
+    uint8_t type = slot[SLOT_TYPE_OFFSET] & 7;
+    uint8_t cbm_name[IMAGE_CONTENTS_FILE_NAME_LEN + 3];
+    char name[IMAGE_CONTENTS_FILE_NAME_LEN + 5];
+    unsigned int len;
+    long size = 0;
+    char *path;
+    FILE *fd;
+    uint8_t c;
+    int status;
+
+    memset(name, 0, sizeof name);
+    for (len = 0; len < IMAGE_CONTENTS_FILE_NAME_LEN; len++) {
+        if (slot[SLOT_NAME_OFFSET + len] == 0xa0) {
+            break;
+        }
+        cbm_name[len] = slot[SLOT_NAME_OFFSET + len];
+        name[len] = (char)cbm_name[len];
+    }
+    /* the type in the name to open SEQ and USR files (as c1541) */
+    if (type == CBMDOS_FT_SEQ) {
+        cbm_name[len++] = ',';
+        cbm_name[len++] = 'S';
+    } else if (type == CBMDOS_FT_USR) {
+        cbm_name[len++] = ',';
+        cbm_name[len++] = 'U';
+    }
+    charset_petconvstring((uint8_t *)name, CONVERT_TO_ASCII);
+    archdep_sanitize_filename(name);
+    if (name[0] == '\0') {
+        strcpy(name, "noname");
+    }
+    /* the C64 file type as extension, for the Amiga side */
+    strcat(name, type == CBMDOS_FT_SEQ ? ".seq" : type == CBMDOS_FT_USR ? ".usr" : ".prg");
+
+    if (vdrive_iec_open(vdrive, cbm_name, len, 0, NULL) != SERIAL_OK) {
+        log_error(LOG_DEFAULT, "extract: cannot open `%s' on the disk.", name);
+        return -1;
+    }
+    path = drawer_file(drawer, name);
+    fd = fopen(path, MODE_WRITE);
+    if (fd == NULL) {
+        log_error(LOG_DEFAULT, "extract: cannot create `%s'.", path);
+        lib_free(path);
+        vdrive_iec_close(vdrive, 0);
+        return -1;
+    }
+    do {
+        status = vdrive_iec_read(vdrive, &c, 0);
+        fputc(c, fd);
+    } while (status == SERIAL_OK && ++size < EXTRACT_FILE_MAX);
+    vdrive_iec_close(vdrive, 0);
+    if (fclose(fd) != 0 || size >= EXTRACT_FILE_MAX) {
+        log_error(LOG_DEFAULT, "extract: cannot write `%s'.", path);
+        lib_free(path);
+        return -1;
+    }
+    lib_free(path);
+    return 0;
+}
+
+/* the closed PRG, SEQ and USR files of the disk to \a drawer, along the
+ * directory sectors as c1541 "extract" */
+static void extract_files(vdrive_t *vdrive, const char *drawer, long *done, long *errors)
+{
+    const unsigned int channel = 2;
+    unsigned int track = vdrive->Dir_Track;
+    unsigned int sector = vdrive->Dir_Sector;
+    unsigned int sectors = 0;
+
+    if (vdrive_iec_open(vdrive, (const uint8_t *)"#", 1, channel, NULL) != SERIAL_OK) {
+        (*errors)++;
+        return;
+    }
+    /* a directory has less sectors than this: else it is a cyclic chain */
+    while (sectors++ < 256) {
+        uint8_t dirsector[256];
+        char *cmd = lib_msprintf("B-R:%u 0 %u %u", channel, track, sector);
+        int res = vdrive_command_execute(vdrive, (uint8_t *)cmd, (unsigned int)strlen(cmd));
+        int i;
+
+        lib_free(cmd);
+        if (res != CBMDOS_IPE_OK) {
+            (*errors)++;
+            break;
+        }
+        /* the channel buffer is used again to read the files */
+        memcpy(dirsector, vdrive->buffers[channel].buffer, sizeof dirsector);
+        for (i = 0; i < 256; i += SLOT_SIZE) {
+            uint8_t type = dirsector[i + SLOT_TYPE_OFFSET];
+
+            if (((type & 7) == CBMDOS_FT_PRG || (type & 7) == CBMDOS_FT_SEQ
+                    || (type & 7) == CBMDOS_FT_USR) && (type & CBMDOS_FT_CLOSED)) {
+                if (extract_file(vdrive, dirsector + i, drawer) == 0) {
+                    (*done)++;
+                } else {
+                    (*errors)++;
+                }
+            }
+        }
+        if (dirsector[0] == 0) {
+            break;
+        }
+        track = dirsector[0];
+        sector = dirsector[1];
+    }
+    vdrive_iec_close(vdrive, channel);
+}
+
+/* the files of the disk image in drive 8 to an Amiga drawer */
+static BOOL Action_ExtractDisk8(void)
+{
+    const char *image = file_system_get_disk_name(8, 0);
+    char *drawer;
+    vdrive_t *vdrive;
+    long counts[3];
+
+    if (image == NULL) {
+        path_request(MSG_ERROR_NO_DISK8, MSG_ERROR_OK, "");
+        return FALSE;
+    }
+    amiga_video_requester_begin();
+    drawer = amiga_drawer_request(amiga_video_window(), LOC(MSG_REQ_EXTRACT_DISK8), NULL);
+    amiga_video_requester_end();
+    vsync_suspend_speed_eval();
+    if (drawer == NULL) {
+        return FALSE;
+    }
+    /* what the true drive wrote is in the image file first */
+    machine_drive_flush();
+    /* its own read-only access: the drive 8 channels are the C64's */
+    vdrive = vdrive_internal_open_fsimage(image, 1);
+    if (vdrive == NULL) {
+        log_error(LOG_DEFAULT, "extract: cannot read `%s'.", image);
+        path_request(MSG_ERROR_READ_DISK, MSG_ERROR_OK, image);
+        lib_free(drawer);
+        return FALSE;
+    }
+    counts[0] = counts[1] = 0;
+    extract_files(vdrive, drawer, &counts[0], &counts[1]);
+    vdrive_internal_close_disk_image(vdrive);
+    log_message(LOG_DEFAULT, "extract: %ld file(s), %ld error(s) from `%s' to `%s'.",
+                counts[0], counts[1], image, drawer);
+
+    {
+        struct EasyStruct es;
+
+        counts[2] = (long)drawer;
+        es.es_StructSize = sizeof es;
+        es.es_Flags = 0;
+        es.es_Title = (UBYTE *)LOC(MSG_WINDOW_TITLE);
+        es.es_TextFormat = (UBYTE *)LOC(MSG_EXTRACT_DONE);
+        es.es_GadgetFormat = (UBYTE *)LOC(MSG_ERROR_OK);
+        amiga_video_requester_begin();
+        EasyRequestArgs(amiga_video_window(), &es, NULL, counts);
+        amiga_video_requester_end();
+        vsync_suspend_speed_eval();
+    }
+    lib_free(drawer);
+    return counts[1] == 0;
+}
+
+/* the BASIC program in memory to a .prg file, as SAVE"NAME",8 writes it:
+ * the load address, then the bytes from the program start (TXTTAB, $2b/$2c)
+ * to the variables start (VARTAB, $2d/$2e). LOAD or autostart it back. */
+static BOOL Action_SaveBasic(void)
+{
+    unsigned int start = mem_ram[0x2b] | (mem_ram[0x2c] << 8);
+    unsigned int end = mem_ram[0x2d] | (mem_ram[0x2e] << 8);
+    char *path;
+    size_t len;
+    FILE *fd;
+    BOOL ok;
+
+    /* NEW leaves 2 zero bytes; a machine code program may have moved the
+       pointers anywhere */
+    if (start < 0x0400 || end <= start + 2 || end > 0xa000) {
+        path_request(MSG_ERROR_NO_BASIC, MSG_ERROR_OK, "");
+        return FALSE;
+    }
+    amiga_video_requester_begin();
+    path = amiga_file_save_request(amiga_video_window(), LOC(MSG_REQ_SAVE_BASIC), "#?.prg");
+    amiga_video_requester_end();
+    vsync_suspend_speed_eval();
+    if (path == NULL) {
+        return FALSE;
+    }
+    /* ".prg" or ".PRG" at the end, else added */
+    len = strlen(path);
+    if (len < 4 || util_strcasecmp(path + len - 4, ".prg") != 0) {
+        char *named = util_concat(path, ".prg", NULL);
+
+        lib_free(path);
+        path = named;
+    }
+    if (util_file_exists(path)
+            && path_request(MSG_CONFIRM_REPLACE, MSG_REPLACE_CANCEL, path) != 1) {
+        lib_free(path);
+        return FALSE;
+    }
+    fd = fopen(path, MODE_WRITE);
+    ok = fd != NULL
+         && fputc((int)(start & 0xff), fd) != EOF
+         && fputc((int)(start >> 8), fd) != EOF
+         && fwrite(mem_ram + start, 1, end - start, fd) == end - start;
+    if (fd != NULL && fclose(fd) != 0) {
+        ok = FALSE;
+    }
+    if (ok) {
+        log_message(LOG_DEFAULT, "BASIC program $%04x-$%04x saved to `%s'.", start, end, path);
+    } else {
+        log_error(LOG_DEFAULT, "cannot save the BASIC program to `%s'.", path);
+        path_request(MSG_ERROR_SAVE_BASIC, MSG_ERROR_OK, path);
+    }
+    lib_free(path);
     return ok;
 }
 
@@ -274,6 +618,14 @@ static int Checked_BordersNone(void) { return amiga_video_get_borders() == AMIGA
 /* ------------------------------------------------------------------------- */
 
 /* ------------------------------------------------------------------------- */
+/* Keyboard menu: symbolic or positional mapping, changed at once */
+
+static BOOL Action_KeyboardSymbolic(void) { amiga_kbd_set_symbolic(1); return TRUE; }
+static BOOL Action_KeyboardPositional(void) { amiga_kbd_set_symbolic(0); return TRUE; }
+static int Checked_KeyboardSymbolic(void) { return amiga_kbd_get_symbolic() ? 1 : 0; }
+static int Checked_KeyboardPositional(void) { return amiga_kbd_get_symbolic() ? 0 : 1; }
+
+/* ------------------------------------------------------------------------- */
 /* Snapshot menu: the whole machine state in a .vsf file */
 
 #define PATTERN_SNAPSHOT "#?.vsf"
@@ -393,7 +745,12 @@ static AmigaAction s_actions[AMIGA_ACTION_COUNT] = {
     /* AMIGA_ACTION_BORDERS_HALF    */ { Action_BordersHalf,   Checked_BordersHalf,   MSG_BORDERS_HALF,    NULL },
     /* AMIGA_ACTION_BORDERS_NONE    */ { Action_BordersNone,   Checked_BordersNone,   MSG_BORDERS_NONE,    NULL },
     /* AMIGA_ACTION_SNAPSHOT_LOAD   */ { Action_SnapshotLoad,  NULL,                  MSG_SNAPSHOT_LOAD,   NULL },
-    /* AMIGA_ACTION_SNAPSHOT_SAVE   */ { Action_SnapshotSave,  NULL,                  MSG_SNAPSHOT_SAVE,   NULL }
+    /* AMIGA_ACTION_SNAPSHOT_SAVE   */ { Action_SnapshotSave,  NULL,                  MSG_SNAPSHOT_SAVE,   NULL },
+    /* AMIGA_ACTION_KEYBOARD_SYMBOLIC   */ { Action_KeyboardSymbolic,   Checked_KeyboardSymbolic,   MSG_KEYBOARD_SYMBOLIC,   NULL },
+    /* AMIGA_ACTION_KEYBOARD_POSITIONAL */ { Action_KeyboardPositional, Checked_KeyboardPositional, MSG_KEYBOARD_POSITIONAL, NULL },
+    /* AMIGA_ACTION_CREATE_DISK8    */ { Action_CreateDisk8,   NULL,                  MSG_CREATE_DISK8,    NULL },
+    /* AMIGA_ACTION_EXTRACT_DISK8   */ { Action_ExtractDisk8,  NULL,                  MSG_EXTRACT_DISK8,   NULL },
+    /* AMIGA_ACTION_SAVE_BASIC      */ { Action_SaveBasic,     NULL,                  MSG_SAVE_BASIC,      NULL }
 };
 
 void AmigaAction_Init(void)

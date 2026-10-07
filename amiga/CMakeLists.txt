@@ -184,7 +184,31 @@ set(VICE_INCLUDE_DIRS
 	${COMMONLIBS}/extrasdk/CGX/include
 	${COMMONLIBS}/extrasdk/AHI/include
 	${COMMONLIBS}/extrasdk/MUI38/include
+	${CMAKE_CURRENT_BINARY_DIR}/generated
 )
+
+# the default positional keymap built in (kbd.c), used when
+# amiga_positional.vkm is not found on disk: a C string of the file without
+# its comment lines, made again when the file changes
+set(KVICE_BUILTIN_VKM "${CMAKE_CURRENT_SOURCE_DIR}/data/C64/amiga_positional.vkm")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${KVICE_BUILTIN_VKM}")
+file(READ "${KVICE_BUILTIN_VKM}" vkm_text)
+# comments out first: they have ';' (CMake list separator) and brackets
+# (a vkm comment runs to the end of its line)
+string(REGEX REPLACE "/\\*[^\n]*" "" vkm_text "${vkm_text}")
+string(REGEX REPLACE "#[^\n]*" "" vkm_text "${vkm_text}")
+string(REGEX REPLACE "[;\r\\\"]" "" vkm_text "${vkm_text}")
+string(REPLACE "\n" ";" vkm_lines "${vkm_text}")
+set(vkm_c "/* made by CMakeLists.txt from data/C64/amiga_positional.vkm */\n")
+string(APPEND vkm_c "static const char amiga_positional_vkm[] =\n")
+foreach(vkm_line IN LISTS vkm_lines)
+	string(STRIP "${vkm_line}" vkm_line)
+	if(NOT vkm_line STREQUAL "")
+		string(APPEND vkm_c "    \"${vkm_line}\\n\"\n")
+	endif()
+endforeach()
+string(APPEND vkm_c "    ;\n")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/amiga_positional_vkm.h" "${vkm_c}")
 
 # same compile settings for every target
 function(vice_amiga_setup_target target)

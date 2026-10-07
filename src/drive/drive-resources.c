@@ -202,6 +202,10 @@ static int drive_resources_type(int val, void *param)
             if (drive_set_disk_drive_type(type, diskunit_context[dnr]) < 0) {
                 return -1;
             }
+#ifdef AMIGA_COMPILE
+            /* a drive again: its ROM is there */
+            drive_rom_missing_type[dnr] = 0;
+#endif
             /* allocate or unallocate rtc module for FD2K/4K */
             if (type == DRIVE_TYPE_2000 || type == DRIVE_TYPE_4000) {
                 if (current != DRIVE_TYPE_2000 && current != DRIVE_TYPE_4000) {
@@ -241,6 +245,11 @@ static int drive_resources_type(int val, void *param)
             machine_drive_idling_method(dnr);
             return 0;
         case DRIVE_TYPE_NONE:
+#ifdef AMIGA_COMPILE
+            /* chosen: no other type is waiting for its ROM (drive_init()
+               records the type after this call) */
+            drive_rom_missing_type[dnr] = 0;
+#endif
             unit->type = type;
             drive_disable(diskunit_context[dnr]);
             machine_bus_status_drivetype_set(dnr + 8, 0);

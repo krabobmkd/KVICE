@@ -274,6 +274,41 @@ static void c64model_set_temp(int model, int *vicii_model, int *sid_model,
     }
 }
 
+/* ROMs of a model: character ROM file name and kernal revision */
+const char *c64model_get_chargen_name(int model)
+{
+    if (model < 0 || model >= C64MODEL_NUM) {
+        return NULL;
+    }
+    return c64models[model].chargenname;
+}
+
+/* video standard (MACHINE_SYNC_*) of a model, -1 if unknown */
+int c64model_get_video(int model)
+{
+    if (model < 0 || model >= C64MODEL_NUM) {
+        return -1;
+    }
+    return c64models[model].video;
+}
+
+/* 1: 8580 SID, 0: 6581, -1 if unknown */
+int c64model_get_new_sid(int model)
+{
+    if (model < 0 || model >= C64MODEL_NUM) {
+        return -1;
+    }
+    return c64models[model].sid == NEW_SID;
+}
+
+int c64model_get_kernal_rev(int model)
+{
+    if (model < 0 || model >= C64MODEL_NUM) {
+        return C64_KERNAL_UNKNOWN;
+    }
+    return c64models[model].kernalrev;
+}
+
 /* get details for model */
 void c64model_set_details(c64model_details_t *details, int model)
 {
@@ -320,9 +355,13 @@ void c64model_set(int model)
     resources_set_int("BoardType", c64models[model].board);
     resources_set_int("IECReset", c64models[model].iecreset);
 
+#ifndef AMIGA_COMPILE
     resources_set_string("ChargenName", c64models[model].chargenname);
 
     resources_set_int("KernalRev", c64models[model].kernalrev);
+#endif
+    /* Amiga: the ROM files are kept, the settings window sets the model
+       ROMs on demand ("Set ROM defaults for this model") */
 
     /* Only change the SID model if the model changes from 6581 to 8580.
        This allows to switch between "pal"/"oldpal" without changing

@@ -240,6 +240,9 @@ int ui_resources_init(void)
     if (amiga_joy_resources_init() < 0) {
         return -1;
     }
+    if (amiga_kbd_resources_init() < 0) {
+        return -1;
+    }
 
     return 0;
 }
