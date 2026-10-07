@@ -47,6 +47,7 @@
 #include "raster.h"
 #include "types.h"
 #include "vicii-fetch.h"
+#include "timestats.h"
 #include "vicii-irq.h"
 #include "vicii-sprites.h"
 #include "viciitypes.h"
@@ -523,6 +524,8 @@ void vicii_fetch_alarm_handler(CLOCK offset, void *data)
 {
     CLOCK last_opcode_first_write_clk, last_opcode_last_write_clk;
 
+    TIMESTATS_ENTER(TSTAT_VIC_FETCH);
+
     /* This kludgy thing is used to emulate the behavior of the 6510 when BA
        goes low.  When BA goes low, every read access stops the processor
        until BA is high again; write accesses happen as usual instead.  */
@@ -596,6 +599,8 @@ void vicii_fetch_alarm_handler(CLOCK offset, void *data)
             break;
         }
     }
+
+    TIMESTATS_LEAVE();
 }
 
 void vicii_fetch_init(void)

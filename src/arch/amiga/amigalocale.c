@@ -82,6 +82,13 @@ static const char *default_strings[] = {
     /* MSG_BORDERS_NONE */
     "None",
 
+    /* MSG_MENU_SNAPSHOT */
+    "Snapshot",
+    /* MSG_SNAPSHOT_LOAD */
+    "Load snapshot...",
+    /* MSG_SNAPSHOT_SAVE */
+    "Save snapshot...",
+
     /* MSG_SETTINGS_TITLE */
     "VICE Settings",
     /* MSG_SETTINGS_SAVE */
@@ -92,6 +99,8 @@ static const char *default_strings[] = {
     "Cancel",
     /* MSG_CATEGORY_INPUT */
     "Input",
+    /* MSG_CATEGORY_KEYBOARD */
+    "Keyboard",
     /* MSG_CATEGORY_SOUND */
     "Sound",
     /* MSG_CATEGORY_MACHINE */
@@ -120,11 +129,34 @@ static const char *default_strings[] = {
     /* MSG_DEVICE_NONE */
     "None",
 
+    /* MSG_KEYMAP */
+    "Keymap:",
+    /* MSG_KEYMAP_SYM */
+    "Symbolic (amiga_sym.vkm)",
+    /* MSG_KEYMAP_POS */
+    "Positional (amiga_pos.vkm)",
+    /* MSG_KEYMAP_CUSTOM */
+    "Custom file",
+    /* MSG_KEYMAP_FILE */
+    "Custom keymap file:",
+    /* MSG_KEYS_C64 */
+    "C64 key",
+    /* MSG_KEYS_AMIGA */
+    "Amiga key",
+
     /* MSG_SOUND_ENABLE */
     "Sound emulation:",
     /* MSG_SOUND_RATE */
     "Sample rate:",
 
+    /* MSG_ROM_KERNAL */
+    "Kernal ROM:",
+    /* MSG_ROM_BASIC */
+    "BASIC ROM:",
+    /* MSG_ROM_CHARGEN */
+    "Character ROM:",
+    /* MSG_ROM_DEFAULT */
+    "Default ROMs",
     /* MSG_C64_MODEL */
     "C64 model:",
     /* MSG_MODEL_C64_PAL */
@@ -163,8 +195,12 @@ static const char *default_strings[] = {
     "Automatic screen mode:",
     /* MSG_FS_SCREEN_MODE */
     "Screen mode:",
+    /* MSG_FS_MENU */
+    "Allow menu in fullscreen mode:",
     /* MSG_FS_NOTE */
-    "Amiga+F switches between the window and the fullscreen.",
+    "Amiga+F switches between the window and the fullscreen.\n"
+    "Without menu: Amiga+P pause, Amiga+R reset,\n"
+    "Amiga+A autostart, Amiga+L/W load/save snapshot, Amiga+Q quit.",
 
     /* MSG_REQ_AUTOSTART */
     "Autostart a program, disk, tape or cartridge",
@@ -174,13 +210,32 @@ static const char *default_strings[] = {
     "Cartridge image",
     /* MSG_REQ_DRAWER8 */
     "Amiga drawer for drive 8",
+    /* MSG_REQ_ROM */
+    "ROM file",
+    /* MSG_REQ_KEYMAP */
+    "Keymap file (.vkm)",
+    /* MSG_REQ_SNAPSHOT_LOAD */
+    "Load a snapshot",
+    /* MSG_REQ_SNAPSHOT_SAVE */
+    "Save a snapshot",
 
     /* MSG_ERROR_MENU */
     "Cannot create the menus.",
     /* MSG_ERROR_NO_MUI */
     "Settings need MUI (muimaster.library).",
     /* MSG_ERROR_SETTINGS_WINDOW */
-    "Cannot open the settings window."
+    "Cannot open the settings window.",
+    /* MSG_ERROR_ROM_FILE: %s is the label, then the file */
+    "%s\nFile not found or wrong size:\n%s",
+    /* MSG_ERROR_OK */
+    "OK",
+    /* MSG_ERROR_SNAPSHOT_LOAD */
+    "Cannot load the snapshot\n%s",
+    /* MSG_ERROR_SNAPSHOT_SAVE */
+    "Cannot save the snapshot\n%s",
+
+    /* MSG_NO_ROM */
+    "(no rom)"
 };
 
 /* compile-time check: one default string per MSG_* id */

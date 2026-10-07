@@ -56,6 +56,41 @@ static uint32_t hr_table[16 * 16 * 16];
 static uint8_t mc_table[3 * 256];
 static uint8_t mcmsktable[256];
 
+/* Multicolor text: the 4 pixels (2 color pairs) of each nibble of a
+   character byte, for each character color 0..7, with the 3 colors shared
+   by the line (background, extra backgrounds 1 and 2). Rebuilt only when
+   one of these 3 colors changes: a multicolor character is then 2 lookups
+   and 2 32 bit stores, as a hires one. Filled byte by byte: right on big
+   and little endian hosts. */
+static uint32_t mc_text_table[8 * 16];
+static unsigned int mc_text_table_colors = 0xffffffff;
+
+static const uint32_t *mc_text_table_get(unsigned int c0, unsigned int c1, unsigned int c2)
+{
+    unsigned int key = (c0 & 0xff) | ((c1 & 0xff) << 8) | ((c2 & 0xff) << 16);
+
+    if (key != mc_text_table_colors) {
+        unsigned int c3, n;
+
+        for (c3 = 0; c3 < 8; c3++) {
+            uint8_t col[4];
+            uint8_t *q = (uint8_t *)(mc_text_table + c3 * 16);
+
+            col[0] = (uint8_t)c0;
+            col[1] = (uint8_t)c1;
+            col[2] = (uint8_t)c2;
+            col[3] = (uint8_t)c3;
+            for (n = 0; n < 16; n++) {
+                q[0] = q[1] = col[n >> 2];
+                q[2] = q[3] = col[n & 3];
+                q += 4;
+            }
+        }
+        mc_text_table_colors = key;
+    }
+    return mc_text_table;
+}
+
 
 /* These functions draw the background from `start_pixel' to `end_pixel'.  */
 
@@ -498,80 +533,77 @@ static int get_mc_text(raster_cache_t *cache, unsigned int *xs,
 inline static void _draw_mc_text(uint8_t *p, unsigned int xs, unsigned int xe,
                                  uint8_t *gfx_msk_ptr)
 {
-    uint8_t c[8];
+    const uint32_t *mc_ptr;
     uint32_t *table_ptr;
     uint8_t *char_ptr, *msk_ptr;
-    uint16_t *ptmp;
+    uint32_t *wp;
     unsigned int i;
 
     table_ptr = hr_table + (vicii.raster.background_color << 4);
     char_ptr = vicii.chargen_ptr + vicii.raster.ycounter;
     msk_ptr = gfx_msk_ptr + GFX_MSK_LEFTBORDER_SIZE;
+    mc_ptr = mc_text_table_get(vicii.raster.background_color,
+                               (unsigned int)vicii.ext_background_color[0],
+                               (unsigned int)vicii.ext_background_color[1]);
 
-    c[1] = c[0] = vicii.raster.background_color;
-    c[3] = c[2] = vicii.ext_background_color[0];
-    c[5] = c[4] = vicii.ext_background_color[1];
-
-    ptmp = (uint16_t *)(p + xs * 8);
+    wp = (uint32_t *)(p + xs * 8);
 
     for (i = xs; i <= xe; i++) {
         unsigned int d = char_ptr[vicii.vbuf[i] * 8];
-        uint8_t c3 = vicii.cbuf[i];
+        unsigned int c3 = vicii.cbuf[i];
+
         if (c3 & 0x8) {
-            c[7] = c[6] = c3 & 0x7;
-            ptmp[0] = ((uint16_t *)c)[mc_table[d]];
-            ptmp[1] = ((uint16_t *)c)[mc_table[0x100 + d]];
-            ptmp[2] = ((uint16_t *)c)[mc_table[0x200 + d]];
-            ptmp[3] = ((uint16_t *)c)[d & 3];
-            ptmp += 4;
+            const uint32_t *ptr = mc_ptr + ((c3 & 0x7) << 4);
+
+            wp[0] = ptr[d >> 4];
+            wp[1] = ptr[d & 0xf];
             msk_ptr[i] = mcmsktable[d];
         } else {
-            uint32_t *ptr = table_ptr + (c3 << 8);
-            *((uint32_t *)ptmp) = ptr[d >> 4];
-            *((uint32_t *)(ptmp + 2)) = ptr[d & 0xf];
-            ptmp += 4;
+            const uint32_t *ptr = table_ptr + (c3 << 8);
+
+            wp[0] = ptr[d >> 4];
+            wp[1] = ptr[d & 0xf];
             msk_ptr[i] = d;
         }
+        wp += 2;
     }
 }
 
 inline static void _draw_mc_text_cached(uint8_t *p, unsigned int xs, unsigned int xe, raster_cache_t *cache)
 {
-    uint8_t c[8];
+    const uint32_t *mc_ptr;
     uint32_t *table_ptr;
     uint8_t *foreground_data, *color_data_3, *msk_ptr;
-    uint16_t *ptmp;
+    uint32_t *wp;
     unsigned int i;
 
     foreground_data = cache->foreground_data;
     color_data_3 = cache->color_data_3;
     table_ptr = hr_table + (cache->background_data[0] << 4);
     msk_ptr = cache->gfx_msk + GFX_MSK_LEFTBORDER_SIZE;
+    mc_ptr = mc_text_table_get(cache->background_data[0],
+                               cache->color_data_1[0], cache->color_data_1[1]);
 
-    c[1] = c[0] = cache->background_data[0];
-    c[3] = c[2] = cache->color_data_1[0];
-    c[5] = c[4] = cache->color_data_1[1];
-
-    ptmp = (uint16_t *)(p + xs * 8);
+    wp = (uint32_t *)(p + xs * 8);
 
     for (i = xs; i <= xe; i++) {
         unsigned int d = foreground_data[i];
-        uint8_t c3 = color_data_3[i];
+        unsigned int c3 = color_data_3[i];
+
         if (c3 & 0x8) {
-            c[7] = c[6] = c3 & 0x7;
-            ptmp[0] = ((uint16_t *)c)[mc_table[d]];
-            ptmp[1] = ((uint16_t *)c)[mc_table[0x100 + d]];
-            ptmp[2] = ((uint16_t *)c)[mc_table[0x200 + d]];
-            ptmp[3] = ((uint16_t *)c)[d & 3];
-            ptmp += 4;
+            const uint32_t *ptr = mc_ptr + ((c3 & 0x7) << 4);
+
+            wp[0] = ptr[d >> 4];
+            wp[1] = ptr[d & 0xf];
             msk_ptr[i] = mcmsktable[d];
         } else {
-            uint32_t *ptr = table_ptr + (c3 << 8);
-            *((uint32_t *)ptmp) = ptr[d >> 4];
-            *((uint32_t *)(ptmp + 2)) = ptr[d & 0xf];
-            ptmp += 4;
+            const uint32_t *ptr = table_ptr + (c3 << 8);
+
+            wp[0] = ptr[d >> 4];
+            wp[1] = ptr[d & 0xf];
             msk_ptr[i] = d;
         }
+        wp += 2;
     }
 }
 

@@ -34,6 +34,9 @@
 #include "lib.h"
 #include "machine.h"
 #include "raster-canvas.h"
+#ifdef KVICE_FRAME_CHECKSUM
+#include "kvice_framecheck.h"
+#endif
 #include "raster.h"
 #include "video.h"
 #include "viewport.h"
@@ -107,6 +110,11 @@ inline static void refresh_canvas(raster_t *raster)
 
 void raster_canvas_handle_end_of_frame(raster_t *raster)
 {
+#ifdef KVICE_FRAME_CHECKSUM
+    /* test build: hash of every frame, before any skipping */
+    kvice_frame_checksum(raster->canvas->draw_buffer);
+#endif
+
     if (video_disabled_mode) {
         return;
     }

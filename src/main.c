@@ -57,6 +57,9 @@
 #include "machine.h"
 #include "maincpu.h"
 #include "main.h"
+#ifdef AMIGA_COMPILE
+#include "amigamui.h"
+#endif
 #include "mainlock.h"
 #include "resources.h"
 #include "screenshot.h"
@@ -511,6 +514,11 @@ void main_loop_forever(void)
     log_message(maincpu_log, "%s", ""); /* ugly hack to produce a blank log line, but not trigger a warning */
     log_message(maincpu_log, "starting at ($FFFC).");
     DBG(("main:maincpu_mainloop"));
+
+#ifdef AMIGA_COMPILE
+    /* "no rom" state: until the ROMs are chosen in the settings window */
+    amiga_wait_for_roms();
+#endif
 
     /* This doesn't return. The thread will directly exit when requested. */
     maincpu_mainloop();

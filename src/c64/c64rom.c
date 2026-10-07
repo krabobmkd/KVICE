@@ -54,9 +54,21 @@ static log_t c64rom_log = LOG_DEFAULT;
 /* Flag: nonzero if the Kernal and BASIC ROMs have been loaded.  */
 static int rom_loaded = 0;
 
+/* which ROMs the last load succeeded for: the machine can wait for the
+   missing ones (Amiga "no rom" state) instead of failing */
+static int kernal_ok = 0;
+static int basic_ok = 0;
+static int chargen_ok = 0;
+
 int c64rom_isloaded(void)
 {
     return rom_loaded;
+}
+
+/* 1 when the Kernal, BASIC and character ROMs are all loaded */
+int c64rom_all_loaded(void)
+{
+    return rom_loaded && kernal_ok && basic_ok && chargen_ok;
 }
 
 struct kernal_s {
@@ -225,6 +237,7 @@ int c64rom_load_kernal(const char *rom_name, uint8_t *cartkernal)
         } else {
             if (sysfile_load(rom_name, machine_name, c64memrom_kernal64_rom, C64_KERNAL_ROM_SIZE, C64_KERNAL_ROM_SIZE) < 0) {
                 log_error(c64rom_log, "Couldn't load kernal ROM `%s'.", rom_name);
+                kernal_ok = 0;
                 if (machine_class != VICE_MACHINE_VSID) {
                     restore_trapflags();
                 }
@@ -242,6 +255,7 @@ int c64rom_load_kernal(const char *rom_name, uint8_t *cartkernal)
     }
 
     memcpy(c64memrom_kernal64_trap_rom, c64memrom_kernal64_rom, C64_KERNAL_ROM_SIZE);
+    kernal_ok = 1;
 
     if (machine_class != VICE_MACHINE_VSID) {
         restore_trapflags();
@@ -278,9 +292,11 @@ int c64rom_load_basic(const char *rom_name)
     /* Load Basic ROM.  */
     if (sysfile_load(rom_name, machine_name, c64memrom_basic64_rom, C64_BASIC_ROM_SIZE, C64_BASIC_ROM_SIZE) < 0) {
         log_error(c64rom_log, "Couldn't load basic ROM `%s'.", rom_name);
+        basic_ok = 0;
         return -1;
     }
     c64rom_print_basic_info();
+    basic_ok = 1;
     return 0;
 }
 
@@ -294,8 +310,10 @@ int c64rom_load_chargen(const char *rom_name)
 
     if (sysfile_load(rom_name, machine_name, mem_chargen_rom, C64_CHARGEN_ROM_SIZE, C64_CHARGEN_ROM_SIZE) < 0) {
         log_error(c64rom_log, "Couldn't load character ROM `%s'.", rom_name);
+        chargen_ok = 0;
         return -1;
     }
+    chargen_ok = 1;
 
     return 0;
 }
@@ -303,6 +321,7 @@ int c64rom_load_chargen(const char *rom_name)
 int mem_load(void)
 {
     const char *rom_name = NULL;
+    int ret = 0;
 
     if (c64rom_log == LOG_DEFAULT) {
         c64rom_log = log_open("C64MEM");
@@ -310,26 +329,19 @@ int mem_load(void)
 
     rom_loaded = 1;
 
-    if (resources_get_string("KernalName", &rom_name) < 0) {
-        return -1;
+    /* all three are tried, so each one's state is known (c64rom_all_loaded) */
+    if (resources_get_string("KernalName", &rom_name) < 0
+        || c64rom_load_kernal(rom_name, NULL) < 0) {
+        ret = -1;
     }
-    if (c64rom_load_kernal(rom_name, NULL) < 0) {
-        return -1;
+    if (resources_get_string("BasicName", &rom_name) < 0
+        || c64rom_load_basic(rom_name) < 0) {
+        ret = -1;
     }
-
-    if (resources_get_string("BasicName", &rom_name) < 0) {
-        return -1;
-    }
-    if (c64rom_load_basic(rom_name) < 0) {
-        return -1;
-    }
-
-    if (resources_get_string("ChargenName", &rom_name) < 0) {
-        return -1;
-    }
-    if (c64rom_load_chargen(rom_name) < 0) {
-        return -1;
+    if (resources_get_string("ChargenName", &rom_name) < 0
+        || c64rom_load_chargen(rom_name) < 0) {
+        ret = -1;
     }
 
-    return 0;
+    return ret;
 }

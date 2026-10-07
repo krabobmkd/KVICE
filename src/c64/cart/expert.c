@@ -391,6 +391,7 @@ static int set_expert_enabled(int value, void *param)
         expert_io1_list_item = NULL;
         export_remove(&export_res);
         expert_enabled = 0;
+        mem_direct_tabs_refresh();
         cart_power_off();
     } else if (!expert_enabled && val) {
         DBG(("EXPERT: enable\n"));
@@ -406,6 +407,7 @@ static int set_expert_enabled(int value, void *param)
             return -1;
         }
         expert_enabled = 1;
+        mem_direct_tabs_refresh();
         resources_set_int("ExpertCartridgeMode", cartmode);
         cart_power_off();
     }
@@ -933,6 +935,7 @@ int expert_snapshot_read_module(snapshot_t *s)
     expert_filetype = 0;
     expert_write_image = 0;
     expert_enabled = 1;
+    mem_direct_tabs_refresh();
 
     /* FIXME: ugly code duplication to avoid cart_config_changed calls */
     expert_io1_list_item = io_source_register(&expert_io1_device);

@@ -31,6 +31,7 @@
 #include "vice.h"
 
 #include "amigatrace.h"
+#include "timestats.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -127,6 +128,14 @@ static int fullscreen_reopen = 0;       /* screen mode setting changed */
 /* fullscreen resources */
 static int fs_auto_mode = 1;
 static int fs_mode_id = (int)INVALID_ID;
+/* AmigaFullscreenMenu: the fullscreen has the screen title bar and the
+ * menus, the emulated screen is drawn in a backdrop window below the bar
+ * (layer clipped: the menus and the drawing do not overwrite each other).
+ * Without it, the whole screen is drawn directly and a few Amiga+key
+ * shortcuts are handled by the window (see amiga_fullscreen_shortcut()). */
+static int fs_menu = 0;
+/* the current fullscreen has the menus */
+static int fs_menu_active = 0;
 
 /* native 16/32 color fullscreen: 4 or 5 bitplanes, 0 otherwise */
 static int fs_planes = 0;
@@ -152,6 +161,33 @@ static unsigned int base_width = 0;
 static unsigned int base_height = 0;
 static int crop_x = 0;
 static int crop_y = 0;
+
+/* Changed lines only. The screen output is bus bound (about 30 ms per frame
+ * for a 320x200 16 bit window on Zorro III), and VICE refreshes the whole
+ * frame each time (its video cache is disabled upstream): a copy of the
+ * shown area of the last frame is kept in fast RAM, the lines that did not
+ * change are not sent to the screen again. */
+static UBYTE *prev_frame = NULL;
+static unsigned int prev_w = 0;
+static unsigned int prev_h = 0;
+static int prev_x = 0;
+static int prev_y = 0;
+/* next refresh draws everything: window redraw, palette, geometry... */
+static int redraw_full = 1;
+
+/* "no rom" state (amiga_wait_for_roms()): "(no rom)" instead of the
+ * emulated screen */
+static int no_rom_screen = 0;
+
+static void amiga_free_prev_frame(void)
+{
+    if (prev_frame != NULL) {
+        lib_free(prev_frame);
+        prev_frame = NULL;
+    }
+    redraw_full = 1;
+}
+
 /* top left corner of the whole canvas in the draw buffer: always border */
 static int canvas_x0 = -1;
 static int canvas_y0 = -1;
@@ -201,6 +237,16 @@ static int set_fs_mode_id(int val, void *param)
     return 0;
 }
 
+static int set_fs_menu(int val, void *param)
+{
+    val = val ? 1 : 0;
+    if (val != fs_menu && fullscreen) {
+        fullscreen_reopen = 1;
+    }
+    fs_menu = val;
+    return 0;
+}
+
 static int set_window_int(int val, void *param)
 {
     *(int *)param = val;
@@ -221,6 +267,8 @@ static const resource_int_t resources_int[] =
       &fs_auto_mode, set_fs_auto_mode, NULL },
     { "AmigaFullscreenModeID", (int)INVALID_ID, RES_EVENT_NO, NULL,
       &fs_mode_id, set_fs_mode_id, NULL },
+    { "AmigaFullscreenMenu", 0, RES_EVENT_NO, NULL,
+      &fs_menu, set_fs_menu, NULL },
     RESOURCE_INT_LIST_END
 };
 
@@ -320,6 +368,7 @@ static void amiga_close_fullscreen(void)
     }
     fs_screen = NULL;
     fullscreen = 0;
+    fs_menu_active = 0;
     fs_planes = 0;
 }
 
@@ -334,6 +383,7 @@ void amiga_video_close_all(void)
     amiga_close_fullscreen();
     amiga_close_window();
     planarscale_free();
+    amiga_free_prev_frame();
     if (app_port != NULL) {
         drain_app_port();
         DeleteMsgPort(app_port);
@@ -501,6 +551,7 @@ static void amiga_compute_crop(video_canvas_t *canvas,
             left = top = right = bottom = 0;
             break;
     }
+    redraw_full = 1;
     canvas_x0 = cx;
     canvas_y0 = cy;
     crop_x = cx + left;
@@ -545,6 +596,7 @@ static void amiga_open_window(unsigned int width, unsigned int height)
 {
     int known_size;
 
+    redraw_full = 1;
     if (width == 0 || height == 0) {
         return;
     }
@@ -631,11 +683,18 @@ static void amiga_open_window(unsigned int width, unsigned int height)
 }
 
 /* redraw the whole window: after a resize or when a hidden part shows */
+static void amiga_draw_no_rom(void);
+
 static void amiga_redraw_all(void)
 {
+    if (no_rom_screen) {
+        amiga_draw_no_rom();
+        return;
+    }
     if (amiga_canvas == NULL || draw_rp == NULL) {
         return;
     }
+    redraw_full = 1;
     if (use_rtg && !fullscreen) {
         /* not scaled: clear what the emulated screen does not cover */
         EraseRect(amiga_window->RPort, amiga_window->BorderLeft, amiga_window->BorderTop,
@@ -730,9 +789,11 @@ static void amiga_update_fs_border(const draw_buffer_t *db)
  * keeping the aspect, centered. Not scaled on the WriteLUTPixelArray() route. */
 static void amiga_fullscreen_layout(void)
 {
-    struct RastPort *srp = &fs_screen->RastPort;
-    int sw = fs_screen->Width;
-    int sh = fs_screen->Height;
+    /* with the menus: the backdrop window below the title bar, its layer
+     * clips the drawing against the menus */
+    struct RastPort *srp = fs_menu_active ? amiga_window->RPort : &fs_screen->RastPort;
+    int sw = fs_menu_active ? amiga_window->Width : fs_screen->Width;
+    int sh = fs_menu_active ? amiga_window->Height : fs_screen->Height;
     int bw = (int)base_width;
     int bh = (int)base_height;
     int w, h, scale;
@@ -762,7 +823,13 @@ static void amiga_fullscreen_layout(void)
     draw_height = (unsigned int)h;
 
     /* pen 0 around: emulator border (32 colors) or color 0 */
-    SetRast(srp, 0);
+    if (fs_menu_active) {
+        /* SetRast() would ignore the layer */
+        SetAPen(srp, 0);
+        RectFill(srp, 0, 0, sw - 1, sh - 1);
+    } else {
+        SetRast(srp, 0);
+    }
     if (fs_planes == 5) {
         /* plane 5 set in the drawing area: pens 16-31 */
         SetAPen(srp, 16);
@@ -781,6 +848,24 @@ static void amiga_fullscreen_layout(void)
     AMIGA_TRACE(("fullscreen %dx%d, drawing %dx%d at %d,%d", sw, sh, w, h, draw_x, draw_y));
 }
 
+/* fullscreen with menus: DrawInfo pens, in the emulator palette (C64 color
+ * numbers: 0 black, 1 white, 12 grey, 15 light grey) */
+static UWORD fs_menu_pens[] = {
+    0,      /* DETAILPEN */
+    1,      /* BLOCKPEN */
+    0,      /* TEXTPEN */
+    1,      /* SHINEPEN */
+    0,      /* SHADOWPEN */
+    12,     /* FILLPEN */
+    0,      /* FILLTEXTPEN */
+    0,      /* BACKGROUNDPEN */
+    1,      /* HIGHLIGHTTEXTPEN */
+    0,      /* BARDETAILPEN */
+    15,     /* BARBLOCKPEN */
+    0,      /* BARTRIMPEN */
+    (UWORD)~0
+};
+
 /* open the screen and its input window, 0 on success */
 static int amiga_open_fullscreen(void)
 {
@@ -791,10 +876,18 @@ static int amiga_open_fullscreen(void)
     char name[64];
     ULONG *colors32;
 
+    /* the title bar height, before the screen exists: the screen font
+     * height + 3 (BarHeight + 1 after the opening) */
+    int bar = 0;
+
+    if (fs_menu) {
+        bar = (GfxBase->DefaultFont != NULL ? GfxBase->DefaultFont->tf_YSize : 8) + 3;
+    }
     if (manual) {
         mode_id = (ULONG)fs_mode_id;
     } else {
-        mode_id = amiga_screenmode_auto((int)base_width, (int)base_height, colors, &depth);
+        /* with the menus: the emulated screen plus the bar */
+        mode_id = amiga_screenmode_auto((int)base_width, (int)base_height + bar, colors, &depth);
     }
     log_message(amiga_video_log, "fullscreen: %s mode 0x%08lx.",
                 manual ? "chosen" : "automatic", (unsigned long)mode_id);
@@ -807,7 +900,9 @@ static int amiga_open_fullscreen(void)
     native = !amiga_screenmode_is_rtg(mode_id);
     if (native && colors <= 16) {
         depth = amiga_screenmode_native_depth(mode_id);
-        fs_planes = (depth >= 5) ? 5 : 4;
+        /* 32 colors: the drawing area pens are 16-31 through a 4 planes copy
+         * of the screen bitmap, without layer: not with the menus */
+        fs_planes = (depth >= 5 && !fs_menu) ? 5 : 4;
         depth = fs_planes;
     } else {
         depth = amiga_screenmode_depth(mode_id, 8);
@@ -825,8 +920,12 @@ static int amiga_open_fullscreen(void)
             /* palette from the start, no flash */
             (colors32 != NULL ? SA_Colors32 : TAG_IGNORE), (ULONG)colors32,
             SA_Title, (ULONG)LOC(MSG_WINDOW_TITLE),
-            SA_ShowTitle, FALSE,
-            SA_Quiet, TRUE,
+            /* the menus need the title bar */
+            SA_ShowTitle, fs_menu ? TRUE : FALSE,
+            SA_Quiet, fs_menu ? FALSE : TRUE,
+            /* bar and menus readable with the emulator palette: black on
+             * light grey (C64 colors 0 and 15) */
+            (fs_menu ? SA_Pens : TAG_IGNORE), (ULONG)fs_menu_pens,
             SA_Type, CUSTOMSCREEN,
             TAG_DONE);
     if (fs_screen == NULL) {
@@ -835,21 +934,27 @@ static int amiga_open_fullscreen(void)
         fs_planes = 0;
         return -1;
     }
-    /* input only: never drawn into, the screen bitmap is used directly */
+    if (fs_menu) {
+        bar = fs_screen->BarHeight + 1;
+    }
+    /* without the menus: input only, never drawn into, the screen bitmap is
+     * used directly. With the menus: below the title bar, drawn into (layer
+     * clipped against the menus). */
     amiga_window = OpenWindowTags(NULL,
             WA_CustomScreen, (ULONG)fs_screen,
             WA_Left, 0,
-            WA_Top, 0,
+            WA_Top, bar,
             WA_Width, sw,
-            WA_Height, sh,
+            WA_Height, sh - bar,
             WA_Borderless, TRUE,
             WA_Backdrop, TRUE,
             /* no menus: they would be drawn over */
-            WA_RMBTrap, TRUE,
+            WA_RMBTrap, fs_menu ? FALSE : TRUE,
             WA_Activate, TRUE,
             WA_SimpleRefresh, TRUE,
             WA_NoCareRefresh, TRUE,
-            WA_IDCMP, IDCMP_RAWKEY | IDCMP_INACTIVEWINDOW,
+            WA_IDCMP, IDCMP_RAWKEY | IDCMP_INACTIVEWINDOW
+                      | (fs_menu ? IDCMP_MENUPICK : 0),
             TAG_DONE);
     if (amiga_window == NULL) {
         log_error(amiga_video_log, "cannot open the fullscreen input window.");
@@ -858,10 +963,15 @@ static int amiga_open_fullscreen(void)
         fs_planes = 0;
         return -1;
     }
-    /* 1 line high blank sprite: control words, 1 line, end */
-    fs_pointer = AllocVec(6 * sizeof(UWORD), MEMF_CHIP | MEMF_CLEAR);
-    if (fs_pointer != NULL) {
-        SetPointer(amiga_window, fs_pointer, 1, 16, 0, 0);
+    if (fs_menu) {
+        /* the menus need the pointer: not hidden */
+        fs_menu_active = AmigaMenu_Create(amiga_window) ? 1 : 0;
+    } else {
+        /* 1 line high blank sprite: control words, 1 line, end */
+        fs_pointer = AllocVec(6 * sizeof(UWORD), MEMF_CHIP | MEMF_CLEAR);
+        if (fs_pointer != NULL) {
+            SetPointer(amiga_window, fs_pointer, 1, 16, 0, 0);
+        }
     }
     fullscreen = 1;
 
@@ -935,6 +1045,78 @@ int amiga_video_is_fullscreen(void)
 /* rawkey codes */
 #define AMIGA_RAWKEY_F9 0x58
 #define AMIGA_RAWKEY_F 0x23
+#define AMIGA_RAWKEY_Q 0x10
+#define AMIGA_RAWKEY_R 0x13
+#define AMIGA_RAWKEY_P 0x19
+#define AMIGA_RAWKEY_A 0x20
+#define AMIGA_RAWKEY_L 0x28
+#define AMIGA_RAWKEY_W 0x11
+
+/* Fullscreen without menus: Amiga+key of the menu shortcuts that still make
+ * sense there (with menus, Intuition turns them into menu picks). Returns 1
+ * when the key was one of them. */
+static int amiga_fullscreen_shortcut(UWORD code)
+{
+    int action;
+
+    switch (code & 0x7f) {
+        case AMIGA_RAWKEY_P:
+            action = AMIGA_ACTION_PAUSE;
+            break;
+        case AMIGA_RAWKEY_Q:
+            action = AMIGA_ACTION_QUIT;
+            break;
+        case AMIGA_RAWKEY_A:
+            action = AMIGA_ACTION_AUTOSTART;
+            break;
+        case AMIGA_RAWKEY_R:
+            action = AMIGA_ACTION_RESET;
+            break;
+        case AMIGA_RAWKEY_L:
+            action = AMIGA_ACTION_SNAPSHOT_LOAD;
+            break;
+        case AMIGA_RAWKEY_W:
+            action = AMIGA_ACTION_SNAPSHOT_SAVE;
+            break;
+        default:
+            return 0;
+    }
+    if (!(code & IECODE_UP_PREFIX)) {
+        AmigaAction_Execute(action);
+    }
+    return 1;
+}
+
+/** \brief  Before a requester or the settings window, on the Workbench (or
+ *          default public) screen: from the fullscreen, show that screen
+ */
+void amiga_video_requester_begin(void)
+{
+    struct Screen *pub;
+
+    if (!fullscreen) {
+        return;
+    }
+    pub = LockPubScreen(NULL);
+    if (pub != NULL) {
+        ScreenToFront(pub);
+        UnlockPubScreen(NULL, pub);
+    }
+}
+
+/** \brief  After the requester or the settings window: back to the
+ *          fullscreen, keys to the emulator again
+ */
+void amiga_video_requester_end(void)
+{
+    if (!fullscreen || fs_screen == NULL) {
+        return;
+    }
+    ScreenToFront(fs_screen);
+    if (amiga_window != NULL) {
+        ActivateWindow(amiga_window);
+    }
+}
 
 /** \brief  Signal mask of the emulator window IDCMP port, 0 if no window
  */
@@ -1076,6 +1258,12 @@ void amiga_video_handle_events(void)
                     if (!(code & IECODE_UP_PREFIX)) {
                         fullscreen_request = !fullscreen;
                     }
+                    break;
+                }
+                /* fullscreen without menus: the other Amiga+key shortcuts */
+                if (fullscreen && !fs_menu_active
+                        && (qualifier & (IEQUALIFIER_LCOMMAND | IEQUALIFIER_RCOMMAND))
+                        && amiga_fullscreen_shortcut(code)) {
                     break;
                 }
                 /*
@@ -1295,10 +1483,108 @@ static void amiga_draw_rect(const draw_buffer_t *db, unsigned int xs, unsigned i
                        (UWORD)(rx1 - rx0), (UWORD)(ry1 - ry0), CTABFMT_XRGB8);
 }
 
+static void video_canvas_refresh_(struct video_canvas_s *canvas,
+                                  unsigned int xs, unsigned int ys,
+                                  unsigned int xi, unsigned int yi,
+                                  unsigned int w, unsigned int h);
+
+/* changed lines closer than this are drawn as one rectangle (one
+ * LockBitMap() and cliprect walk less) */
+#define CHANGED_LINES_GAP 3
+
+/* 1 if the line changed since the last frame, the copy is then updated */
+static int amiga_line_changed(UBYTE *prev, const UBYTE *cur, unsigned int n)
+{
+    if ((((ULONG)prev | (ULONG)cur | n) & 3) == 0) {
+        ULONG *p = (ULONG *)prev;
+        const ULONG *c = (const ULONG *)cur;
+        unsigned int i;
+
+        for (i = 0; i < n / 4; i++) {
+            if (p[i] != c[i]) {
+                break;
+            }
+        }
+        if (i == n / 4) {
+            return 0;
+        }
+    } else if (memcmp(prev, cur, n) == 0) {
+        return 0;
+    }
+    memcpy(prev, cur, n);
+    return 1;
+}
+
+/* amiga_draw_rect() for the lines of the rectangle that changed */
+static void amiga_draw_changed(const draw_buffer_t *db, unsigned int xs, unsigned int ys,
+                               unsigned int w, unsigned int h)
+{
+    unsigned int bw = base_width;
+    unsigned int bh = base_height;
+    int y, y0, y1;
+    int run = -1;
+    int last = -1;
+
+    if (bw == 0 || bh == 0) {
+        amiga_draw_rect(db, xs, ys, w, h);
+        return;
+    }
+    if (prev_frame == NULL || prev_w != bw || prev_h != bh
+        || prev_x != crop_x || prev_y != crop_y) {
+        if (prev_frame != NULL) {
+            lib_free(prev_frame);
+        }
+        prev_frame = lib_malloc(bw * bh);
+        prev_w = bw;
+        prev_h = bh;
+        prev_x = crop_x;
+        prev_y = crop_y;
+        redraw_full = 1;
+    }
+    if (redraw_full) {
+        for (y = 0; y < (int)bh; y++) {
+            memcpy(prev_frame + y * bw,
+                   db->draw_buffer + (crop_y + y) * db->draw_buffer_pitch + crop_x, bw);
+        }
+        redraw_full = 0;
+        amiga_draw_rect(db, xs, ys, w, h);
+        return;
+    }
+
+    /* the rectangle lines inside the shown area */
+    y0 = ((int)ys > crop_y) ? (int)ys : crop_y;
+    y1 = ((int)(ys + h) < crop_y + (int)bh) ? (int)(ys + h) : crop_y + (int)bh;
+    for (y = y0; y < y1; y++) {
+        if (amiga_line_changed(prev_frame + (y - crop_y) * bw,
+                               db->draw_buffer + y * db->draw_buffer_pitch + crop_x, bw)) {
+            if (run < 0) {
+                run = y;
+            } else if (y - last > CHANGED_LINES_GAP) {
+                amiga_draw_rect(db, xs, (unsigned int)run, w, (unsigned int)(last - run + 1));
+                run = y;
+            }
+            last = y;
+        }
+    }
+    if (run >= 0) {
+        amiga_draw_rect(db, xs, (unsigned int)run, w, (unsigned int)(last - run + 1));
+    }
+}
+
 void video_canvas_refresh(struct video_canvas_s *canvas,
                           unsigned int xs, unsigned int ys,
                           unsigned int xi, unsigned int yi,
                           unsigned int w, unsigned int h)
+{
+    TIMESTATS_ENTER(TSTAT_SCREEN);
+    video_canvas_refresh_(canvas, xs, ys, xi, yi, w, h);
+    TIMESTATS_LEAVE();
+}
+
+static void video_canvas_refresh_(struct video_canvas_s *canvas,
+                                  unsigned int xs, unsigned int ys,
+                                  unsigned int xi, unsigned int yi,
+                                  unsigned int w, unsigned int h)
 {
     draw_buffer_t *db;
 
@@ -1311,7 +1597,7 @@ void video_canvas_refresh(struct video_canvas_s *canvas,
                      refresh_count, xs, ys, xi, yi, w, h));
     }
 #endif
-    if (canvas == NULL || draw_rp == NULL) {
+    if (canvas == NULL || draw_rp == NULL || no_rom_screen) {
         return;
     }
     db = canvas->draw_buffer;
@@ -1332,10 +1618,63 @@ void video_canvas_refresh(struct video_canvas_s *canvas,
 
         LockLayer(0, layer);
         amiga_update_inner_size();
-        amiga_draw_rect(db, xs, ys, w, h);
+        amiga_draw_changed(db, xs, ys, w, h);
         UnlockLayer(layer);
     } else {
-        amiga_draw_rect(db, xs, ys, w, h);
+        amiga_draw_changed(db, xs, ys, w, h);
+    }
+}
+
+/* the drawing area in the screen's darkest pen, "(no rom)" in its brightest
+ * one, centered */
+static void amiga_draw_no_rom(void)
+{
+    struct Screen *screen = NULL;
+    struct DrawInfo *dri;
+    UWORD back = 1;
+    UWORD front = 2;
+    const char *text = LOC(MSG_NO_ROM);
+    ULONG len = (ULONG)strlen(text);
+    struct TextFont *font;
+    WORD width;
+
+    if (draw_rp == NULL || draw_width == 0 || draw_height == 0) {
+        return;
+    }
+    if (amiga_window != NULL) {
+        screen = amiga_window->WScreen;
+    } else if (fs_screen != NULL) {
+        screen = fs_screen;
+    }
+    if (screen != NULL) {
+        dri = GetScreenDrawInfo(screen);
+        if (dri != NULL) {
+            back = dri->dri_Pens[SHADOWPEN];
+            front = dri->dri_Pens[SHINEPEN];
+            FreeScreenDrawInfo(screen, dri);
+        }
+    }
+    SetAPen(draw_rp, back);
+    RectFill(draw_rp, draw_x, draw_y,
+             draw_x + (WORD)draw_width - 1, draw_y + (WORD)draw_height - 1);
+
+    font = draw_rp->Font;
+    width = TextLength(draw_rp, (CONST_STRPTR)text, len);
+    SetAPen(draw_rp, front);
+    SetDrMd(draw_rp, JAM1);
+    Move(draw_rp, draw_x + ((WORD)draw_width - width) / 2,
+         draw_y + ((WORD)draw_height - (WORD)font->tf_YSize) / 2 + (WORD)font->tf_Baseline);
+    Text(draw_rp, (CONST_STRPTR)text, len);
+}
+
+void amiga_video_show_no_rom(int on)
+{
+    no_rom_screen = on;
+    if (on) {
+        amiga_draw_no_rom();
+    } else {
+        /* the first emulated frame redraws everything */
+        redraw_full = 1;
     }
 }
 
@@ -1369,6 +1708,7 @@ int video_canvas_set_palette(struct video_canvas_s *canvas,
     AMIGA_TRACE(("%s", __func__));
 
     canvas->palette = palette;
+    redraw_full = 1;
     if (palette == NULL) {
         return 0;
     }

@@ -1032,7 +1032,13 @@ int machine_specific_init(void)
     DBG(("machine_specific_init"));
 
     if (mem_load() < 0) {
+#ifdef AMIGA_COMPILE
+        /* not fatal: the emulation waits for the ROMs to be chosen in the
+           settings window (amiga_wait_for_roms(), "no rom" state) */
+        log_warning(c64_log, "ROMs missing: the emulation waits for them (Settings, Machine).");
+#else
         return -1;
+#endif
     }
 
     event_init();

@@ -39,6 +39,7 @@
 #include "mainlock.h"
 #include "ui.h"
 #include "vsyncapi.h"
+#include "timestats.h"
 #include "videoarch.h"
 
 #include "joystick.h"
@@ -68,6 +69,7 @@ static int pause_pending = 0;
 
 void vsyncarch_presync(void)
 {
+    TIMESTATS_FRAME();
     /* window and MUI events, ui_dispatch_events() is only used by the monitor */
     amiga_wait_poll_events();
     ui_update_lightpen();

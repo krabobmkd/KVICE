@@ -54,17 +54,26 @@
 #include <proto/alib.h>
 
 #include "amigaaction.h"
+#include "amigakeys.h"
 #include "amigafile.h"
 #include "amigalocale.h"
 #include "amigamui.h"
 #include "amigatrace.h"
 #include "amiga_screenmode.h"
+#include "amigavideo.h"
+#include "amigawait.h"
+#include "c64mem.h"
 #include "c64model.h"
+#include "c64rom.h"
 #include "drive.h"
+#include "keyboard.h"
+#include "keymap.h"
 #include "joystick.h"
 #include "lib.h"
 #include "log.h"
 #include "resources.h"
+#include "sysfile.h"
+#include "util.h"
 
 /* opened when the settings window is first used: MUI is optional */
 struct Library *MUIMasterBase = NULL;
@@ -89,6 +98,9 @@ MUI_NewObjectB(const char *cl, Tag tags, ...)
 #define RID_USE     2
 #define RID_CANCEL  3
 #define RID_BROWSE  4   /* "..." of the drawer row */
+#define RID_ROM_DEFAULT 5   /* "Default ROMs" */
+#define RID_BROWSE_ROM  10  /* + 0..2: "..." of a ROM file row */
+#define RID_BROWSE_FILE 6   /* "..." of the file row (custom keymap) */
 
 /* ------------------------------------------------------------------------- */
 /* setting bindings */
@@ -97,7 +109,9 @@ typedef enum {
     BIND_CHECK,     /* boolean resource, checkmark */
     BIND_CYCLE,     /* integer resource, one of values[] */
     BIND_DRAWER,    /* string resource, drawer path + "..." requester */
-    BIND_SCREENMODE /* mode id resource, ASL screen mode popup */
+    BIND_SCREENMODE,/* mode id resource, ASL screen mode popup */
+    BIND_ROMFILE,   /* ROM file name resource, file path + "..." requester */
+    BIND_FILE       /* file name resource, file path + "..." requester */
 } bind_type_t;
 
 #define MAX_PATH_LEN 256
@@ -116,13 +130,32 @@ typedef struct setting_s {
     int count;
     /* runtime */
     Object *obj;
-    Object *browse;             /* BIND_DRAWER: the "..." button */
+    Object *browse;             /* BIND_DRAWER, BIND_ROMFILE: the "..." button */
+    int rom_size;               /* BIND_ROMFILE: the exact file size */
+    const char *pattern;        /* BIND_FILE: requester pattern */
+    ULONG req_msg;              /* BIND_FILE: requester title */
+    const char *rom_default;    /* BIND_ROMFILE: default file name */
     int initial_index;          /* index shown at open, -1 if unknown */
-    char initial_string[MAX_PATH_LEN];  /* BIND_DRAWER: value shown at open */
+    char initial_string[MAX_PATH_LEN];  /* BIND_DRAWER, BIND_ROMFILE: value shown at open */
 } setting_t;
 
 /* the drawer row, for the "..." requester */
 static setting_t *drawer_setting = NULL;
+/* the file row (custom keymap), for the "..." requester */
+static setting_t *file_setting = NULL;
+
+/* Keyboard page: C64 key -> Amiga key table of the keymap in use */
+#define KEYS_ROWS_MAX 40
+static amiga_key_row_t keys_rows[KEYS_ROWS_MAX];
+static Object *keys_list = NULL;
+
+/* Machine page: Kernal, BASIC, character ROM file rows, and their
+ * "Default ROMs" button */
+#define ROM_COUNT 3
+static setting_t *rom_settings[ROM_COUNT];
+static Object *rom_default_button = NULL;
+/* where the ROMs are searched by default (sysfile path, machine drawer) */
+#define ROM_DEFAULT_DRAWER "PROGDIR:C64/"
 
 /* Fullscreen page: the screen mode row (only one) and the checkbox that
  * disables it. The mode shown is kept here between the popup and Use. */
@@ -175,6 +208,48 @@ static void setting_add_entry(setting_t *s, const char *label, int value)
     }
 }
 
+/* ROM file of a row as shown: the file found by the system file search
+ * (PROGDIR:C64/... first), or where the default drawer would have it */
+static void rom_display_path(const setting_t *s, char *out, size_t size)
+{
+    const char *name = NULL;
+    char *found = NULL;
+
+    if (resources_get_string(s->resource, &name) < 0 || name == NULL) {
+        name = "";
+    }
+    if (strchr(name, ':') == NULL && strchr(name, '/') == NULL
+            && sysfile_locate(name, "C64", &found) == 0 && found != NULL) {
+        strncpy(out, found, size - 1);
+        lib_free(found);
+    } else if (strchr(name, ':') == NULL && strchr(name, '/') == NULL) {
+        snprintf(out, size, "%s%s", ROM_DEFAULT_DRAWER, name);
+    } else {
+        strncpy(out, name, size - 1);
+    }
+    out[size - 1] = '\0';
+}
+
+/* 1 when \a path is a file of exactly \a size bytes */
+static int rom_file_ok(const char *path, int size)
+{
+    FILE *f;
+    long len = -1;
+
+    if (path == NULL || path[0] == '\0') {
+        return 0;
+    }
+    f = fopen(path, "rb");
+    if (f == NULL) {
+        return 0;
+    }
+    if (fseek(f, 0, SEEK_END) == 0) {
+        len = ftell(f);
+    }
+    fclose(f);
+    return len == (long)size;
+}
+
 /* resource -> gadget */
 static void setting_to_ui(setting_t *s)
 {
@@ -190,7 +265,12 @@ static void setting_to_ui(setting_t *s)
         fs_show_mode();
         return;
     }
-    if (s->type == BIND_DRAWER) {
+    if (s->type == BIND_ROMFILE) {
+        rom_display_path(s, s->initial_string, sizeof s->initial_string);
+        set(s->obj, MUIA_String_Contents, (ULONG)s->initial_string);
+        return;
+    }
+    if (s->type == BIND_DRAWER || s->type == BIND_FILE) {
         const char *str = NULL;
 
         if (resources_get_string(s->resource, &str) < 0 || str == NULL) {
@@ -231,7 +311,7 @@ static void setting_from_ui(setting_t *s)
         }
         return;
     }
-    if (s->type == BIND_DRAWER) {
+    if (s->type == BIND_DRAWER || s->type == BIND_FILE) {
         STRPTR str = NULL;
 
         get(s->obj, MUIA_String_Contents, &str);
@@ -259,17 +339,18 @@ static void setting_from_ui(setting_t *s)
 /* the settings, by page */
 
 enum {
-    PAGE_INPUT = 0,
+    PAGE_MACHINE = 0,
+    PAGE_INPUT,
+    PAGE_KEYBOARD,
     PAGE_SOUND,
-    PAGE_MACHINE,
     PAGE_DRIVE8,
     PAGE_FULLSCREEN,
     PAGE_COUNT
 };
 
 static const ULONG page_names[PAGE_COUNT] = {
-    MSG_CATEGORY_INPUT, MSG_CATEGORY_SOUND, MSG_CATEGORY_MACHINE, MSG_CATEGORY_DRIVE8,
-    MSG_CATEGORY_FULLSCREEN
+    MSG_CATEGORY_MACHINE, MSG_CATEGORY_INPUT, MSG_CATEGORY_KEYBOARD, MSG_CATEGORY_SOUND,
+    MSG_CATEGORY_DRIVE8, MSG_CATEGORY_FULLSCREEN
 };
 
 #define MAX_SETTINGS_PER_PAGE 8
@@ -337,6 +418,15 @@ static void build_settings(void)
     s = new_setting(PAGE_INPUT, BIND_CYCLE, "JoyDevice2", MSG_C64_PORT2);
     add_joydev_entries(s);
 
+    /* Keyboard: the custom file is applied before the choice (Use) */
+    s = new_setting(PAGE_KEYBOARD, BIND_CYCLE, "KeymapIndex", MSG_KEYMAP);
+    setting_add_entry(s, LOC(MSG_KEYMAP_SYM), KBD_INDEX_SYM);
+    setting_add_entry(s, LOC(MSG_KEYMAP_POS), KBD_INDEX_POS);
+    setting_add_entry(s, LOC(MSG_KEYMAP_CUSTOM), KBD_INDEX_USERSYM);
+    file_setting = s = new_setting(PAGE_KEYBOARD, BIND_FILE, "KeymapUserSymFile", MSG_KEYMAP_FILE);
+    s->pattern = "#?.vkm";
+    s->req_msg = MSG_REQ_KEYMAP;
+
     /* Sound */
     new_setting(PAGE_SOUND, BIND_CHECK, "Sound", MSG_SOUND_ENABLE);
     s = new_setting(PAGE_SOUND, BIND_CYCLE, "SoundSampleRate", MSG_SOUND_RATE);
@@ -345,7 +435,16 @@ static void build_settings(void)
     setting_add_entry(s, "44100 Hz", 44100);
     setting_add_entry(s, "48000 Hz", 48000);
 
-    /* Machine */
+    /* Machine: the ROM files, then the model */
+    s = rom_settings[0] = new_setting(PAGE_MACHINE, BIND_ROMFILE, "KernalName", MSG_ROM_KERNAL);
+    s->rom_size = C64_KERNAL_ROM_SIZE;
+    s->rom_default = C64_KERNAL_REV3_NAME;
+    s = rom_settings[1] = new_setting(PAGE_MACHINE, BIND_ROMFILE, "BasicName", MSG_ROM_BASIC);
+    s->rom_size = C64_BASIC_ROM_SIZE;
+    s->rom_default = C64_BASIC_NAME;
+    s = rom_settings[2] = new_setting(PAGE_MACHINE, BIND_ROMFILE, "ChargenName", MSG_ROM_CHARGEN);
+    s->rom_size = C64_CHARGEN_ROM_SIZE;
+    s->rom_default = C64_CHARGEN_NAME;
     s = new_setting(PAGE_MACHINE, BIND_CYCLE, NULL, MSG_C64_MODEL);
     s->getter = get_c64model;
     s->setter = set_c64model;
@@ -379,6 +478,7 @@ static void build_settings(void)
     fs_auto_setting = new_setting(PAGE_FULLSCREEN, BIND_CHECK, "AmigaFullscreenAutoMode",
                                   MSG_FS_AUTO_MODE);
     fs_mode_setting = new_setting(PAGE_FULLSCREEN, BIND_SCREENMODE, NULL, MSG_FS_SCREEN_MODE);
+    new_setting(PAGE_FULLSCREEN, BIND_CHECK, "AmigaFullscreenMenu", MSG_FS_MENU);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -511,6 +611,60 @@ static Object *make_space(void)
     return MUI_NewObjectB(MUIC_Rectangle, TAG_DONE);
 }
 
+/* the keys table: 2 columns, C64 key and Amiga key(s) */
+static ULONG keys_display(register struct Hook *hook __asm("a0"),
+                          register char **array __asm("a2"),
+                          register amiga_key_row_t *row __asm("a1"))
+{
+    if (row == NULL) {
+        /* title line */
+        array[0] = (char *)LOC(MSG_KEYS_C64);
+        array[1] = (char *)LOC(MSG_KEYS_AMIGA);
+    } else {
+        array[0] = row->c64;
+        array[1] = row->host;
+    }
+    return 0;
+}
+
+static struct Hook keys_display_hook;
+
+static Object *make_keys_list(void)
+{
+    keys_display_hook.h_Entry = (ULONG (*)())keys_display;
+    keys_list = MUI_NewObjectB(MUIC_List,
+                               MUIA_Frame, MUIV_Frame_ReadList,
+                               MUIA_List_Format, (ULONG)"BAR,",
+                               MUIA_List_Title, TRUE,
+                               MUIA_List_DisplayHook, (ULONG)&keys_display_hook,
+                               TAG_DONE);
+    if (keys_list == NULL) {
+        return NULL;
+    }
+    return MUI_NewObjectB(MUIC_Listview,
+                          MUIA_Listview_List, (ULONG)keys_list,
+                          MUIA_Listview_Input, FALSE,
+                          TAG_DONE);
+}
+
+/* the table of the keymap in use, each time the window opens */
+static void keys_list_fill(void)
+{
+    int i, n;
+
+    if (keys_list == NULL) {
+        return;
+    }
+    n = amiga_keys_table(keys_rows, KEYS_ROWS_MAX);
+    set(keys_list, MUIA_List_Quiet, TRUE);
+    DoMethod(keys_list, MUIM_List_Clear);
+    for (i = 0; i < n; i++) {
+        DoMethod(keys_list, MUIM_List_InsertSingle, (ULONG)&keys_rows[i],
+                 MUIV_List_Insert_Bottom);
+    }
+    set(keys_list, MUIA_List_Quiet, FALSE);
+}
+
 /* a page: 2 columns label / gadget, then free space */
 static Object *make_page(int page)
 {
@@ -532,6 +686,8 @@ static Object *make_page(int page)
                 s->obj = make_checkmark();
                 break;
             case BIND_DRAWER:
+            case BIND_ROMFILE:
+            case BIND_FILE:
                 s->obj = make_string();
                 s->browse = make_button(LOC(MSG_BROWSE));
                 break;
@@ -547,7 +703,7 @@ static Object *make_page(int page)
             return NULL;
         }
         DoMethod(columns, OM_ADDMEMBER, (ULONG)make_label(LOC(s->label_msg)));
-        if (s->type == BIND_DRAWER) {
+        if (s->type == BIND_DRAWER || s->type == BIND_ROMFILE || s->type == BIND_FILE) {
             /* string + small "..." button */
             Object *row = MUI_NewObjectB(MUIC_Group,
                                          MUIA_Group_Horiz, TRUE,
@@ -557,6 +713,16 @@ static Object *make_page(int page)
                                          TAG_DONE);
             set(s->browse, MUIA_Weight, 0);
             DoMethod(columns, OM_ADDMEMBER, (ULONG)row);
+            if (s == rom_settings[ROM_COUNT - 1]) {
+                /* after the last ROM row: "Default ROMs", aligned left */
+                rom_default_button = make_button(LOC(MSG_ROM_DEFAULT));
+                DoMethod(columns, OM_ADDMEMBER, (ULONG)make_label(""));
+                DoMethod(columns, OM_ADDMEMBER, (ULONG)MUI_NewObjectB(MUIC_Group,
+                         MUIA_Group_Horiz, TRUE,
+                         MUIA_Group_Child, (ULONG)rom_default_button,
+                         MUIA_Group_Child, (ULONG)make_space(),
+                         TAG_DONE));
+            }
         } else if (s->type == BIND_CHECK) {
             /* keep the checkmark small, aligned left */
             Object *row = MUI_NewObjectB(MUIC_Group,
@@ -585,6 +751,15 @@ static Object *make_page(int page)
     if (page == PAGE_DRIVE8) {
         DoMethod(group, OM_ADDMEMBER, (ULONG)make_text(LOC(MSG_DRIVE8_DRAWER_NOTE)));
     }
+    if (page == PAGE_KEYBOARD) {
+        Object *view = make_keys_list();
+
+        if (view != NULL) {
+            DoMethod(group, OM_ADDMEMBER, (ULONG)view);
+            /* the list takes the free space */
+            return group;
+        }
+    }
     if (page == PAGE_FULLSCREEN) {
         DoMethod(group, OM_ADDMEMBER, (ULONG)make_text(LOC(MSG_FS_NOTE)));
     }
@@ -599,19 +774,87 @@ static const char *category_names[PAGE_COUNT + 1];
 /* the MUI application lives from the first Settings use to the exit */
 static Object *mui_app = NULL;
 static Object *mui_win = NULL;
+static Object *mui_category_list = NULL;
 /* signals MUI wants to be woken up for, 0 when nothing to do */
 ULONG mui_sigs = 0;
 static int mui_win_open = 0;
 
-static void apply_settings(void)
+/* the ROM file rows: a changed file must exist and have the right size,
+ * and all of them while ROMs are missing ("no rom" state). Returns 0, or -1
+ * after showing which file is wrong (that row is then not applied). */
+static int apply_rom_settings(void)
+{
+    int i, ret = 0;
+    int check_all = !c64rom_all_loaded();
+
+    for (i = 0; i < ROM_COUNT; i++) {
+        setting_t *s = rom_settings[i];
+        STRPTR str = NULL;
+        int changed;
+
+        if (s == NULL || s->obj == NULL) {
+            continue;
+        }
+        get(s->obj, MUIA_String_Contents, &str);
+        if (str == NULL) {
+            continue;
+        }
+        changed = strcmp((const char *)str, s->initial_string) != 0;
+        if (!changed && !check_all) {
+            continue;
+        }
+        if (!rom_file_ok((const char *)str, s->rom_size)) {
+            ULONG args[2];
+
+            args[0] = (ULONG)LOC(s->label_msg);
+            args[1] = (ULONG)str;
+            MUI_RequestA(mui_app, mui_win, 0, NULL, (char *)LOC(MSG_ERROR_OK),
+                         (char *)LOC(MSG_ERROR_ROM_FILE), args);
+            ret = -1;
+            continue;
+        }
+        if (!changed) {
+            /* right file, not loaded yet: mem_load() below */
+            continue;
+        }
+        if (resources_set_string(s->resource, (const char *)str) < 0) {
+            log_error(LOG_DEFAULT, "settings: cannot load the ROM %s.", (const char *)str);
+            ret = -1;
+            continue;
+        }
+        /* changed and loaded: the new value is the reference now */
+        strncpy(s->initial_string, (const char *)str, sizeof s->initial_string - 1);
+    }
+    /* "no rom" state: load them all again, a file may have been copied
+       where the settings already pointed */
+    if (check_all && ret == 0 && !c64rom_all_loaded()) {
+        mem_load();
+    }
+    return ret;
+}
+
+/* Returns -1 when a ROM file was not accepted: the window stays open */
+static int apply_settings(void)
 {
     int page, i;
 
+    /* the files first: a keymap file is then loaded by the keymap choice */
     for (page = 0; page < PAGE_COUNT; page++) {
         for (i = 0; i < settings_count[page]; i++) {
-            setting_from_ui(&settings[page][i]);
+            if (settings[page][i].type == BIND_FILE) {
+                setting_from_ui(&settings[page][i]);
+            }
         }
     }
+    for (page = 0; page < PAGE_COUNT; page++) {
+        for (i = 0; i < settings_count[page]; i++) {
+            if (settings[page][i].type != BIND_ROMFILE
+                    && settings[page][i].type != BIND_FILE) {
+                setting_from_ui(&settings[page][i]);
+            }
+        }
+    }
+    return apply_rom_settings();
 }
 
 static void settings_to_ui(void)
@@ -623,6 +866,7 @@ static void settings_to_ui(void)
             setting_to_ui(&settings[page][i]);
         }
     }
+    keys_list_fill();
     /* the notification only follows changes: initial state here */
     if (fs_auto_setting != NULL && fs_mode_setting != NULL) {
         ULONG automatic = FALSE;
@@ -656,13 +900,15 @@ static int create_app(void)
     }
     category_names[PAGE_COUNT] = NULL;
 
+    /* in the PAGE_* order */
     pages = MUI_NewObjectB(MUIC_Group,
                            MUIA_Group_PageMode, TRUE,
-                           MUIA_Group_Child, (ULONG)page_objs[PAGE_INPUT],
-                           MUIA_Group_Child, (ULONG)page_objs[PAGE_SOUND],
-                           MUIA_Group_Child, (ULONG)page_objs[PAGE_MACHINE],
-                           MUIA_Group_Child, (ULONG)page_objs[PAGE_DRIVE8],
-                           MUIA_Group_Child, (ULONG)page_objs[PAGE_FULLSCREEN],
+                           MUIA_Group_Child, (ULONG)page_objs[0],
+                           MUIA_Group_Child, (ULONG)page_objs[1],
+                           MUIA_Group_Child, (ULONG)page_objs[2],
+                           MUIA_Group_Child, (ULONG)page_objs[3],
+                           MUIA_Group_Child, (ULONG)page_objs[4],
+                           MUIA_Group_Child, (ULONG)page_objs[5],
                            TAG_DONE);
 
     list = MUI_NewObjectB(MUIC_Listview,
@@ -718,6 +964,7 @@ static int create_app(void)
 
     /* list selection -> page */
     get(list, MUIA_Listview_List, &list_obj);
+    mui_category_list = list_obj;
     DoMethod(list_obj, MUIM_Notify, MUIA_List_Active, MUIV_EveryTime,
              (ULONG)pages, 3, MUIM_Set, MUIA_Group_ActivePage, MUIV_TriggerValue);
 
@@ -739,6 +986,20 @@ static int create_app(void)
         DoMethod(drawer_setting->browse, MUIM_Notify, MUIA_Pressed, FALSE,
                  (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_BROWSE);
     }
+    for (page = 0; page < ROM_COUNT; page++) {
+        if (rom_settings[page] != NULL && rom_settings[page]->browse != NULL) {
+            DoMethod(rom_settings[page]->browse, MUIM_Notify, MUIA_Pressed, FALSE,
+                     (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_BROWSE_ROM + page);
+        }
+    }
+    if (file_setting != NULL && file_setting->browse != NULL) {
+        DoMethod(file_setting->browse, MUIM_Notify, MUIA_Pressed, FALSE,
+                 (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_BROWSE_FILE);
+    }
+    if (rom_default_button != NULL) {
+        DoMethod(rom_default_button, MUIM_Notify, MUIA_Pressed, FALSE,
+                 (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_ROM_DEFAULT);
+    }
     return 0;
 }
 
@@ -746,6 +1007,8 @@ static void close_window(void)
 {
     set(mui_win, MUIA_Window_Open, FALSE);
     mui_win_open = 0;
+    /* opened from the fullscreen: back to it */
+    amiga_video_requester_end();
     /* closed window: MUI must not be polled nor waited for anymore */
     mui_sigs = 0;
     AMIGA_TRACE(("settings window closed"));
@@ -772,6 +1035,58 @@ static void browse_drawer(void)
     }
 }
 
+/* "..." of a ROM row: ASL file requester */
+static void browse_rom(int index)
+{
+    struct Window *window = NULL;
+    char *path;
+
+    if (index < 0 || index >= ROM_COUNT || rom_settings[index] == NULL) {
+        return;
+    }
+    get(mui_win, MUIA_Window_Window, &window);
+    set(mui_app, MUIA_Application_Sleep, TRUE);
+    path = amiga_file_request(window, LOC(MSG_REQ_ROM), NULL);
+    set(mui_app, MUIA_Application_Sleep, FALSE);
+    if (path != NULL) {
+        set(rom_settings[index]->obj, MUIA_String_Contents, (ULONG)path);
+        lib_free(path);
+    }
+}
+
+/* "..." of the file row: ASL file requester with its pattern */
+static void browse_file(void)
+{
+    struct Window *window = NULL;
+    char *path;
+
+    if (file_setting == NULL) {
+        return;
+    }
+    get(mui_win, MUIA_Window_Window, &window);
+    set(mui_app, MUIA_Application_Sleep, TRUE);
+    path = amiga_file_request(window, LOC(file_setting->req_msg), file_setting->pattern);
+    set(mui_app, MUIA_Application_Sleep, FALSE);
+    if (path != NULL) {
+        set(file_setting->obj, MUIA_String_Contents, (ULONG)path);
+        lib_free(path);
+    }
+}
+
+/* "Default ROMs": the standard files in the default drawer */
+static void rom_defaults(void)
+{
+    char path[MAX_PATH_LEN];
+    int i;
+
+    for (i = 0; i < ROM_COUNT; i++) {
+        if (rom_settings[i] != NULL && rom_settings[i]->obj != NULL) {
+            snprintf(path, sizeof path, "%s%s", ROM_DEFAULT_DRAWER, rom_settings[i]->rom_default);
+            set(rom_settings[i]->obj, MUIA_String_Contents, (ULONG)path);
+        }
+    }
+}
+
 /** \brief  Open the settings window (non-modal, the emulation goes on)
  */
 void amiga_settings_open(void)
@@ -785,6 +1100,8 @@ void amiga_settings_open(void)
     }
     /* show the current values each time the window opens */
     settings_to_ui();
+    /* from the fullscreen: the Workbench (MUI window screen) in front */
+    amiga_video_requester_begin();
     set(mui_win, MUIA_Window_Open, TRUE);
     mui_win_open = 1;
     AMIGA_TRACE(("settings window open"));
@@ -808,14 +1125,19 @@ void amiga_mui_handle_events(void)
         rid = (LONG)DoMethod(mui_app, MUIM_Application_NewInput, (ULONG)&mui_sigs);
         switch (rid) {
             case RID_SAVE:
-                apply_settings();
+                if (apply_settings() < 0) {
+                    /* a ROM file to fix: the window stays open */
+                    break;
+                }
                 if (resources_save(NULL) < 0) {
                     log_error(LOG_DEFAULT, "settings: cannot save the configuration file.");
                 }
                 close_window();
                 return;
             case RID_USE:
-                apply_settings();
+                if (apply_settings() < 0) {
+                    break;
+                }
                 close_window();
                 return;
             case RID_CANCEL:
@@ -824,6 +1146,17 @@ void amiga_mui_handle_events(void)
                 return;
             case RID_BROWSE:
                 browse_drawer();
+                break;
+            case RID_ROM_DEFAULT:
+                rom_defaults();
+                break;
+            case RID_BROWSE_FILE:
+                browse_file();
+                break;
+            case RID_BROWSE_ROM:
+            case RID_BROWSE_ROM + 1:
+            case RID_BROWSE_ROM + 2:
+                browse_rom((int)(rid - RID_BROWSE_ROM));
                 break;
             default:
                 break;
@@ -850,4 +1183,29 @@ void amiga_mui_close_all(void)
         CloseLibrary(MUIMasterBase);
         MUIMasterBase = NULL;
     }
+}
+
+/** \brief  "No rom" state, before the CPU starts
+ *
+ * The ROMs were not all found at startup: the emulator screen shows
+ * "(no rom)", the settings window opens on the Machine page, and the UI is
+ * handled (menus, window, settings, CTRL-C) until the ROM files chosen there
+ * are all loaded. The CPU then starts as usual, from the reset.
+ */
+void amiga_wait_for_roms(void)
+{
+    if (c64rom_all_loaded()) {
+        return;
+    }
+    log_warning(LOG_DEFAULT, "ROMs missing: choose them in Settings, Machine.");
+    amiga_video_show_no_rom(1);
+    amiga_settings_open();
+    if (mui_category_list != NULL) {
+        set(mui_category_list, MUIA_List_Active, PAGE_MACHINE);
+    }
+    while (!c64rom_all_loaded()) {
+        amiga_wait_events();
+    }
+    amiga_video_show_no_rom(0);
+    log_message(LOG_DEFAULT, "ROMs loaded: the emulation starts.");
 }

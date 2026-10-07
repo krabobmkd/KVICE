@@ -29,6 +29,7 @@
 #define VICE_RASTER_MODES_H
 
 #include "raster-cache.h"
+#include "timestats.h"
 
 /* Fill the cache with the screen data and check for differences.  If nothing
    has changed, return 0.  Otherwise, return the smallest interval that
@@ -112,7 +113,9 @@ inline static void raster_modes_draw_line_cached(raster_modes_t *modes,
 
     mode = modes->modes + mode_num;
 
+    TIMESTATS_ENTER(TSTAT_VIC_GFX);
     mode->draw_line_cached(c, start, end);
+    TIMESTATS_LEAVE();
 }
 
 inline static void raster_modes_draw_line(raster_modes_t *modes,
@@ -122,7 +125,9 @@ inline static void raster_modes_draw_line(raster_modes_t *modes,
 
     mode = modes->modes + mode_num;
 
+    TIMESTATS_ENTER(TSTAT_VIC_GFX);
     mode->draw_line();
+    TIMESTATS_LEAVE();
 }
 
 inline static void raster_modes_draw_background(raster_modes_t *modes,
@@ -134,7 +139,9 @@ inline static void raster_modes_draw_background(raster_modes_t *modes,
 
     mode = modes->modes + mode_num;
 
+    TIMESTATS_ENTER(TSTAT_VIC_GFX);
     mode->draw_background(start_pixel, end_pixel);
+    TIMESTATS_LEAVE();
 }
 
 inline static void raster_modes_draw_foreground(raster_modes_t *modes,
@@ -146,7 +153,9 @@ inline static void raster_modes_draw_foreground(raster_modes_t *modes,
 
     mode = modes->modes + mode_num;
 
+    TIMESTATS_ENTER(TSTAT_VIC_GFX);
     mode->draw_foreground(start_char, end_char);
+    TIMESTATS_LEAVE();
 }
 
 

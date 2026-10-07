@@ -92,12 +92,12 @@ void cia1_update_model(void)
     }
 }
 
-static void cia_set_int_clk(cia_context_t *cia_context, int value, CLOCK clk)
+static void cia_set_int_clk(cia_context_t *cia_context PARAMREG(a0), int value PARAMREG(a1), CLOCK clk PARAMREG(d0))
 {
     interrupt_set_irq(maincpu_int_status, cia_context->int_num, value, clk);
 }
 
-static void cia_restore_int(cia_context_t *cia_context, int value)
+static void cia_restore_int(cia_context_t *cia_context PARAMREG(a0), int value PARAMREG(d0))
 {
     interrupt_restore_irq(maincpu_int_status, cia_context->int_num, value);
 }
@@ -110,7 +110,7 @@ void cia1_set_extended_keyboard_rows_mask(uint8_t value)
 {
 }
 
-static void pulse_ciapc(cia_context_t *cia_context, CLOCK rclk)
+static void pulse_ciapc(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0))
 {
 }
 
@@ -129,7 +129,7 @@ static void pre_peek(void)
     vicii_handle_pending_alarms_external(0);
 }
 
-static void do_reset_cia(cia_context_t *cia_context)
+static void do_reset_cia(cia_context_t *cia_context PARAMREG(a0))
 {
 }
 
@@ -158,7 +158,7 @@ void cia1_check_lightpen(void)
     cia1_internal_lightpen_check(machine_context.cia1->old_pa, machine_context.cia1->old_pb);
 }
 
-static void store_ciapa(cia_context_t *cia_context, CLOCK rclk, uint8_t b)
+static void store_ciapa(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), uint8_t b PARAMREG(d2))
 {
     cia1_internal_lightpen_check(b, machine_context.cia1->old_pb);
 
@@ -167,18 +167,18 @@ static void store_ciapa(cia_context_t *cia_context, CLOCK rclk, uint8_t b)
     store_joyport_dig(JOYPORT_2, b, 0xff);
 }
 
-static void undump_ciapa(cia_context_t *cia_context, CLOCK rclk, uint8_t b)
+static void undump_ciapa(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), uint8_t b PARAMREG(d2))
 {
 }
 
-static void store_ciapb(cia_context_t *cia_context, CLOCK rclk, uint8_t byte)
+static void store_ciapb(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), uint8_t byte PARAMREG(d2))
 {
     cia1_internal_lightpen_check(machine_context.cia1->old_pa, byte);
 
     store_joyport_dig(JOYPORT_1, byte, 0xff);
 }
 
-static void undump_ciapb(cia_context_t *cia_context, CLOCK rclk, uint8_t byte)
+static void undump_ciapb(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), uint8_t byte PARAMREG(d2))
 {
 }
 
@@ -283,7 +283,7 @@ inline static uint8_t matrix_get_active_columns_by_row(int row)
     - add improvements also to C128
 */
 
-static uint8_t read_ciapa(cia_context_t *cia_context)
+static uint8_t read_ciapa(cia_context_t *cia_context PARAMREG(a0))
 {
     uint8_t byte;
     uint8_t val = 0xff;
@@ -362,7 +362,7 @@ inline static int ciapb_forcelow(int row, uint8_t mask)
     return 0;
 }
 
-static uint8_t read_ciapb(cia_context_t *cia_context)
+static uint8_t read_ciapb(cia_context_t *cia_context PARAMREG(a0))
 {
     uint8_t byte;
     uint8_t val = 0xff;
@@ -433,14 +433,14 @@ static uint8_t read_ciapb(cia_context_t *cia_context)
     return byte;
 }
 
-static void read_ciaicr(cia_context_t *cia_context)
+static void read_ciaicr(cia_context_t *cia_context PARAMREG(a0))
 {
     if (burst_mod == BURST_MOD_CIA1) {
         drive_cpu_execute_all(maincpu_clk);
     }
 }
 
-static void read_sdr(cia_context_t *cia_context)
+static void read_sdr(cia_context_t *cia_context PARAMREG(a0))
 {
     if (burst_mod == BURST_MOD_CIA1) {
         drive_cpu_execute_all(maincpu_clk);
@@ -449,7 +449,7 @@ static void read_sdr(cia_context_t *cia_context)
     DBG(("read_sdr sp1: %02x\n", cia_context->c_cia[CIA_SDR]));
 }
 
-static void store_sdr(cia_context_t *cia_context, uint8_t byte)
+static void store_sdr(cia_context_t *cia_context PARAMREG(a0), uint8_t byte PARAMREG(d0))
 {
     if ((cia1_cra & 0x49) == 0x41) {
         DBG(("store_sdr sp1: %02x\n", byte));

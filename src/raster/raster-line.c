@@ -37,6 +37,7 @@
 #include "raster-canvas.h"
 #include "raster-changes.h"
 #include "raster-line.h"
+#include "timestats.h"
 #include "raster-modes.h"
 #include "raster-sprite-status.h"
 #include "raster-sprite.h"
@@ -91,8 +92,10 @@ inline static void update_sprite_collisions(raster_t *raster)
     fake_draw_buffer_ptr = raster->fake_draw_buffer_line
                            + raster->geometry->extra_offscreen_border_left;
 
+    TIMESTATS_ENTER(TSTAT_VIC_SPRITES);
     raster->sprite_status->draw_function(fake_draw_buffer_ptr,
                                          raster->zero_gfx_msk);
+    TIMESTATS_LEAVE();
 }
 
 /* map the current line so that lines 0+ in the lower border on NTSC */
@@ -181,8 +184,10 @@ inline static void draw_sprites(raster_t *raster)
 {
     if (raster->sprite_status != NULL
         && raster->sprite_status->draw_function != NULL) {
+        TIMESTATS_ENTER(TSTAT_VIC_SPRITES);
         raster->sprite_status->draw_function(raster->draw_buffer_ptr,
                                              raster->gfx_msk);
+        TIMESTATS_LEAVE();
     }
 }
 
@@ -190,6 +195,7 @@ inline static void draw_sprites_partial(raster_t *raster, int xs, int xe)
 {
     if (raster->sprite_status != NULL
         && raster->sprite_status->draw_partial_function != NULL) {
+        TIMESTATS_ENTER(TSTAT_VIC_SPRITES);
         if (raster->sprite_xsmooth_shift_right > 0) {
             raster->sprite_status->draw_partial_function(raster->draw_buffer_ptr,
                                                          raster->zero_gfx_msk, xs, xe);
@@ -198,6 +204,7 @@ inline static void draw_sprites_partial(raster_t *raster, int xs, int xe)
                                                          raster->gfx_msk, xs, xe);
         }
         raster->sprite_xsmooth_shift_right = 0;
+        TIMESTATS_LEAVE();
     }
 }
 

@@ -83,12 +83,12 @@ uint8_t cia2_peek(uint16_t addr)
     return ciacore_peek(machine_context.cia2, addr);
 }
 
-static void cia_set_int_clk(cia_context_t *cia_context, int value, CLOCK clk)
+static void cia_set_int_clk(cia_context_t *cia_context PARAMREG(a0), int value PARAMREG(a1), CLOCK clk PARAMREG(d0))
 {
     interrupt_set_nmi(maincpu_int_status, cia_context->int_num, value, clk);
 }
 
-static void cia_restore_int(cia_context_t *cia_context, int value)
+static void cia_restore_int(cia_context_t *cia_context PARAMREG(a0), int value PARAMREG(d0))
 {
     interrupt_restore_nmi(maincpu_int_status, cia_context->int_num, value);
 }
@@ -109,7 +109,7 @@ void cia2_update_model(void)
 /* Current video bank (0, 1, 2 or 3).  */
 static int vbank;
 
-static void do_reset_cia(cia_context_t *cia_context)
+static void do_reset_cia(cia_context_t *cia_context PARAMREG(a0))
 {
     store_userport_pbx(0xff, USERPORT_NO_PULSE);
     store_userport_pa2(1);
@@ -133,7 +133,7 @@ static void pre_peek(void)
     vicii_handle_pending_alarms_external(0);
 }
 
-static void store_ciapa(cia_context_t *cia_context, CLOCK rclk, uint8_t byte)
+static void store_ciapa(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), uint8_t byte PARAMREG(d2))
 {
     if (cia_context->old_pa != byte) {
         uint8_t tmp;
@@ -164,7 +164,7 @@ static void store_ciapa(cia_context_t *cia_context, CLOCK rclk, uint8_t byte)
     }
 }
 
-static void undump_ciapa(cia_context_t *cia_context, CLOCK rclk, uint8_t byte)
+static void undump_ciapa(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), uint8_t byte PARAMREG(d2))
 {
     store_userport_pa2((uint8_t)((byte & 4) >> 2));
     store_userport_pa3((uint8_t)((byte & 8) >> 3));
@@ -177,18 +177,18 @@ static void undump_ciapa(cia_context_t *cia_context, CLOCK rclk, uint8_t byte)
     }
 }
 
-static void store_ciapb(cia_context_t *cia_context, CLOCK rclk, uint8_t byte)
+static void store_ciapb(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), uint8_t byte PARAMREG(d2))
 {
     store_userport_pbx(byte, USERPORT_NO_PULSE);
 }
 
-static void pulse_ciapc(cia_context_t *cia_context, CLOCK rclk)
+static void pulse_ciapc(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0))
 {
     store_userport_pbx((uint8_t)(cia_context->old_pb), USERPORT_PULSE);
 }
 
 /* FIXME! */
-static inline void undump_ciapb(cia_context_t *cia_context, CLOCK rclk, uint8_t byte)
+static inline void undump_ciapb(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), uint8_t byte PARAMREG(d2))
 {
     store_userport_pbx(byte, USERPORT_NO_PULSE);
 
@@ -197,7 +197,7 @@ static inline void undump_ciapb(cia_context_t *cia_context, CLOCK rclk, uint8_t 
 }
 
 /* read_* functions must return 0xff if nothing to read!!! */
-static uint8_t read_ciapa(cia_context_t *cia_context)
+static uint8_t read_ciapa(cia_context_t *cia_context PARAMREG(a0))
 {
     uint8_t value;
     uint8_t userval = 1;
@@ -231,7 +231,7 @@ static uint8_t read_ciapa(cia_context_t *cia_context)
 }
 
 /* read_* functions must return 0xff if nothing to read!!! */
-static uint8_t read_ciapb(cia_context_t *cia_context)
+static uint8_t read_ciapb(cia_context_t *cia_context PARAMREG(a0))
 {
     uint8_t byte = 0xff;
 
@@ -242,7 +242,7 @@ static uint8_t read_ciapb(cia_context_t *cia_context)
     return byte;
 }
 
-static void read_ciaicr(cia_context_t *cia_context)
+static void read_ciaicr(cia_context_t *cia_context PARAMREG(a0))
 {
     if (burst_mod == BURST_MOD_CIA2) {
         drive_cpu_execute_all(maincpu_clk);
@@ -250,7 +250,7 @@ static void read_ciaicr(cia_context_t *cia_context)
     parallel_cable_cpu_execute(DRIVE_PC_STANDARD);
 }
 
-static void read_sdr(cia_context_t *cia_context)
+static void read_sdr(cia_context_t *cia_context PARAMREG(a0))
 {
     if (burst_mod == BURST_MOD_CIA2) {
         drive_cpu_execute_all(maincpu_clk);
@@ -258,7 +258,7 @@ static void read_sdr(cia_context_t *cia_context)
     cia_context->c_cia[CIA_SDR] = read_userport_sp2(cia_context->c_cia[CIA_SDR]);
 }
 
-static void store_sdr(cia_context_t *cia_context, uint8_t byte)
+static void store_sdr(cia_context_t *cia_context PARAMREG(a0), uint8_t byte PARAMREG(d0))
 {
     if ((cia2_cra & 0x59) == 0x51) {
         store_userport_sp2(byte);

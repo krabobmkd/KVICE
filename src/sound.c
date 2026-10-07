@@ -52,6 +52,7 @@
 #include "monitor.h"
 #include "resources.h"
 #include "sound.h"
+#include "timestats.h"
 #include "types.h"
 #include "uiapi.h"
 #include "util.h"
@@ -1225,6 +1226,10 @@ int sound_open(void)
             } else {
                 snddata.sound_output_channels = channels;
             }
+        } else {
+            /* no init (the dummy device): it was left at 0 and the sound
+               chips computed nothing */
+            snddata.sound_output_channels = channels;
         }
         if (snddata.buffer) {
             lib_free(snddata.buffer);
@@ -1475,7 +1480,19 @@ void sound_reset(void)
 }
 
 /* flush all generated samples from buffer to sounddevice. */
+static bool sound_flush_(void);
+
 bool sound_flush(void)
+{
+    bool r;
+
+    TIMESTATS_ENTER(TSTAT_SOUND);
+    r = sound_flush_();
+    TIMESTATS_LEAVE();
+    return r;
+}
+
+static bool sound_flush_(void)
 {
     int c, i, nr, space;
 

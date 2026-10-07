@@ -178,8 +178,35 @@ struct cliprect_msg {
 
 /* one row of destination pixels, per pixel size */
 
+/* The bitmap is in graphics card memory, behind the Zorro bus: the 8 and
+ * 16 bit rows are written as aligned 32 bit words (4 or 2 pixels per bus
+ * write), the unaligned pixels at the start and the end one by one. */
+
 static void row8(UBYTE *d, const UBYTE *s, ULONG ax, ULONG step, int n)
 {
+    ULONG *dl;
+
+    while (n > 0 && ((ULONG)d & 3) != 0) {
+        *d++ = clut8[s[ax >> 16]];
+        ax += step;
+        n--;
+    }
+    dl = (ULONG *)d;
+    while (n >= 4) {
+        ULONG p;
+
+        p = (ULONG)clut8[s[ax >> 16]] << 24;
+        ax += step;
+        p |= (ULONG)clut8[s[ax >> 16]] << 16;
+        ax += step;
+        p |= (ULONG)clut8[s[ax >> 16]] << 8;
+        ax += step;
+        p |= (ULONG)clut8[s[ax >> 16]];
+        ax += step;
+        *dl++ = p;
+        n -= 4;
+    }
+    d = (UBYTE *)dl;
     while (n-- > 0) {
         *d++ = clut8[s[ax >> 16]];
         ax += step;
@@ -188,9 +215,27 @@ static void row8(UBYTE *d, const UBYTE *s, ULONG ax, ULONG step, int n)
 
 static void row16(UWORD *d, const UBYTE *s, ULONG ax, ULONG step, int n)
 {
-    while (n-- > 0) {
+    ULONG *dl;
+
+    if (n > 0 && ((ULONG)d & 2) != 0) {
         *d++ = clut16[s[ax >> 16]];
         ax += step;
+        n--;
+    }
+    dl = (ULONG *)d;
+    while (n >= 2) {
+        ULONG p;
+
+        /* big endian: the first pixel is the high word */
+        p = (ULONG)clut16[s[ax >> 16]] << 16;
+        ax += step;
+        p |= (ULONG)clut16[s[ax >> 16]];
+        ax += step;
+        *dl++ = p;
+        n -= 2;
+    }
+    if (n > 0) {
+        *(UWORD *)dl = clut16[s[ax >> 16]];
     }
 }
 

@@ -33,6 +33,8 @@
 /* ASL file requester on the screen of \a window (may be NULL).
  * Returns a lib_malloc'd full path to free with lib_free(), or NULL. */
 char *amiga_file_request(struct Window *window, const char *title, const char *pattern);
+/* the same in save mode (a new file name can be typed) */
+char *amiga_file_save_request(struct Window *window, const char *title, const char *pattern);
 
 /* ASL drawer requester, starting in \a initial (may be NULL or "").
  * Returns a lib_malloc'd drawer path to free with lib_free(), or NULL. */

@@ -44,6 +44,7 @@
 #include <string.h>
 
 #include "cia.h"
+#include "timestats.h"
 #include "ciatimer.h"
 #include "interrupt.h"
 #include "lib.h"
@@ -153,8 +154,8 @@
 static void ciacore_intta(CLOCK offset, void *data);
 static void ciacore_inttb(CLOCK offset, void *data);
 static void ciacore_intsdr(CLOCK offset, void *data);
-static void schedule_sdr_alarm(cia_context_t *cia_context, CLOCK rclk, uint32_t feed);
-static void cia_set_irq_flag(cia_context_t *cia_context, CLOCK rclk, unsigned int bits);
+static void schedule_sdr_alarm(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), uint32_t feed PARAMREG(a1));
+static void cia_set_irq_flag(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), unsigned int bits PARAMREG(a1));
 
 
 /* The following is an attempt in rewriting the interrupt defines into
@@ -247,7 +248,7 @@ inline static void check_ciatodalarm(cia_context_t *cia_context, CLOCK rclk)
  * FIXME: SDR count, etc
  */
 
-static void cia_do_update_ta(cia_context_t *cia_context, CLOCK rclk)
+static void cia_do_update_ta(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0))
 {
     int n;
 
@@ -257,7 +258,7 @@ static void cia_do_update_ta(cia_context_t *cia_context, CLOCK rclk)
     }
 }
 
-static void cia_do_update_tb(cia_context_t *cia_context, CLOCK rclk)
+static void cia_do_update_tb(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0))
 {
     int n;
 
@@ -274,7 +275,7 @@ static void cia_do_update_tb(cia_context_t *cia_context, CLOCK rclk)
     }
 }
 
-static void cia_do_step_tb(cia_context_t *cia_context, CLOCK rclk)
+static void cia_do_step_tb(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0))
 {
     int n;
 
@@ -288,7 +289,7 @@ static void cia_do_step_tb(cia_context_t *cia_context, CLOCK rclk)
  * Those functions are called everywhere but in the alarm functions.
  */
 
-static void cia_update_ta(cia_context_t *cia_context, CLOCK rclk)
+static void cia_update_ta(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0))
 {
     CLOCK tmp, last_tmp;
 
@@ -314,7 +315,7 @@ static void cia_update_ta(cia_context_t *cia_context, CLOCK rclk)
 
 }
 
-static void cia_update_tb(cia_context_t *cia_context, CLOCK rclk)
+static void cia_update_tb(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0))
 {
     CLOCK tmp, last_tmp;
 
@@ -371,7 +372,7 @@ static void dump_ifr_delay(const char *name, uint32_t delay)
  * Register; one cycle at a time. It is for things we didn't do immediately
  * because they are delayed wrt the action that triggers them.
  */
-static void cia_run_ifr_cycle(cia_context_t *cia_context)
+static void cia_run_ifr_cycle(cia_context_t *cia_context PARAMREG(a0))
 {
     uint32_t delay = cia_context->ifr_delay;
     CLOCK rclk = cia_context->ifr_clock;
@@ -453,7 +454,7 @@ static void cia_run_ifr_cycle(cia_context_t *cia_context)
 #define CIA_IFR_CURRENT  0x01
 #define CIA_IFR_NEXT     0x02
 #define CIA_IFR_CUR_NXT  0x03
-static void cia_ifr_current(cia_context_t *cia_context, CLOCK rclk, int what)
+static void cia_ifr_current(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), int what PARAMREG(a1))
 {
     /*
      * Check if Timer A/B alarms for this cycle are still scheduled.
@@ -519,7 +520,7 @@ static void cia_ifr_current(cia_context_t *cia_context, CLOCK rclk, int what)
  * It knows how to shortcut doing all clock iterations, if no more
  * changes can happen.
  */
-static void cia_ifr_catchup(cia_context_t *cia_context, CLOCK rclk)
+static void cia_ifr_catchup(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0))
 {
     if (cia_context->ifr_clock < rclk) {
         while ((cia_context->ifr_delay ||
@@ -589,7 +590,7 @@ static void cia_ifr_catchup(cia_context_t *cia_context, CLOCK rclk)
  * - ciacore_intsdr(),
  *   - ciacore_intsdr_entry() ok, from alarm
  */
-static void cia_set_irq_flag(cia_context_t *cia_context, CLOCK rclk, unsigned int bits)
+static void cia_set_irq_flag(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), unsigned int bits PARAMREG(a1))
 {
     cia_ifr_catchup(cia_context, rclk);
 
@@ -780,7 +781,7 @@ static inline bool ciacore_update_pb67(cia_context_t *cia_context, CLOCK rclk)
     return current_called;
 }
 
-static void ciacore_store_internal(cia_context_t *cia_context, uint16_t addr, uint8_t byte)
+static void ciacore_store_internal(cia_context_t *cia_context PARAMREG(a0), uint16_t addr PARAMREG(d0), uint8_t byte PARAMREG(d1))
 {
     CLOCK rclk;
 
@@ -1107,7 +1108,20 @@ static void ciacore_store_internal(cia_context_t *cia_context, uint16_t addr, ui
     }                           /* switch */
 }
 
-void ciacore_store(cia_context_t *cia_context, uint16_t addr, uint8_t byte)
+#ifdef VICE_AMIGA_TIME_STATS
+static void ciacore_store_(cia_context_t *cia_context PARAMREG(a0), uint16_t addr PARAMREG(d0), uint8_t byte PARAMREG(d1));
+
+void ciacore_store(cia_context_t *cia_context PARAMREG(a0), uint16_t addr PARAMREG(d0), uint8_t byte PARAMREG(d1))
+{
+    TIMESTATS_ENTER(TSTAT_CIA);
+    ciacore_store_(cia_context, addr, byte);
+    TIMESTATS_LEAVE();
+}
+
+static void ciacore_store_(cia_context_t *cia_context PARAMREG(a0), uint16_t addr PARAMREG(d0), uint8_t byte PARAMREG(d1))
+#else
+void ciacore_store(cia_context_t *cia_context PARAMREG(a0), uint16_t addr PARAMREG(d0), uint8_t byte PARAMREG(d1))
+#endif
 {
     if (cia_context->pre_store != NULL) {
         (cia_context->pre_store)();
@@ -1125,11 +1139,27 @@ void ciacore_store(cia_context_t *cia_context, uint16_t addr, uint8_t byte)
 /* ------------------------------------------------------------------------- */
 
 
-uint8_t ciacore_read(cia_context_t *cia_context, uint16_t addr)
+#ifdef VICE_AMIGA_TIME_STATS
+static uint8_t ciacore_read_(cia_context_t *cia_context PARAMREG(a0), uint16_t addr PARAMREG(d0));
+
+uint8_t ciacore_read(cia_context_t *cia_context PARAMREG(a0), uint16_t addr PARAMREG(d0))
+{
+    uint8_t r;
+
+    TIMESTATS_ENTER(TSTAT_CIA);
+    r = ciacore_read_(cia_context, addr);
+    TIMESTATS_LEAVE();
+    return r;
+}
+
+static uint8_t ciacore_read_(cia_context_t *cia_context PARAMREG(a0), uint16_t addr PARAMREG(d0))
+#else
+uint8_t ciacore_read(cia_context_t *cia_context PARAMREG(a0), uint16_t addr PARAMREG(d0))
+#endif
 {
 #if defined(CIA_TIMER_DEBUG)
 
-    uint8_t cia_read_(cia_context_t *, uint16_t addr);
+    uint8_t cia_read_(cia_context_t * PARAMREG(a0), uint16_t addr PARAMREG(d0));
     uint8_t tmp = cia_read_(cia_context, addr);
 
     if (cia_context->debugFlag) {
@@ -1139,7 +1169,7 @@ uint8_t ciacore_read(cia_context_t *cia_context, uint16_t addr)
     return tmp;
 }
 
-uint8_t cia_read_(cia_context_t *cia_context, uint16_t addr)
+uint8_t cia_read_(cia_context_t *cia_context PARAMREG(a0), uint16_t addr PARAMREG(d0))
 {
 #endif
 
@@ -1385,7 +1415,7 @@ uint8_t cia_read_(cia_context_t *cia_context, uint16_t addr)
 
 /* FIXME: this function should return the current state of the registers
           without affecting the state of the emulation. */
-uint8_t ciacore_peek(cia_context_t *cia_context, uint16_t addr)
+uint8_t ciacore_peek(cia_context_t *cia_context PARAMREG(a0), uint16_t addr PARAMREG(d0))
 {
     uint8_t ret;
 
@@ -1512,7 +1542,20 @@ static void ciacore_intta(CLOCK offset, void *data)
 /*
  * Entry point for alarm callbacks.
  */
+#ifdef VICE_AMIGA_TIME_STATS
+static void ciacore_intta_entry_(CLOCK offset, void *data);
+
 static void ciacore_intta_entry(CLOCK offset, void *data)
+{
+    TIMESTATS_ENTER(TSTAT_CIA);
+    ciacore_intta_entry_(offset, data);
+    TIMESTATS_LEAVE();
+}
+
+static void ciacore_intta_entry_(CLOCK offset, void *data)
+#else
+static void ciacore_intta_entry(CLOCK offset, void *data)
+#endif
 {
     cia_context_t *cia_context = (cia_context_t *)data;
     CLOCK rclk = *(cia_context->clk_ptr) - offset;
@@ -1567,7 +1610,20 @@ static void ciacore_inttb(CLOCK offset, void *data)
 /*
  * Entry point for alarm callbacks.
  */
+#ifdef VICE_AMIGA_TIME_STATS
+static void ciacore_inttb_entry_(CLOCK offset, void *data);
+
 static void ciacore_inttb_entry(CLOCK offset, void *data)
+{
+    TIMESTATS_ENTER(TSTAT_CIA);
+    ciacore_inttb_entry_(offset, data);
+    TIMESTATS_LEAVE();
+}
+
+static void ciacore_inttb_entry_(CLOCK offset, void *data)
+#else
+static void ciacore_inttb_entry(CLOCK offset, void *data)
+#endif
 {
     cia_context_t *cia_context = (cia_context_t *)data;
     CLOCK rclk = *(cia_context->clk_ptr) - offset;
@@ -1586,7 +1642,7 @@ static void ciacore_inttb_entry(CLOCK offset, void *data)
  * (which is cheating).
  */
 
-static void ciacore_async_interrupt(cia_context_t *cia_context, int flag)
+static void ciacore_async_interrupt(cia_context_t *cia_context PARAMREG(a0), int flag PARAMREG(d0))
 {
     /*
      * This is for when an external signal has come in,
@@ -1613,7 +1669,7 @@ static void ciacore_async_interrupt(cia_context_t *cia_context, int flag)
     }
 }
 
-void ciacore_set_flag(cia_context_t *cia_context)
+void ciacore_set_flag(cia_context_t *cia_context PARAMREG(a0))
 {
     DBG(("ciacore_set_flag"));
     ciacore_async_interrupt(cia_context, CIA_IM_FLG);
@@ -1623,7 +1679,7 @@ void ciacore_set_flag(cia_context_t *cia_context)
  * Shortcut to shift a whole byte into the shift register all at once
  * instead of bit-by-bit.
  */
-void ciacore_set_sdr(cia_context_t *cia_context, uint8_t data)
+void ciacore_set_sdr(cia_context_t *cia_context PARAMREG(a0), uint8_t data PARAMREG(d0))
 {
     if ((cia_context->c_cia[CIA_CRA] & CIA_CRA_SPMODE) == CIA_CRA_SPMODE_IN) {
 
@@ -1641,7 +1697,7 @@ void ciacore_set_sdr(cia_context_t *cia_context, uint8_t data)
     }
 }
 
-void ciacore_set_cnt(cia_context_t *cia_context, bool data)
+void ciacore_set_cnt(cia_context_t *cia_context PARAMREG(a0), bool data PARAMREG(d0))
 {
     /* Is the CNT input changing? */
     if (data != cia_context->cnt_in_state) {
@@ -1689,7 +1745,7 @@ void ciacore_set_cnt(cia_context_t *cia_context, bool data)
     }
 }
 
-void ciacore_set_sp(cia_context_t *cia_context, bool data)
+void ciacore_set_sp(cia_context_t *cia_context PARAMREG(a0), bool data PARAMREG(d0))
 {
     cia_context->sp_in_state = data & 1;
 }
@@ -1701,7 +1757,7 @@ void ciacore_set_sp(cia_context_t *cia_context, bool data)
  * That means it should normally be invoked only from a CPU register access,
  * not from an alarm.
  */
-static void schedule_sdr_alarm(cia_context_t *cia_context, CLOCK rclk, uint32_t feed)
+static void schedule_sdr_alarm(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), uint32_t feed PARAMREG(a1))
 {
     cia_context->sdr_delay |= feed;
     alarm_set(cia_context->sdr_alarm, rclk);
@@ -1827,7 +1883,20 @@ static void ciacore_intsdr(CLOCK offset, void *data)
 /*
  * Entry point for alarm callbacks.
  */
+#ifdef VICE_AMIGA_TIME_STATS
+static void ciacore_intsdr_entry_(CLOCK offset, void *data);
+
 static void ciacore_intsdr_entry(CLOCK offset, void *data)
+{
+    TIMESTATS_ENTER(TSTAT_CIA);
+    ciacore_intsdr_entry_(offset, data);
+    TIMESTATS_LEAVE();
+}
+
+static void ciacore_intsdr_entry_(CLOCK offset, void *data)
+#else
+static void ciacore_intsdr_entry(CLOCK offset, void *data)
+#endif
 {
     cia_context_t *cia_context = (cia_context_t *)data;
     CLOCK rclk = *(cia_context->clk_ptr) - offset;
@@ -2001,7 +2070,20 @@ static void ciacore_inttod(CLOCK offset, void *data)
 /*
  * Entry point for alarm callbacks.
  */
+#ifdef VICE_AMIGA_TIME_STATS
+static void ciacore_inttod_entry_(CLOCK offset, void *data);
+
 static void ciacore_inttod_entry(CLOCK offset, void *data)
+{
+    TIMESTATS_ENTER(TSTAT_CIA);
+    ciacore_inttod_entry_(offset, data);
+    TIMESTATS_LEAVE();
+}
+
+static void ciacore_inttod_entry_(CLOCK offset, void *data)
+#else
+static void ciacore_inttod_entry(CLOCK offset, void *data)
+#endif
 {
     cia_context_t *cia_context = (cia_context_t *)data;
     CLOCK rclk = *(cia_context->clk_ptr) - offset;
@@ -2032,7 +2114,20 @@ void ciacore_setup_context(cia_context_t *cia_context)
 
     FIXME: maybe other stuff must be handled here
  */
+#ifdef VICE_AMIGA_TIME_STATS
+static void ciacore_idle_(CLOCK offset, void *data);
+
 static void ciacore_idle(CLOCK offset, void *data)
+{
+    TIMESTATS_ENTER(TSTAT_CIA);
+    ciacore_idle_(offset, data);
+    TIMESTATS_LEAVE();
+}
+
+static void ciacore_idle_(CLOCK offset, void *data)
+#else
+static void ciacore_idle(CLOCK offset, void *data)
+#endif
 {
     CLOCK clk, rclk;
     cia_context_t *cia_context = (cia_context_t *)data;

@@ -72,7 +72,7 @@ int cia1581_dump(diskunit_context_t *ctxptr, uint16_t addr)
     return 0;
 }
 
-static void cia_set_int_clk(cia_context_t *cia_context, int value, CLOCK clk)
+static void cia_set_int_clk(cia_context_t *cia_context PARAMREG(a0), int value PARAMREG(a1), CLOCK clk PARAMREG(d0))
 {
     diskunit_context_t *dc;
 
@@ -82,7 +82,7 @@ static void cia_set_int_clk(cia_context_t *cia_context, int value, CLOCK clk)
                       value, clk);
 }
 
-static void cia_restore_int(cia_context_t *cia_context, int value)
+static void cia_restore_int(cia_context_t *cia_context PARAMREG(a0), int value PARAMREG(d0))
 {
     diskunit_context_t *dc;
 
@@ -95,7 +95,7 @@ static void cia_restore_int(cia_context_t *cia_context, int value)
  * Hardware binding
  */
 
-static void do_reset_cia(cia_context_t *cia_context)
+static void do_reset_cia(cia_context_t *cia_context PARAMREG(a0))
 {
     drivecia1581_context_t *cia1581p;
 
@@ -104,7 +104,7 @@ static void do_reset_cia(cia_context_t *cia_context)
     cia1581p->drive->led_status = 1;
 }
 
-static void pulse_ciapc(cia_context_t *cia_context, CLOCK rclk)
+static void pulse_ciapc(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0))
 {
 }
 
@@ -112,7 +112,7 @@ static void pulse_ciapc(cia_context_t *cia_context, CLOCK rclk)
 #define PRE_READ_CIA
 #define PRE_PEEK_CIA
 
-static void undump_ciapa(cia_context_t *cia_context, CLOCK rclk, uint8_t b)
+static void undump_ciapa(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), uint8_t b PARAMREG(d2))
 {
     drivecia1581_context_t *cia1581p;
 
@@ -121,11 +121,11 @@ static void undump_ciapa(cia_context_t *cia_context, CLOCK rclk, uint8_t b)
     cia1581p->drive->led_status = (b & 0x40) ? 1 : 0;
 }
 
-static void undump_ciapb(cia_context_t *cia_context, CLOCK rclk, uint8_t b)
+static void undump_ciapb(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), uint8_t b PARAMREG(d2))
 {
 }
 
-static void store_ciapa(cia_context_t *cia_context, CLOCK rclk, uint8_t byte)
+static void store_ciapa(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), uint8_t byte PARAMREG(d2))
 {
     drivecia1581_context_t *cia1581p;
     diskunit_context_t *drive;
@@ -144,7 +144,7 @@ static void store_ciapa(cia_context_t *cia_context, CLOCK rclk, uint8_t byte)
     cia1581p->drive->led_last_change_clk = *(cia_context->clk_ptr);
 }
 
-static void store_ciapb(cia_context_t *cia_context, CLOCK rclk, uint8_t byte)
+static void store_ciapb(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), uint8_t byte PARAMREG(d2))
 {
     drivecia1581_context_t *cia1581p;
 
@@ -182,7 +182,7 @@ static void store_ciapb(cia_context_t *cia_context, CLOCK rclk, uint8_t byte)
     }
 }
 
-static uint8_t read_ciapa(cia_context_t *cia_context)
+static uint8_t read_ciapa(cia_context_t *cia_context PARAMREG(a0))
 {
     diskunit_context_t *dc;
     drivecia1581_context_t *cia1581p;
@@ -201,7 +201,7 @@ static uint8_t read_ciapa(cia_context_t *cia_context)
             | (cia_context->c_cia[CIA_PRA] & cia_context->c_cia[CIA_DDRA]));
 }
 
-static uint8_t read_ciapb(cia_context_t *cia_context)
+static uint8_t read_ciapb(cia_context_t *cia_context PARAMREG(a0))
 {
     drivecia1581_context_t *cia1581p;
 
@@ -222,15 +222,15 @@ static uint8_t read_ciapb(cia_context_t *cia_context)
     }
 }
 
-static void read_ciaicr(cia_context_t *cia_context)
+static void read_ciaicr(cia_context_t *cia_context PARAMREG(a0))
 {
 }
 
-static void read_sdr(cia_context_t *cia_context)
+static void read_sdr(cia_context_t *cia_context PARAMREG(a0))
 {
 }
 
-static void store_sdr(cia_context_t *cia_context, uint8_t byte)
+static void store_sdr(cia_context_t *cia_context PARAMREG(a0), uint8_t byte PARAMREG(d0))
 {
     drivecia1581_context_t *cia1581p;
 
