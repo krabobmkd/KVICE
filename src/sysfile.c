@@ -85,6 +85,19 @@ static int set_system_path(const char *val, void *param)
                                 tmp_path, NULL );
             }
         } else { /* relative path */
+#ifdef AMIGA_COMPILE
+            /* AmigaDOS: no "/" after a volume ("DH0:/x" is its parent) */
+            char *joined = util_join_paths(current_dir, tmp_path, NULL);
+
+            if (expanded_system_path == NULL) {
+                s = util_concat(joined, NULL);
+            } else {
+                s = util_concat(expanded_system_path,
+                                ARCHDEP_FINDPATH_SEPARATOR_STRING,
+                                joined, NULL);
+            }
+            lib_free(joined);
+#else
             if (expanded_system_path == NULL) {
                 s = util_concat(current_dir,
                                 ARCHDEP_DIR_SEP_STR,
@@ -96,6 +109,7 @@ static int set_system_path(const char *val, void *param)
                                 ARCHDEP_DIR_SEP_STR,
                                 tmp_path, NULL );
             }
+#endif
         }
         lib_free(expanded_system_path);
         expanded_system_path = s;
@@ -259,12 +273,21 @@ int sysfile_load(const char *name, const char *subpath, uint8_t *dest, int minsi
 
     if (fp == NULL) {
         /* Try to open the file from the current directory. */
+#ifdef AMIGA_COMPILE
+        /* "./name" is not an AmigaDOS path: the current directory joined */
+        char *local_name = NULL;
+
+        if (archdep_expand_path(&local_name, name) < 0 || local_name == NULL) {
+            goto fail;
+        }
+#else
         const char working_dir_prefix[3] = {
             '.', ARCHDEP_DIR_SEP_CHR, '\0'
         };
         char *local_name = NULL;
 
         local_name = util_concat(working_dir_prefix, name, NULL);
+#endif
         fp = sysfile_open((const char *)local_name, subpath, &complete_path, MODE_READ);
         lib_free(local_name);
         local_name = NULL;

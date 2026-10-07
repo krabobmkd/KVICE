@@ -43,4 +43,28 @@ const char *kbd_arch_keynum_to_keyname(signed long keynum);
 void kbd_hotkey_init(void);
 void kbd_hotkey_shutdown(void);
 
+/* keyboard mapping ("AmigaKeyboardSymbolic"):
+ * - positional: every rawkey goes through the keymap file
+ *   (amiga_positional.vkm), C64 key positions,
+ * - symbolic (default): the special keys (modifiers, Return, Del, cursors,
+ *   function keys, Run/Stop, Clr/Home, Restore, space) still go through
+ *   the file, the other keys and the numeric keypad give the character of
+ *   the Amiga keymap (MapRawKey()) and press the C64 keys of that
+ *   character (keypad Enter: RETURN).
+ *   Characters the C64 has not (é, à...) do nothing. */
+int amiga_kbd_resources_init(void);
+int amiga_kbd_get_symbolic(void);
+void amiga_kbd_set_symbolic(int on);
+
+/* an IDCMP_RAWKEY message (code with IECODE_UP_PREFIX), mods: KBD_MOD_* */
+void amiga_kbd_rawkey(unsigned int code, unsigned int qualifier, int mods);
+/* all keys up (window inactive, mode change) */
+void amiga_kbd_clear(void);
+
+/* keymap.c: a keymap file was loaded, add the symbolic mode entries */
+void kbd_arch_keymap_loaded(void);
+/* the standard positional keymap built in (amiga_positional.vkm without
+   comments), loaded when the file is not on disk */
+const char *kbd_arch_builtin_keymap(void);
+
 #endif

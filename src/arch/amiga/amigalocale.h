@@ -92,8 +92,8 @@ enum {
 
     /* Settings: Keyboard */
     MSG_KEYMAP,
-    MSG_KEYMAP_SYM,
-    MSG_KEYMAP_POS,
+    MSG_KEYMAP_STANDARD,
+    MSG_KEYBOARD_MAPPING,
     MSG_KEYMAP_CUSTOM,
     MSG_KEYMAP_FILE,
     MSG_KEYS_C64,
@@ -107,7 +107,7 @@ enum {
     MSG_ROM_KERNAL,
     MSG_ROM_BASIC,
     MSG_ROM_CHARGEN,
-    MSG_ROM_DEFAULT,
+    MSG_ROM_MODEL_DEFAULTS,
     MSG_C64_MODEL,
     MSG_MODEL_C64_PAL,
     MSG_MODEL_C64C_PAL,
@@ -116,9 +116,15 @@ enum {
     MSG_MODEL_C64C_NTSC,
     MSG_MODEL_C64_OLD_NTSC,
     MSG_MODEL_DREAN,
+    MSG_MODEL_INFO,
+    MSG_REU,
+    MSG_REU_OFF,
 
     /* Settings: Drive 8 */
     MSG_DRIVE_TYPE,
+    MSG_DRIVE_ROM_FILE,
+    MSG_DRIVE_ROM_FOUND,
+    MSG_DRIVE_ROM_MISSING,
     MSG_DRIVE_NONE,
     MSG_DRIVE_TRUE_EMULATION,
     MSG_AUTOSTART_FAST_LOAD,
@@ -152,8 +158,44 @@ enum {
     MSG_ERROR_SNAPSHOT_LOAD,
     MSG_ERROR_SNAPSHOT_SAVE,
 
-    /* emulator screen while the ROMs are missing */
-    MSG_NO_ROM,
+    /* emulator screen while files are missing: report values */
+    MSG_REPORT_OK,          /* slot of the former "(no rom)" */
+
+    /* report labels and values (ROM labels: MSG_ROM_*) */
+    MSG_REPORT_DRIVE8_ROM,
+    MSG_REPORT_KEYMAP,
+    MSG_REPORT_NOT_FOUND,
+    MSG_REPORT_NO_DRIVE,
+
+    /* over the emulated screen */
+    MSG_DRIVE8_NO_ROM_USED,
+
+    /* Keyboard: menu, mapping choice */
+    MSG_MENU_KEYBOARD,
+    MSG_KEYBOARD_SYMBOLIC,
+    MSG_KEYBOARD_POSITIONAL,
+    MSG_KEYBOARD_NOTE,
+    MSG_REPORT_BUILTIN,
+
+    /* C64 menu: new empty disk */
+    MSG_CREATE_DISK8,
+    MSG_REQ_CREATE_DISK8,
+    MSG_CONFIRM_REPLACE,
+    MSG_REPLACE_CANCEL,
+    MSG_ERROR_CREATE_DISK,
+
+    /* C64 menu: files of the disk in drive 8 to an Amiga drawer */
+    MSG_EXTRACT_DISK8,
+    MSG_REQ_EXTRACT_DISK8,
+    MSG_ERROR_NO_DISK8,
+    MSG_ERROR_READ_DISK,
+    MSG_EXTRACT_DONE,
+
+    /* C64 menu: the BASIC program in memory to a .prg file */
+    MSG_SAVE_BASIC,
+    MSG_REQ_SAVE_BASIC,
+    MSG_ERROR_NO_BASIC,
+    MSG_ERROR_SAVE_BASIC,
 
     /* Must be last */
     MSG_COUNT

@@ -68,6 +68,7 @@
 
 #include "amigavideo.h"
 #include "amigaaction.h"
+#include "kbd.h"
 #include "amigalocale.h"
 #include "amigamenu.h"
 #include "amigafile.h"
@@ -175,9 +176,23 @@ static int prev_y = 0;
 /* next refresh draws everything: window redraw, palette, geometry... */
 static int redraw_full = 1;
 
-/* "no rom" state (amiga_wait_for_roms()): "(no rom)" instead of the
+/* "no rom" state (amiga_wait_for_roms()): a report instead of the
  * emulated screen */
 static int no_rom_screen = 0;
+static amiga_report_line_t report_lines[AMIGA_REPORT_LINES_MAX];
+static int report_count = 0;
+/* red pen of the report, obtained on the screen of red_pen_cm */
+static LONG red_pen = -1;
+static struct ColorMap *red_pen_cm = NULL;
+static int red_pen_obtained = 0;
+/* message over the emulated screen (amiga_video_show_message()) */
+static const char *osd_text = NULL;
+static int osd_frames = 0;
+
+static void amiga_draw_message(void);
+static LONG amiga_report_red_pen(struct Screen *screen);
+
+static void amiga_report_release_pen(void);
 
 static void amiga_free_prev_frame(void)
 {
@@ -334,6 +349,8 @@ static void amiga_sync_window_geometry(void)
 
 static void amiga_close_window(void)
 {
+    /* the pen belongs to the screen of the window */
+    amiga_report_release_pen();
     amiga_remove_app_window();
     AmigaMenu_Close(amiga_window);
     if (amiga_window != NULL) {
@@ -1024,7 +1041,7 @@ static void amiga_process_fullscreen_request(void)
         amiga_open_window(base_width, base_height);
     }
     /* key releases went to the old window */
-    keyboard_key_clear();
+    amiga_kbd_clear();
     vsync_suspend_speed_eval();
     amiga_redraw_all();
 }
@@ -1270,15 +1287,12 @@ void amiga_video_handle_events(void)
                 AMIGA_TRACE(("rawkey 0x%02x %s qualifier 0x%04x", code & 0x7f,
                              (code & IECODE_UP_PREFIX) ? "up" : "down", qualifier));
                 */
-                if (code & IECODE_UP_PREFIX) {
-                    keyboard_key_released((signed long)(code & 0x7f), amiga_key_mods(qualifier));
-                } else {
-                    keyboard_key_pressed((signed long)(code & 0x7f), amiga_key_mods(qualifier));
-                }
+                /* positional or symbolic (kbd.c) */
+                amiga_kbd_rawkey(code, qualifier, amiga_key_mods(qualifier));
                 break;
             case IDCMP_INACTIVEWINDOW:
                 /* key releases go to the new active window: avoid stuck keys */
-                keyboard_key_clear();
+                amiga_kbd_clear();
                 break;
             default:
                 break;
@@ -1619,24 +1633,130 @@ static void video_canvas_refresh_(struct video_canvas_s *canvas,
         LockLayer(0, layer);
         amiga_update_inner_size();
         amiga_draw_changed(db, xs, ys, w, h);
+        amiga_draw_message();
         UnlockLayer(layer);
     } else {
         amiga_draw_changed(db, xs, ys, w, h);
+        amiga_draw_message();
     }
 }
 
-/* the drawing area in the screen's darkest pen, "(no rom)" in its brightest
- * one, centered */
+void amiga_video_sync_menu(void)
+{
+    if (amiga_window != NULL && (!fullscreen || fs_menu_active)) {
+        AmigaMenu_SyncChecks(amiga_window);
+    }
+}
+
+void amiga_video_show_message(const char *text, int frames)
+{
+    osd_text = text;
+    osd_frames = frames;
+}
+
+/* after a refresh: the message box over what was just drawn, every time
+ * (changed lines may have covered it). At the end, a full redraw erases it. */
+static void amiga_draw_message(void)
+{
+    struct Screen *screen = NULL;
+    struct ColorMap *cm;
+    struct TextFont *font;
+    LONG red, white;
+    ULONG len;
+    WORD tw, bw, bh, x, y;
+
+    if (osd_frames <= 0 || osd_text == NULL) {
+        return;
+    }
+    if (--osd_frames == 0) {
+        redraw_full = 1;
+        return;
+    }
+    if (amiga_window != NULL) {
+        screen = amiga_window->WScreen;
+    } else if (fs_screen != NULL) {
+        screen = fs_screen;
+    }
+    if (screen == NULL || draw_rp == NULL || draw_width == 0 || draw_height == 0) {
+        return;
+    }
+    cm = screen->ViewPort.ColorMap;
+    red = amiga_report_red_pen(screen);
+    white = FindColor(cm, 0xffffffff, 0xffffffff, 0xffffffff, fs_planes == 5 ? 15 : -1);
+    if (red < 0 || white < 0) {
+        return;
+    }
+    font = draw_rp->Font;
+    len = (ULONG)strlen(osd_text);
+    tw = TextLength(draw_rp, (CONST_STRPTR)osd_text, len);
+    bw = tw + 2 * (WORD)font->tf_XSize;
+    bh = (WORD)font->tf_YSize + 6;
+    if (bw > (WORD)draw_width) {
+        bw = (WORD)draw_width;
+    }
+    if (bh > (WORD)draw_height) {
+        return;
+    }
+    x = draw_x + ((WORD)draw_width - bw) / 2;
+    /* low on the screen, above the bottom border of most programs */
+    y = draw_y + (WORD)draw_height - bh - (WORD)draw_height / 8;
+    SetAPen(draw_rp, (UWORD)red);
+    RectFill(draw_rp, x, y, x + bw - 1, y + bh - 1);
+    SetAPen(draw_rp, (UWORD)white);
+    SetDrMd(draw_rp, JAM1);
+    Move(draw_rp, x + (bw - tw) / 2, y + 3 + (WORD)font->tf_Baseline);
+    Text(draw_rp, (CONST_STRPTR)osd_text, len);
+}
+
+static void amiga_report_release_pen(void)
+{
+    if (red_pen_obtained && red_pen_cm != NULL) {
+        ReleasePen(red_pen_cm, (ULONG)red_pen);
+    }
+    red_pen = -1;
+    red_pen_cm = NULL;
+    red_pen_obtained = 0;
+}
+
+/* a red pen on \a screen: a shared pen when one is free, else the nearest
+ * color (custom screens have no shared pen) */
+static LONG amiga_report_red_pen(struct Screen *screen)
+{
+    struct ColorMap *cm = screen->ViewPort.ColorMap;
+
+    if (red_pen_cm == cm && red_pen >= 0) {
+        return red_pen;
+    }
+    amiga_report_release_pen();
+    red_pen = ObtainBestPen(cm, 0xffffffff, 0x20000000, 0x20000000,
+                            OBP_Precision, PRECISION_GUI, TAG_DONE);
+    if (red_pen >= 0 && (fs_planes != 5 || red_pen < 16)) {
+        red_pen_obtained = 1;
+    } else {
+        if (red_pen >= 0) {
+            ReleasePen(cm, (ULONG)red_pen);
+        }
+        /* 5 planes fullscreen: drawn in planes 1-4 only, pens 0-15 */
+        red_pen = FindColor(cm, 0xffffffff, 0x20000000, 0x20000000,
+                            fs_planes == 5 ? 15 : -1);
+    }
+    red_pen_cm = cm;
+    return red_pen;
+}
+
+/* the drawing area in the screen's darkest pen, the report lines in its
+ * brightest one (bad values in red), as a centered block: labels in a
+ * column, values in the next one */
 static void amiga_draw_no_rom(void)
 {
     struct Screen *screen = NULL;
     struct DrawInfo *dri;
     UWORD back = 1;
     UWORD front = 2;
-    const char *text = LOC(MSG_NO_ROM);
-    ULONG len = (ULONG)strlen(text);
+    LONG red;
     struct TextFont *font;
-    WORD width;
+    WORD label_w = 0, value_w = 0, gap, line_h, x, y;
+    int i;
 
     if (draw_rp == NULL || draw_width == 0 || draw_height == 0) {
         return;
@@ -1654,25 +1774,77 @@ static void amiga_draw_no_rom(void)
             FreeScreenDrawInfo(screen, dri);
         }
     }
+    red = screen != NULL ? amiga_report_red_pen(screen) : -1;
+    if (red < 0) {
+        red = front;
+    }
     SetAPen(draw_rp, back);
     RectFill(draw_rp, draw_x, draw_y,
              draw_x + (WORD)draw_width - 1, draw_y + (WORD)draw_height - 1);
 
     font = draw_rp->Font;
-    width = TextLength(draw_rp, (CONST_STRPTR)text, len);
-    SetAPen(draw_rp, front);
+    line_h = (WORD)font->tf_YSize + 2;
+    gap = TextLength(draw_rp, (CONST_STRPTR)"  ", 2);
+    for (i = 0; i < report_count; i++) {
+        WORD w;
+
+        if (report_lines[i].label != NULL) {
+            w = TextLength(draw_rp, (CONST_STRPTR)report_lines[i].label,
+                           (ULONG)strlen(report_lines[i].label));
+            if (w > label_w) {
+                label_w = w;
+            }
+        }
+        if (report_lines[i].value != NULL) {
+            w = TextLength(draw_rp, (CONST_STRPTR)report_lines[i].value,
+                           (ULONG)strlen(report_lines[i].value));
+            if (w > value_w) {
+                value_w = w;
+            }
+        }
+    }
+    x = draw_x + ((WORD)draw_width - (label_w + gap + value_w)) / 2;
+    if (x < draw_x) {
+        x = draw_x;
+    }
+    y = draw_y + ((WORD)draw_height - line_h * (WORD)report_count) / 2;
+    if (y < draw_y) {
+        y = draw_y;
+    }
     SetDrMd(draw_rp, JAM1);
-    Move(draw_rp, draw_x + ((WORD)draw_width - width) / 2,
-         draw_y + ((WORD)draw_height - (WORD)font->tf_YSize) / 2 + (WORD)font->tf_Baseline);
-    Text(draw_rp, (CONST_STRPTR)text, len);
+    for (i = 0; i < report_count; i++, y += line_h) {
+        if (y + line_h > draw_y + (WORD)draw_height) {
+            break;
+        }
+        if (report_lines[i].label != NULL) {
+            SetAPen(draw_rp, front);
+            Move(draw_rp, x, y + (WORD)font->tf_Baseline);
+            Text(draw_rp, (CONST_STRPTR)report_lines[i].label,
+                 (ULONG)strlen(report_lines[i].label));
+        }
+        if (report_lines[i].value != NULL) {
+            SetAPen(draw_rp, report_lines[i].bad ? (UWORD)red : front);
+            Move(draw_rp, x + label_w + gap, y + (WORD)font->tf_Baseline);
+            Text(draw_rp, (CONST_STRPTR)report_lines[i].value,
+                 (ULONG)strlen(report_lines[i].value));
+        }
+    }
 }
 
-void amiga_video_show_no_rom(int on)
+void amiga_video_show_report(const amiga_report_line_t *lines, int count)
 {
-    no_rom_screen = on;
-    if (on) {
+    if (count > AMIGA_REPORT_LINES_MAX) {
+        count = AMIGA_REPORT_LINES_MAX;
+    }
+    if (count > 0) {
+        memcpy(report_lines, lines, sizeof report_lines[0] * (size_t)count);
+        report_count = count;
+        no_rom_screen = 1;
         amiga_draw_no_rom();
     } else {
+        report_count = 0;
+        no_rom_screen = 0;
+        amiga_report_release_pen();
         /* the first emulated frame redraws everything */
         redraw_full = 1;
     }

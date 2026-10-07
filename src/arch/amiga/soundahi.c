@@ -271,6 +271,8 @@ static void ahi_process_entry(void)
     if (ahi_process_open(s) != 0) {
         ahi_process_close(s);
         s->state = AHIS_ERROR;
+        /* as at the end: gone before the main process frees or unloads */
+        Forbid();
         Signal((struct Task *)s->main_process, SIGF_SINGLE);
         return;
     }

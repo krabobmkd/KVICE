@@ -179,6 +179,12 @@ int keymap_resources_init(void);
 extern int keyboard_set_keymap_index(int vak, void *param);
 int keyboard_set_keymap_file(const char *val, void *param);
 int keyboard_keymap_dump(const char *filename);
+/* 1 when the last keymap file load succeeded */
+int keyboard_keymap_loaded(void);
+#ifdef AMIGA_COMPILE
+/* 1 when the keymap in use is the built-in one (no file found) */
+int keyboard_keymap_builtin(void);
+#endif
 
 void keyboard_set_map_any(signed long sym, int row, int col, int shift);
 void keyboard_set_unmap_any(signed long sym);

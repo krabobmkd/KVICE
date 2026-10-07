@@ -604,10 +604,33 @@ static int set_sound_emulation_enabled_on_warp(int value, void *param)
     return 0;
 }
 
+#ifdef AMIGA_COMPILE
+/* "Sound" was turned off by a device error (ahi.device not installed...),
+   not by the user: the configuration file keeps it on */
+static int playback_off_by_error = 0;
+
+void sound_save_wanted_begin(void)
+{
+    if (playback_off_by_error) {
+        playback_enabled = 1;
+    }
+}
+
+void sound_save_wanted_end(void)
+{
+    if (playback_off_by_error) {
+        playback_enabled = 0;
+    }
+}
+#endif
+
 static int set_playback_enabled(int value, void *param)
 {
     int val = value ? 1 : 0;
 
+#ifdef AMIGA_COMPILE
+    playback_off_by_error = 0;
+#endif
     playback_enabled = val;
     sound_machine_enable(playback_enabled);
     return 0;
@@ -961,6 +984,11 @@ static int sound_error(const char *msg)
         ui_error("Sound: %s", msg);
     }
 
+#ifdef AMIGA_COMPILE
+    if (playback_enabled) {
+        playback_off_by_error = 1;
+    }
+#endif
     playback_enabled = 0;
 
     return 1;

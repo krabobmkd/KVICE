@@ -98,4 +98,9 @@ int iecbus_device_write(unsigned int unit, uint8_t data);
 
 extern void (*iecbus_update_ports)(void);
 
+#ifdef AMIGA_COMPILE
+/* called when the CPU asserts ATN while no drive is on the bus, NULL: off */
+extern void (*iecbus_atn_hook)(void);
+#endif
+
 #endif

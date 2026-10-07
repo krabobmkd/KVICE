@@ -45,6 +45,8 @@
 
 /* nm_MutualExclude of 3 sibling radio items: each excludes the 2 others */
 #define MX3(i) (7 & ~(1 << (i)))
+/* and of 2 sibling radio items */
+#define MX2(i) (3 & ~(1 << (i)))
 
 static struct NewMenu s_menuTemplate[MENU_TEMPLATE_MAX];
 static int s_n;
@@ -74,8 +76,11 @@ static void buildMenuTemplate(void)
 
     ADD(NM_TITLE, NULL, 0,   0, 0, MSG_MENU_C64);
     ADD(NM_ITEM,  NULL, "A", 0, 0, ACTION_UD(AMIGA_ACTION_AUTOSTART));
+    ADD(NM_ITEM,  NULL, 0,   0, 0, ACTION_UD(AMIGA_ACTION_SAVE_BASIC));
     BAR(NM_ITEM);
     ADD(NM_ITEM,  NULL, "D", 0, 0, ACTION_UD(AMIGA_ACTION_ATTACH_DISK8));
+    ADD(NM_ITEM,  NULL, 0,   0, 0, ACTION_UD(AMIGA_ACTION_CREATE_DISK8));
+    ADD(NM_ITEM,  NULL, 0,   0, 0, ACTION_UD(AMIGA_ACTION_EXTRACT_DISK8));
     ADD(NM_ITEM,  NULL, 0,   0, 0, ACTION_UD(AMIGA_ACTION_DETACH_DISK8));
     ADD(NM_ITEM,  NULL, 0,   0, 0, ACTION_UD(AMIGA_ACTION_DRIVE8_DRAWER));
     ADD(NM_ITEM,  NULL, "C", 0, 0, ACTION_UD(AMIGA_ACTION_ATTACH_CART));
@@ -103,6 +108,10 @@ static void buildMenuTemplate(void)
     ADD(NM_TITLE, NULL, 0, 0, 0, MSG_MENU_SNAPSHOT);
     ADD(NM_ITEM,  NULL, "L", 0, 0, ACTION_UD(AMIGA_ACTION_SNAPSHOT_LOAD));
     ADD(NM_ITEM,  NULL, "W", 0, 0, ACTION_UD(AMIGA_ACTION_SNAPSHOT_SAVE));
+
+    ADD(NM_TITLE, NULL, 0, 0, 0, MSG_MENU_KEYBOARD);
+    ADD(NM_ITEM,  NULL, 0, CHECKIT, MX2(0), ACTION_UD(AMIGA_ACTION_KEYBOARD_SYMBOLIC));
+    ADD(NM_ITEM,  NULL, 0, CHECKIT, MX2(1), ACTION_UD(AMIGA_ACTION_KEYBOARD_POSITIONAL));
 
     ADD(NM_END, NULL, 0, 0, 0, 0);
 }

@@ -381,6 +381,12 @@ extern struct diskunit_context_s *diskunit_context[NUM_DISK_UNITS];
 
 extern int rom_loaded;
 
+#ifdef AMIGA_COMPILE
+/* type a unit had before drive_init() set it to "none" for a missing ROM,
+   0 if not (or set again since): the UI tells it when the drive is used */
+extern unsigned int drive_rom_missing_type[NUM_DISK_UNITS];
+#endif
+
 int drive_init(void);
 int drive_enable(struct diskunit_context_s *drv);
 void drive_disable(struct diskunit_context_s *drv);

@@ -95,6 +95,10 @@ static log_t drive_log = LOG_DEFAULT;
 /* If nonzero, at least one vaild drive ROM has already been loaded.  */
 int rom_loaded = 0;
 
+#ifdef AMIGA_COMPILE
+unsigned int drive_rom_missing_type[NUM_DISK_UNITS];
+#endif
+
 /* ------------------------------------------------------------------------- */
 
 static int drive_led_color[NUM_DISK_UNITS];
@@ -217,7 +221,17 @@ int drive_init(void)
         machine_drive_port_default(diskunit);
 
         if (drive_check_type(diskunit->type, unit) < 1) {
+#ifdef AMIGA_COMPILE
+            unsigned int wanted = diskunit->type;
+#endif
             resources_set_int_sprintf("Drive%uType", DRIVE_TYPE_NONE, unit + 8);
+#ifdef AMIGA_COMPILE
+            if (wanted != DRIVE_TYPE_NONE && machine_drive_rom_check_loaded(wanted) < 0) {
+                drive_rom_missing_type[unit] = wanted;
+                log_warning(drive_log, "Unit %u: no ROM for drive type %u, the drive is off until its ROM is found.",
+                            unit + 8, wanted);
+            }
+#endif
         }
 
         /* This will trigger loading the ROM if needed */

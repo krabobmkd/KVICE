@@ -84,7 +84,13 @@ int archdep_expand_path(char **return_path, const char *orig_name)
             *return_path = NULL;
             return -1;
         }
-        *return_path = util_join_paths(buffer, orig_name, NULL);
+        /* "" (util_fname_split() of a bare name) or "." (unix habit): the
+           current directory itself, joining would add a "/" (parent) */
+        if (orig_name[0] == '\0' || strcmp(orig_name, ".") == 0) {
+            *return_path = lib_strdup(buffer);
+        } else {
+            *return_path = util_join_paths(buffer, orig_name, NULL);
+        }
     }
 #elif defined(WINDOWS_COMPILE)
     /* taken from the old WinVICE port (src/arch/win32/archdep.c): */

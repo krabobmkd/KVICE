@@ -534,10 +534,32 @@ void util_fname_split(const char *path, char **directory_return,
     }
 #endif
 
+#ifdef AMIGA_COMPILE
+    /* AmigaDOS: a file at the root of a volume or assign ("RAM:x.prg") has
+       no '/', its directory is the volume with its ':' ("RAM:"), which
+       util_join_paths() joins back without a '/' */
+    if (p == NULL && (p = strrchr(path, ':')) != NULL) {
+        if (directory_return != NULL) {
+            *directory_return = lib_malloc((size_t)(p - path + 2));
+            memcpy(*directory_return, path, p - path + 1);
+            (*directory_return)[p - path + 1] = '\0';
+        }
+        if (name_return != NULL) {
+            *name_return = lib_strdup(p + 1);
+        }
+        return;
+    }
+#endif
+
     /* if no path in the input, return "." as path */
     if (p == NULL) {
         if (directory_return != NULL) {
+#ifdef AMIGA_COMPILE
+            /* the current directory is "" in AmigaDOS paths, "." is a name */
+            *directory_return = lib_strdup("");
+#else
             *directory_return = lib_strdup(".");
+#endif
         }
         if (name_return != NULL) {
             *name_return = lib_strdup(path);

@@ -216,10 +216,21 @@ static uint8_t iecbus_cpu_read_conf0(CLOCK clock)
     return (iecbus.iec_fast_1541 & 0x30u) << 2;
 }
 
+#ifdef AMIGA_COMPILE
+/* called when the CPU asserts ATN while no drive is on the bus */
+void (*iecbus_atn_hook)(void) = NULL;
+#endif
+
 static void iecbus_cpu_write_conf0(uint8_t data, CLOCK clock)
 {
     DEBUG_IEC_CPU_WRITE(data);
 
+#ifdef AMIGA_COMPILE
+    /* bit 3: ATN, 0 when asserted */
+    if (iecbus_atn_hook != NULL && (iecbus.iec_fast_1541 & 8) && !(data & 8)) {
+        iecbus_atn_hook();
+    }
+#endif
     iecbus.iec_fast_1541 = data;
 }
 

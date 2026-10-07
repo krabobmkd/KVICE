@@ -130,15 +130,15 @@ static const char *default_strings[] = {
     "None",
 
     /* MSG_KEYMAP */
-    "Keymap:",
-    /* MSG_KEYMAP_SYM */
-    "Symbolic (amiga_sym.vkm)",
-    /* MSG_KEYMAP_POS */
-    "Positional (amiga_pos.vkm)",
+    "Positional keymap file:",
+    /* MSG_KEYMAP_STANDARD */
+    "Standard (amiga_positional.vkm)",
+    /* MSG_KEYBOARD_MAPPING */
+    "Keyboard mapping:",
     /* MSG_KEYMAP_CUSTOM */
     "Custom file",
     /* MSG_KEYMAP_FILE */
-    "Custom keymap file:",
+    "Custom positional keymap:",
     /* MSG_KEYS_C64 */
     "C64 key",
     /* MSG_KEYS_AMIGA */
@@ -155,8 +155,8 @@ static const char *default_strings[] = {
     "BASIC ROM:",
     /* MSG_ROM_CHARGEN */
     "Character ROM:",
-    /* MSG_ROM_DEFAULT */
-    "Default ROMs",
+    /* MSG_ROM_MODEL_DEFAULTS */
+    "Set ROM defaults for this model",
     /* MSG_C64_MODEL */
     "C64 model:",
     /* MSG_MODEL_C64_PAL */
@@ -173,9 +173,21 @@ static const char *default_strings[] = {
     "C64 old NTSC",
     /* MSG_MODEL_DREAN */
     "Drean (PAL-N)",
+    /* MSG_MODEL_INFO: video standard, SID chip */
+    "Video: %s, SID: %s",
+    /* MSG_REU */
+    "RAM cart (REU):",
+    /* MSG_REU_OFF */
+    "None",
 
     /* MSG_DRIVE_TYPE */
     "Drive type:",
+    /* MSG_DRIVE_ROM_FILE: label of the line under the drive type */
+    "ROM file:",
+    /* MSG_DRIVE_ROM_FOUND */
+    "(found)",
+    /* MSG_DRIVE_ROM_MISSING */
+    "(not found)",
     /* MSG_DRIVE_NONE */
     "None",
     /* MSG_DRIVE_TRUE_EMULATION */
@@ -234,8 +246,65 @@ static const char *default_strings[] = {
     /* MSG_ERROR_SNAPSHOT_SAVE */
     "Cannot save the snapshot\n%s",
 
-    /* MSG_NO_ROM */
-    "(no rom)"
+    /* MSG_REPORT_OK */
+    "Ok",
+
+    /* MSG_REPORT_DRIVE8_ROM */
+    "Drive 8 ROM:",
+    /* MSG_REPORT_KEYMAP */
+    "Keyboard file:",
+    /* MSG_REPORT_NOT_FOUND */
+    "Not found",
+    /* MSG_REPORT_NO_DRIVE */
+    "No drive",
+
+    /* MSG_DRIVE8_NO_ROM_USED */
+    "Drive 8 ROM not found: no disk drive",
+
+    /* MSG_MENU_KEYBOARD */
+    "Keyboard",
+    /* MSG_KEYBOARD_SYMBOLIC */
+    "Symbolic",
+    /* MSG_KEYBOARD_POSITIONAL */
+    "Positional",
+    /* MSG_KEYBOARD_NOTE */
+    "Symbolic: the keys type the characters of the Amiga keymap.\n"
+    "Positional: the C64 key positions (keymap file), for games.\n"
+    "Symbolic only takes the special keys from the keymap file\n"
+    "(Shift, C=, CTRL, Run/Stop, Clr/Home, Restore, F-keys...).",
+    /* MSG_REPORT_BUILTIN: keymap file not found, the built-in one is used */
+    "Built-in",
+
+    /* MSG_CREATE_DISK8 */
+    "Create empty disk and mount...",
+    /* MSG_REQ_CREATE_DISK8 */
+    "New empty disk image (.d64)",
+    /* MSG_CONFIRM_REPLACE: %s is the file */
+    "%s\nalready exists. Replace it?",
+    /* MSG_REPLACE_CANCEL */
+    "Replace|Cancel",
+    /* MSG_ERROR_CREATE_DISK */
+    "Cannot create the disk image\n%s",
+
+    /* MSG_EXTRACT_DISK8 */
+    "Extract disk files...",
+    /* MSG_REQ_EXTRACT_DISK8 */
+    "Drawer for the files of the disk",
+    /* MSG_ERROR_NO_DISK8: %s is empty */
+    "No disk image in drive 8.%s",
+    /* MSG_ERROR_READ_DISK: %s is the disk image */
+    "Cannot read the disk image\n%s",
+    /* MSG_EXTRACT_DONE: files written, files not written, drawer */
+    "%ld file(s) extracted, %ld error(s), to\n%s",
+
+    /* MSG_SAVE_BASIC */
+    "Save BASIC program as .prg...",
+    /* MSG_REQ_SAVE_BASIC */
+    "Save the BASIC program (.prg)",
+    /* MSG_ERROR_NO_BASIC: %s is empty */
+    "No BASIC program in memory.%s",
+    /* MSG_ERROR_SAVE_BASIC: %s is the file */
+    "Cannot save the BASIC program\n%s"
 };
 
 /* compile-time check: one default string per MSG_* id */

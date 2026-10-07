@@ -71,6 +71,14 @@ int c64rom_all_loaded(void)
     return rom_loaded && kernal_ok && basic_ok && chargen_ok;
 }
 
+/* each ROM's state of the last load, 1 when loaded */
+void c64rom_get_loaded(int *kernal, int *basic, int *chargen)
+{
+    *kernal = rom_loaded && kernal_ok;
+    *basic = rom_loaded && basic_ok;
+    *chargen = rom_loaded && chargen_ok;
+}
+
 struct kernal_s {
     int id;         /* the value located at 0xff80 */
     int chksum;
