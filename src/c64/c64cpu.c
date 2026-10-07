@@ -25,9 +25,11 @@
 
 #include "vice.h"
 
+
 #include "maincpu.h"
 #include "mem.h"
 
+#include "c64mem.h"
 #include "cpmcart.h"
 
 #ifdef FEATURE_CPUMEMHISTORY
@@ -130,6 +132,62 @@ static uint8_t memmap_mem_read_dummy(unsigned int addr)
     memmap_mem_update(addr, 0);
     return (*_mem_read_tab_ptr_dummy[(addr) >> 8])((uint16_t)(addr));
 }
+#else
+
+/* Plain RAM/ROM pages are read and written directly, the others call their
+   handler (I/O, CPU port, VIC-II bank writes, cartridges...), see
+   mem_read_direct_get() in c64mem.c. Functions, not macros: the address is
+   evaluated once. */
+static inline uint8_t c64cpu_load(unsigned int addr)
+{
+    uint8_t *p = _mem_read_direct_ptr[addr >> 8];
+
+    if (p != NULL) {
+        return p[addr];
+    }
+    return (*_mem_read_tab_ptr[addr >> 8])((uint16_t)addr);
+}
+
+static inline void c64cpu_store(unsigned int addr, uint8_t value)
+{
+    uint8_t *p = _mem_write_direct_ptr[addr >> 8];
+
+    if (p != NULL) {
+        p[addr] = value;
+    } else {
+        (*_mem_write_tab_ptr[addr >> 8])((uint16_t)addr, value);
+    }
+}
+
+#define LOAD(addr) c64cpu_load((unsigned int)(addr))
+#define STORE(addr, value) c64cpu_store((unsigned int)(addr), (uint8_t)(value))
+
+/* zero page: $02-$ff directly in RAM when possible, $00/$01 is the CPU
+   port (c64mem.c, mem_update_zero_direct_ptrs()) */
+static inline uint8_t c64cpu_load_zero(unsigned int addr)
+{
+    unsigned int a = addr & 0xff;
+
+    if (a >= 2 && _mem_zero_read_direct != NULL) {
+        return _mem_zero_read_direct[a];
+    }
+    return (*_mem_read_tab_ptr[0])((uint16_t)addr);
+}
+
+static inline void c64cpu_store_zero(unsigned int addr, uint8_t value)
+{
+    unsigned int a = addr & 0xff;
+
+    if (a >= 2 && _mem_zero_write_direct != NULL) {
+        _mem_zero_write_direct[a] = value;
+    } else {
+        (*_mem_write_tab_ptr[0])((uint16_t)addr, value);
+    }
+}
+
+#define LOAD_ZERO(addr) c64cpu_load_zero((unsigned int)(addr))
+#define STORE_ZERO(addr, value) c64cpu_store_zero((unsigned int)(addr), (uint8_t)(value))
+
 #endif
 
 /* the CP/M cartridge Z80 runs from the maincpu_attention epilogue, after an
@@ -137,5 +195,8 @@ static uint8_t memmap_mem_read_dummy(unsigned int addr)
 #define ALTERNATE_CPU_ON_ATTENTION cpmcart_check_and_run_z80();
 
 #define HAVE_Z80_REGS
+
+/* the N and Z flags in one variable: one store per instruction less */
+#define CPU_FLAG_NZ_MERGED
 
 #include "../maincpu.c"

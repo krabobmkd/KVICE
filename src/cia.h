@@ -32,6 +32,7 @@
 #define VICE_CIA_H
 
 #include "types.h"
+#include "paramreg.h"
 
 /* MOS 6526 models */
 #define CIA_MODEL_6526  0  /* "old" */
@@ -171,21 +172,21 @@ typedef struct cia_context_s {
     void *prv;                    /* drivecia15{7,8}1_context_t */
     void *context;                /* diskunit_context_t * in 15{7,8}1 */
 
-    void (*undump_ciapa)(struct cia_context_s *, CLOCK, uint8_t);
-    void (*undump_ciapb)(struct cia_context_s *, CLOCK, uint8_t);
-    void (*store_ciapa)(struct cia_context_s *, CLOCK, uint8_t);
-    void (*store_ciapb)(struct cia_context_s *, CLOCK, uint8_t);
-    void (*store_sdr)(struct cia_context_s *, uint8_t);
-    void (*set_sp)(struct cia_context_s *, CLOCK, bool);
-    void (*set_cnt)(struct cia_context_s *, CLOCK, bool);
-    uint8_t (*read_ciapa)(struct cia_context_s *);
-    uint8_t (*read_ciapb)(struct cia_context_s *);
-    void (*read_ciaicr)(struct cia_context_s *);
-    void (*read_sdr)(struct cia_context_s *);
-    void (*cia_set_int_clk)(struct cia_context_s *, int, CLOCK);
-    void (*cia_restore_int)(struct cia_context_s *, int);
-    void (*do_reset_cia)(struct cia_context_s *);
-    void (*pulse_ciapc)(struct cia_context_s *, CLOCK);
+    void (*undump_ciapa)(struct cia_context_s * PARAMREG(a0), CLOCK PARAMREG(d0), uint8_t PARAMREG(d2));
+    void (*undump_ciapb)(struct cia_context_s * PARAMREG(a0), CLOCK PARAMREG(d0), uint8_t PARAMREG(d2));
+    void (*store_ciapa)(struct cia_context_s * PARAMREG(a0), CLOCK PARAMREG(d0), uint8_t PARAMREG(d2));
+    void (*store_ciapb)(struct cia_context_s * PARAMREG(a0), CLOCK PARAMREG(d0), uint8_t PARAMREG(d2));
+    void (*store_sdr)(struct cia_context_s * PARAMREG(a0), uint8_t PARAMREG(d0));
+    void (*set_sp)(struct cia_context_s * PARAMREG(a0), CLOCK PARAMREG(d0), bool PARAMREG(d2));
+    void (*set_cnt)(struct cia_context_s * PARAMREG(a0), CLOCK PARAMREG(d0), bool PARAMREG(d2));
+    uint8_t (*read_ciapa)(struct cia_context_s * PARAMREG(a0));
+    uint8_t (*read_ciapb)(struct cia_context_s * PARAMREG(a0));
+    void (*read_ciaicr)(struct cia_context_s * PARAMREG(a0));
+    void (*read_sdr)(struct cia_context_s * PARAMREG(a0));
+    void (*cia_set_int_clk)(struct cia_context_s * PARAMREG(a0), int PARAMREG(a1), CLOCK PARAMREG(d0));
+    void (*cia_restore_int)(struct cia_context_s * PARAMREG(a0), int PARAMREG(d0));
+    void (*do_reset_cia)(struct cia_context_s * PARAMREG(a0));
+    void (*pulse_ciapc)(struct cia_context_s * PARAMREG(a0), CLOCK PARAMREG(d0));
     void (*pre_store)(void);
     void (*pre_read)(void);
     void (*pre_peek)(void);
@@ -198,19 +199,19 @@ void ciacore_init(struct cia_context_s *cia_context,
 void ciacore_shutdown(cia_context_t *cia_context);
 void ciacore_reset(struct cia_context_s *cia_context);
 void ciacore_disable(struct cia_context_s *cia_context);
-void ciacore_store(struct cia_context_s *cia_context, uint16_t addr, uint8_t data);
-uint8_t ciacore_read(struct cia_context_s *cia_context, uint16_t addr);
-uint8_t ciacore_peek(struct cia_context_s *cia_context, uint16_t addr);
+void ciacore_store(struct cia_context_s *cia_context PARAMREG(a0), uint16_t addr PARAMREG(d0), uint8_t data PARAMREG(d1));
+uint8_t ciacore_read(struct cia_context_s *cia_context PARAMREG(a0), uint16_t addr PARAMREG(d0));
+uint8_t ciacore_peek(struct cia_context_s *cia_context PARAMREG(a0), uint16_t addr PARAMREG(d0));
 
 /*
  * The next several functions can be called from outside the CIA
  * to set the FLAG, CNT or SP input lines, or the whole SDR at once
  * (which is cheating).
  */
-void ciacore_set_flag(struct cia_context_s *cia_context);
-void ciacore_set_sdr(struct cia_context_s *cia_context, uint8_t data);
-void ciacore_set_cnt(struct cia_context_s *cia_context, bool data);
-void ciacore_set_sp(struct cia_context_s *cia_context, bool data);
+void ciacore_set_flag(struct cia_context_s *cia_context PARAMREG(a0));
+void ciacore_set_sdr(struct cia_context_s *cia_context PARAMREG(a0), uint8_t data PARAMREG(d0));
+void ciacore_set_cnt(struct cia_context_s *cia_context PARAMREG(a0), bool data PARAMREG(d0));
+void ciacore_set_sp(struct cia_context_s *cia_context PARAMREG(a0), bool data PARAMREG(d0));
 
 int ciacore_snapshot_write_module(struct cia_context_s *cia_context, struct snapshot_s *s);
 int ciacore_snapshot_read_module(struct cia_context_s *cia_context, struct snapshot_s *s);

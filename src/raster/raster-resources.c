@@ -69,8 +69,12 @@ static int set_video_cache_enabled(int val, void *param)
         val = 0;
     }
 
-    /* no more video cache support */
+    /* no more video cache support, except on the Amiga (-vcache): the lines
+       that did not change are then neither drawn again nor copied to the
+       screen. Unmaintained upstream, off by default. */
+#ifndef AMIGA_COMPILE
     val = 0;
+#endif
 
     if (val >= 0) {
         raster_resource_chip->video_cache_enabled = val;

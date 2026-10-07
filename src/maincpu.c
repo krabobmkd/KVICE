@@ -295,7 +295,8 @@ mos6510dtv_regs_t maincpu_regs;
 mos6510_regs_t maincpu_regs;
 #endif
 
-static int maincpu_jammed = 0;
+/* one byte of the attention word: tested with the other rare cases */
+#define maincpu_jammed (maincpu_attention.flags.jammed)
 
 /* ------------------------------------------------------------------------- */
 
@@ -530,11 +531,6 @@ void maincpu_resync_limits(void)
    flags is set. Not inlined: it stays out of the main loop code. */
 static void __attribute__((noinline)) maincpu_attention_epilogue(void)
 {
-    if (maincpu_attention.flags.clk_limit && (maincpu_clk > maincpu_clk_limit)) {
-        log_error(LOG_DEFAULT, "cycle limit reached.");
-        archdep_vice_exit(1);
-    }
-
     if (maincpu_attention.flags.autostart) {
         autostart_advance();
     }
@@ -591,8 +587,14 @@ void maincpu_mainloop(void)
 #endif
     uint8_t reg_p = 0;
     uint8_t reg_sp = 0;
+#ifdef CPU_FLAG_NZ_MERGED
+    /* N and Z in one variable, see 6510core.c (0: Z set, N clear, as
+       flag_n = flag_z = 0) */
+    unsigned int flag_nz = 0;
+#else
     uint8_t flag_n = 0;
     uint8_t flag_z = 0;
+#endif
 #ifndef NEED_REG_PC
     unsigned int reg_pc;
 #endif
@@ -658,8 +660,9 @@ void maincpu_mainloop(void)
 
 #define GLOBAL_REGS maincpu_regs
 
-/* one test of the attention word after each opcode, for the profiler, the
-   cycle limit, autostart and the alternate CPU */
+/* one test of the attention word after each opcode, for the profiler,
+   autostart and the alternate CPU (the cycle limit is checked once per
+   raster line, in vsync_do_end_of_line()) */
 #define CPU_ATTENTION (maincpu_attention.any != 0)
 #define CPU_ATTENTION_EPILOGUE maincpu_attention_epilogue();
 

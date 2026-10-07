@@ -62,12 +62,18 @@ enum {
     MSG_BORDERS_HALF,
     MSG_BORDERS_NONE,
 
+    /* Menu: Snapshot */
+    MSG_MENU_SNAPSHOT,
+    MSG_SNAPSHOT_LOAD,
+    MSG_SNAPSHOT_SAVE,
+
     /* Settings window */
     MSG_SETTINGS_TITLE,
     MSG_SETTINGS_SAVE,
     MSG_SETTINGS_USE,
     MSG_SETTINGS_CANCEL,
     MSG_CATEGORY_INPUT,
+    MSG_CATEGORY_KEYBOARD,
     MSG_CATEGORY_SOUND,
     MSG_CATEGORY_MACHINE,
     MSG_CATEGORY_DRIVE8,
@@ -84,11 +90,24 @@ enum {
     MSG_C64_PORT2,
     MSG_DEVICE_NONE,
 
+    /* Settings: Keyboard */
+    MSG_KEYMAP,
+    MSG_KEYMAP_SYM,
+    MSG_KEYMAP_POS,
+    MSG_KEYMAP_CUSTOM,
+    MSG_KEYMAP_FILE,
+    MSG_KEYS_C64,
+    MSG_KEYS_AMIGA,
+
     /* Settings: Sound */
     MSG_SOUND_ENABLE,
     MSG_SOUND_RATE,
 
     /* Settings: Machine */
+    MSG_ROM_KERNAL,
+    MSG_ROM_BASIC,
+    MSG_ROM_CHARGEN,
+    MSG_ROM_DEFAULT,
     MSG_C64_MODEL,
     MSG_MODEL_C64_PAL,
     MSG_MODEL_C64C_PAL,
@@ -111,6 +130,7 @@ enum {
     /* Settings: Fullscreen page */
     MSG_FS_AUTO_MODE,
     MSG_FS_SCREEN_MODE,
+    MSG_FS_MENU,
     MSG_FS_NOTE,
 
     /* File requesters */
@@ -118,11 +138,22 @@ enum {
     MSG_REQ_DISK8,
     MSG_REQ_CART,
     MSG_REQ_DRAWER8,
+    MSG_REQ_ROM,
+    MSG_REQ_KEYMAP,
+    MSG_REQ_SNAPSHOT_LOAD,
+    MSG_REQ_SNAPSHOT_SAVE,
 
     /* Errors */
     MSG_ERROR_MENU,
     MSG_ERROR_NO_MUI,
     MSG_ERROR_SETTINGS_WINDOW,
+    MSG_ERROR_ROM_FILE,
+    MSG_ERROR_OK,
+    MSG_ERROR_SNAPSHOT_LOAD,
+    MSG_ERROR_SNAPSHOT_SAVE,
+
+    /* emulator screen while the ROMs are missing */
+    MSG_NO_ROM,
 
     /* Must be last */
     MSG_COUNT

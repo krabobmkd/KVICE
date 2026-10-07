@@ -157,7 +157,20 @@
 
 /* ------------------------------------------------------------------------- */
 
+#ifdef CPU_FLAG_NZ_MERGED
+/* The N and Z flags in one variable (main CPU): one store for the usual
+   LOCAL_SET_NZ(). Z when the low byte is 0, N when bit 7 or bit 15 is set:
+   0x8000 is "N and Z both set" (BIT, PLP, RTI, decimal ADC/SBC, ARR). */
+#define FLAG_NZ_ENCODE(n, z)    ((z) ? ((n) ? 0x8000u : 0u) : ((n) ? 0x80u : 1u))
+#define LOCAL_SET_NZ(val)       (flag_nz = (uint8_t)(val))
+#define EXPORT_FLAGS_NZ()       (GLOBAL_REGS.n = LOCAL_SIGN() ? 0x80 : 0, \
+                                 GLOBAL_REGS.z = LOCAL_ZERO() ? 0 : 1)
+#define IMPORT_FLAGS_NZ()       (flag_nz = FLAG_NZ_ENCODE(GLOBAL_REGS.n & 0x80, !GLOBAL_REGS.z))
+#else
 #define LOCAL_SET_NZ(val) (flag_z = flag_n = (val))
+#define EXPORT_FLAGS_NZ()       (GLOBAL_REGS.n = flag_n, GLOBAL_REGS.z = flag_z)
+#define IMPORT_FLAGS_NZ()       (flag_n = GLOBAL_REGS.n, flag_z = GLOBAL_REGS.z)
+#endif
 
 #if defined DRIVE_CPU
 #define LOCAL_SET_OVERFLOW(val)               \
@@ -217,20 +230,32 @@
         }                      \
     } while (0)
 
+#ifdef CPU_FLAG_NZ_MERGED
+#define LOCAL_SET_SIGN(val)      (flag_nz = FLAG_NZ_ENCODE((val), LOCAL_ZERO()))
+#define LOCAL_SET_ZERO(val)      (flag_nz = FLAG_NZ_ENCODE(LOCAL_SIGN(), (val)))
+#define LOCAL_SET_STATUS(val)    (reg_p = ((val) & ~(P_ZERO | P_SIGN)), \
+                                  flag_nz = FLAG_NZ_ENCODE((val) & P_SIGN, (val) & P_ZERO))
+#else
 #define LOCAL_SET_SIGN(val)      (flag_n = (val) ? 0x80 : 0)
 #define LOCAL_SET_ZERO(val)      (flag_z = !(val))
 #define LOCAL_SET_STATUS(val)    (reg_p = ((val) & ~(P_ZERO | P_SIGN)), \
                                   LOCAL_SET_ZERO((val) & P_ZERO),       \
                                   flag_n = (val))
+#endif
 
 #define LOCAL_OVERFLOW()         (reg_p & P_OVERFLOW)
 #define LOCAL_BREAK()            (reg_p & P_BREAK)
 #define LOCAL_DECIMAL()          (reg_p & P_DECIMAL)
 #define LOCAL_INTERRUPT()        (reg_p & P_INTERRUPT)
 #define LOCAL_CARRY()            (reg_p & P_CARRY)
+#ifdef CPU_FLAG_NZ_MERGED
+#define LOCAL_SIGN()             (flag_nz & 0x8080)
+#define LOCAL_ZERO()             (!(flag_nz & 0xff))
+#else
 #define LOCAL_SIGN()             (flag_n & 0x80)
 #define LOCAL_ZERO()             (!flag_z)
-#define LOCAL_STATUS()           (reg_p | (flag_n & 0x80) | P_UNUSED    \
+#endif
+#define LOCAL_STATUS()           (reg_p | (LOCAL_SIGN() ? P_SIGN : 0) | P_UNUSED \
                                   | (LOCAL_ZERO() ? P_ZERO : 0))
 
 #ifdef LAST_OPCODE_INFO
@@ -281,8 +306,7 @@
         GLOBAL_REGS.y = reg_y_read; \
         GLOBAL_REGS.sp = reg_sp;    \
         GLOBAL_REGS.p = reg_p;      \
-        GLOBAL_REGS.n = flag_n;     \
-        GLOBAL_REGS.z = flag_z;     \
+        EXPORT_FLAGS_NZ();          \
     } while (0)
 
 /* Import the public version of the registers.  */
@@ -293,8 +317,7 @@
         reg_y_write(GLOBAL_REGS.y);                        \
         reg_sp = GLOBAL_REGS.sp;                           \
         reg_p = GLOBAL_REGS.p;                             \
-        flag_n = GLOBAL_REGS.n;                            \
-        flag_z = GLOBAL_REGS.z;                            \
+        IMPORT_FLAGS_NZ();                                 \
         bank_start = bank_limit = 0; /* prevent caching */ \
         JUMP(GLOBAL_REGS.pc);                              \
     } while (0)
@@ -1255,6 +1278,7 @@ FIXME: perhaps we really have to add some randomness to (some) bits
         EXPORT_REGISTERS();                                                              \
         if (!ROM_TRAP_ALLOWED() || (trap_result = ROM_TRAP_HANDLER()) == (uint32_t)-1) { \
             CPU_IS_JAMMED = 1;                                                           \
+            jam_opcode = p0;                                                             \
             REWIND_FETCH_OPCODE(CLK);                                                    \
             JAM();                                                                       \
         } else {                                                                         \
@@ -2302,8 +2326,16 @@ static const uint8_t rewind_fetch_tab[] = {
 #endif
     unsigned int tmpa; /* needed for some of the opcode macros */
 #if !defined(DRIVE_CPU)
-    CLOCK profiling_clock_start;
+    /* static: only set when profiling (cpu_slow_path), never read
+       uninitialized */
+    static CLOCK profiling_clock_start;
 #endif
+    /* the opcode that jammed the CPU (JAM, JAM_02), fetched again while the
+       CPU stays jammed */
+    static uint8_t jam_opcode;
+    /* the rare work of the prologue (jammed CPU, profiler) is only looked at
+       when the attention word is set: one test in the usual case */
+    const int cpu_slow_path = CPU_ATTENTION;
 
     /* handle 8502 fast mode refresh cycles */
     CPU_REFRESH_CLK
@@ -2320,7 +2352,7 @@ static const uint8_t rewind_fetch_tab[] = {
     /* HACK: when the CPU is jammed, no interrupts are served, the only way
        to recover is reset. so we clear the interrupt flags and force
        acknowledging them here in this case. */
-    if (CPU_IS_JAMMED) {
+    if (cpu_slow_path && CPU_IS_JAMMED) {
         interrupt_ack_irq(CPU_INT_STATUS);
         CPU_INT_STATUS->global_pending_int &= ~(IK_IRQ | IK_NMI);
         if (CPU_INT_STATUS->global_pending_int & IK_RESET) {
@@ -2377,8 +2409,8 @@ static const uint8_t rewind_fetch_tab[] = {
 #endif
 
 #if !defined(DRIVE_CPU)
-        profiling_clock_start = CLK;
-        if (maincpu_profiling) {
+        if (cpu_slow_path && maincpu_profiling) {
+            profiling_clock_start = CLK;
             profile_sample_start(reg_pc);
         }
 #endif
@@ -2393,16 +2425,10 @@ static const uint8_t rewind_fetch_tab[] = {
          * the value at the original jam location changed to a non-jam, for
          * whatever reason.
          */
-        {
-            static uint8_t lastop;
-            FETCH_OPCODE(opcode);
-            if (!CPU_IS_JAMMED) {
-                /* remember current opcode */
-                lastop = p0;
-            } else {
-                /* set opcode that made the cpu jam */
-                SET_OPCODE(lastop);
-            }
+        FETCH_OPCODE(opcode);
+        if (cpu_slow_path && CPU_IS_JAMMED) {
+            /* set opcode that made the cpu jam (remembered by JAM) */
+            SET_OPCODE(jam_opcode);
         }
 
 #ifdef FEATURE_CPUMEMHISTORY
@@ -2490,6 +2516,7 @@ trap_skipped:
             case 0x42:          /* JAM */
 #endif
                 CPU_IS_JAMMED = 1;
+                jam_opcode = p0;
                 REWIND_FETCH_OPCODE(CLK);
                 JAM();
                 break;

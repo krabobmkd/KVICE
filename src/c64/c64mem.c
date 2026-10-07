@@ -112,6 +112,24 @@ static uint32_t mem_read_limit_tab[NUM_CONFIGS][0x101];
 static store_func_ptr_t mem_write_tab_watch[0x101];
 static read_func_ptr_t mem_read_tab_watch[0x101];
 
+/* Direct access tables for the CPU (LOAD/STORE in c64cpu.c): for each page,
+   a pointer p such as p[addr] is the byte, when the page handler is a plain
+   RAM/ROM access without side effect, else NULL (the handler is called).
+   Built from the handler identity, see mem_direct_tabs_update(). */
+static uint8_t *mem_read_direct_tab[NUM_CONFIGS][0x101];
+static uint8_t *mem_write_direct_tab[NUM_VBANKS][NUM_CONFIGS][0x101];
+/* all NULL: every access calls its handler (watchpoints, before init) */
+static uint8_t *mem_direct_none[0x101];
+
+uint8_t **_mem_read_direct_ptr = mem_direct_none;
+uint8_t **_mem_write_direct_ptr = mem_direct_none;
+
+/* Zero page $02-$ff, for LOAD_ZERO/STORE_ZERO (the page 0 entries above are
+   always NULL: $00/$01 is the CPU port). mem_ram when zero_read() or
+   zero_store() would only access the C64 RAM, else NULL. */
+uint8_t *_mem_zero_read_direct = NULL;
+uint8_t *_mem_zero_write_direct = NULL;
+
 /* Current video bank (0, 1, 2 or 3).  */
 static int vbank;
 
@@ -159,6 +177,96 @@ static void store_watch(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
     mem_write_tab[vbank][mem_config][addr >> 8](addr, value);
 }
 
+/* Direct pointer of a page from its read handler: only the handlers that
+   just return a RAM or ROM byte, on the pages they are made for. Anything
+   else (CPU port, I/O, cartridges, RAM expansions...) keeps its handler. */
+static uint8_t *mem_read_direct_get(int page, read_func_ptr_t f)
+{
+    if (page == 0 || page > 0xff) {
+        return NULL;    /* $00/$01 CPU port, $100 is the wrap entry */
+    }
+    if (f == ram_read) {
+        return mem_ram;
+    }
+    if (f == c64memrom_basic64_read && page >= 0xa0 && page <= 0xbf) {
+        return c64memrom_basic64_rom - 0xa000;
+    }
+    if (f == chargen_read && page >= 0xd0 && page <= 0xdf) {
+        return mem_chargen_rom - 0xd000;
+    }
+    if (f == c64memrom_kernal64_read && page >= 0xe0) {
+        return c64memrom_kernal64_rom - 0xe000;
+    }
+    return NULL;
+}
+
+/* Same for writes: only plain RAM stores. The VIC-II bank, $ffxx (REU
+   trigger) and every other page keep their handler. */
+static uint8_t *mem_write_direct_get(int page, store_func_ptr_t f)
+{
+    if (page == 0 || page > 0xff) {
+        return NULL;
+    }
+    if (f == ram_store) {
+        return mem_ram;
+    }
+    /* $8000-$9fff without cartridge */
+    if (f == raml_no_ultimax_store && page >= 0x80 && page <= 0x9f
+        && cartmem_raml_store_is_ram()) {
+        return mem_ram;
+    }
+    return NULL;
+}
+
+/* rebuild all the direct tables from the handler tables */
+static void mem_direct_tabs_update(void)
+{
+    int i, j, k;
+
+    for (i = 0; i < NUM_CONFIGS; i++) {
+        for (j = 0; j <= 0x100; j++) {
+            mem_read_direct_tab[i][j] = mem_read_direct_get(j, mem_read_tab[i][j]);
+            for (k = 0; k < NUM_VBANKS; k++) {
+                mem_write_direct_tab[k][i][j] = mem_write_direct_get(j, mem_write_tab[k][i][j]);
+            }
+        }
+    }
+}
+
+/* the direct tables for the current config and vbank, none while
+   watchpoints are active (the watch handlers must see every access) */
+static void mem_update_zero_direct_ptrs(int watch)
+{
+    /* zero_read(): the RAM expansions with their own page 0 excepted */
+    _mem_zero_read_direct = (!watch && mem_read_tab[mem_config][0] == zero_read
+                             && !c64_256k_enabled && !plus256k_enabled)
+                            ? mem_ram : NULL;
+    /* zero_store(): only plain RAM outside the VIC-II bank 0 */
+    _mem_zero_write_direct = (!watch && mem_write_tab[vbank][mem_config][0] == zero_store
+                              && vbank != 0)
+                             ? mem_ram : NULL;
+}
+
+static void mem_update_direct_ptrs(int watch)
+{
+    if (watch) {
+        _mem_read_direct_ptr = mem_direct_none;
+        _mem_write_direct_ptr = mem_direct_none;
+    } else {
+        _mem_read_direct_ptr = mem_read_direct_tab[mem_config];
+        _mem_write_direct_ptr = mem_write_direct_tab[vbank][mem_config];
+    }
+    mem_update_zero_direct_ptrs(watch);
+}
+
+/* a cartridge was attached, detached, enabled...: some handlers may stop or
+   start being plain RAM accesses (cartmem_raml_store_is_ram()) */
+void mem_direct_tabs_refresh(void)
+{
+    mem_direct_tabs_update();
+    mem_update_direct_ptrs(watchpoints_active);
+}
+
 /* called by mem_pla_config_changed(), mem_toggle_watchpoints() */
 static void mem_update_tab_ptrs(int flag)
 {
@@ -180,6 +288,7 @@ static void mem_update_tab_ptrs(int flag)
         _mem_read_tab_ptr_dummy = mem_read_tab[mem_config];
         _mem_write_tab_ptr_dummy = mem_write_tab[vbank][mem_config];
     }
+    mem_update_direct_ptrs(flag);
 }
 
 void mem_toggle_watchpoints(int flag, void *context)
@@ -789,12 +898,14 @@ void mem_set_write_hook(int config, int page, store_func_t *f)
 
     for (i = 0; i < NUM_VBANKS; i++) {
         mem_write_tab[i][config][page] = f;
+        mem_write_direct_tab[i][config][page] = mem_write_direct_get(page, f);
     }
 }
 
 void mem_read_tab_set(unsigned int base, unsigned int index, read_func_ptr_t read_func)
 {
     mem_read_tab[base][index] = read_func;
+    mem_read_direct_tab[base][index] = mem_read_direct_get((int)index, read_func);
 }
 
 
@@ -966,6 +1077,10 @@ void mem_initialize_memory(void)
     if (board == BOARD_MAX) {
         mem_limit_max_init();
     }
+
+    /* the handler tables are complete (expansions included) */
+    mem_direct_tabs_update();
+    mem_update_direct_ptrs(watchpoints_active);
 }
 
 void mem_mmu_translate(unsigned int addr, uint8_t **base, int *start, int *limit)
@@ -1003,6 +1118,8 @@ void mem_set_vbank(int new_vbank)
     /* Do not override watchpoints on vbank switches.  */
     if (_mem_write_tab_ptr != mem_write_tab_watch) {
         _mem_write_tab_ptr = mem_write_tab[new_vbank][mem_config];
+        _mem_write_direct_ptr = mem_write_direct_tab[new_vbank][mem_config];
+        mem_update_zero_direct_ptrs(0);
     }
 
     vicii_set_vbank(new_vbank);

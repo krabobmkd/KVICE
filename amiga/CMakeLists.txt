@@ -39,12 +39,20 @@ option(AMIGA_USE_68030 "compile for 68030" ON)
 option(AMIGA_USE_68040 "compile for 68040" OFF)
 option(AMIGA_USE_68060 "compile for 68060" OFF)
 option(VICE_USE_HARDFLOAT "use 6888x/040/060 FPU instructions" OFF)
-option(VICE_AMIGA_TRACE "print startup traces to stdout (arch/amiga/amigatrace.h)" ON)
+option(VICE_AMIGA_TRACE "print startup traces to stdout (arch/amiga/amigatrace.h)" OFF)
 option(VICE_AMIGA_SAVE_ASM "keep the generated assembler (.s) and preprocessed (.i) files next to the objects in the build dir" ON)
+option(VICE_AMIGA_TIME_STATS "measure: print the host time spent in CPU, VIC-II, screen output, SID, sound and waiting every 5 s" OFF)
 option(VICE_AMIGA_DIV64_STATS "measure: print 64 bit divisions per second and their callers every 5 s" OFF)
 
 set(VICE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../src")
-set(VICE_DATA "${CMAKE_CURRENT_SOURCE_DIR}/../data")
+# ROMs and data files of VICE 3.10 (C64/, DRIVES/...): ../data when copied
+# there from an official VICE 3.10 archive, else the vice-3.10 source tree
+# next to KVICE
+set(VICE_DATA_DEFAULT "${CMAKE_CURRENT_SOURCE_DIR}/../data")
+if(NOT EXISTS "${VICE_DATA_DEFAULT}" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../vice-3.10/data")
+	set(VICE_DATA_DEFAULT "${CMAKE_CURRENT_SOURCE_DIR}/../../vice-3.10/data")
+endif()
+set(VICE_DATA "${VICE_DATA_DEFAULT}" CACHE PATH "VICE 3.10 data dir: ROMs in C64/, DRIVES/...")
 set(COMMONLIBS "${CMAKE_CURRENT_SOURCE_DIR}/../../amigacommonlibs")
 
 # "cmake --install ." or "make install": a runnable folder to copy to the Amiga.
@@ -72,6 +80,8 @@ endif()
 
 # zlib from amigacommonlibs (target: z)
 add_subdirectory(${COMMONLIBS}/zlib zlib EXCLUDE_FROM_ALL)
+# amigacommonlibs compiles zlib with -O2: added after it, the last -O wins
+target_compile_options(z PRIVATE -O3)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/vice_common_sources.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/x64_sources.cmake)
@@ -88,6 +98,8 @@ set(VICE_AMIGA_EXCLUDED_SRC
 	${VICE_SRC}/arch/shared/socketdrv/socketdrv.c	# no HAVE_NETWORK (bsdsocket.library later)
 	${VICE_SRC}/gfxoutputdrv/ffmpegexedrv.c		# needs an external ffmpeg process + sockets
 	${VICE_SRC}/vicii/vicii-clock-stretch.c		# x128 only, never linked in x64
+	${VICE_SRC}/drive/drive-sound.c			# floppy noise samples: arch/amiga/amiga_nosoundfx.c
+	${VICE_SRC}/datasette/datasette-sound.c		# datasette sound: arch/amiga/amiga_nosoundfx.c
 )
 foreach(list_name VICE_COMMON_SRC VICE_X64_SRC VICE_XVIC_SRC VICE_XPLUS4_SRC VICE_XPET_SRC VICE_C1541_SRC)
 	list(REMOVE_ITEM ${list_name} ${VICE_AMIGA_EXCLUDED_SRC})
@@ -108,6 +120,7 @@ list(APPEND VICE_COMMON_SRC
 	${VICE_SRC}/arch/amiga/amigaaction.c
 	${VICE_SRC}/arch/amiga/amigamenu.c
 	${VICE_SRC}/arch/amiga/amigamui.c
+	${VICE_SRC}/arch/amiga/amigakeys.c
 	${VICE_SRC}/arch/amiga/amigafile.c
 	${VICE_SRC}/arch/amiga/amiga_cgxscale.c
 	${VICE_SRC}/arch/amiga/amiga_planarscale.c
@@ -115,6 +128,10 @@ list(APPEND VICE_COMMON_SRC
 	# replaces the slow libgcc (68000 multilib) 64 bit divisions
 	${VICE_SRC}/arch/amiga/amiga_div64.c
 	${VICE_SRC}/arch/amiga/amiga_propjoy.c
+	# empty drive and datasette sound effects
+	${VICE_SRC}/arch/amiga/amiga_nosoundfx.c
+	# measurement build (VICE_AMIGA_TIME_STATS), empty otherwise
+	${VICE_SRC}/arch/amiga/amiga_timestats.c
 )
 
 set(VICE_INCLUDE_DIRS
@@ -176,6 +193,9 @@ function(vice_amiga_setup_target target)
 	target_compile_definitions(${target} PRIVATE HAVE_CONFIG_H=1)
 	if(VICE_AMIGA_DIV64_STATS)
 		target_compile_definitions(${target} PRIVATE VICE_AMIGA_DIV64_STATS=1)
+	endif()
+	if(VICE_AMIGA_TIME_STATS)
+		target_compile_definitions(${target} PRIVATE VICE_AMIGA_TIME_STATS=1)
 	endif()
 	if(VICE_AMIGA_TRACE)
 		target_compile_definitions(${target} PRIVATE VICE_AMIGA_TRACE=1)

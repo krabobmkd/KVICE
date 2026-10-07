@@ -39,6 +39,7 @@
 #include "archdep.h"
 #include "c64.h"
 #include "c64cart.h"
+#include "c64mem.h"
 #define CARTRIDGE_INCLUDE_SLOTMAIN_API
 #include "c64cartsystem.h"
 #undef CARTRIDGE_INCLUDE_SLOTMAIN_API
@@ -1156,6 +1157,7 @@ int cartridge_attach_image(int type, const char *filename)
     if (cart_is_slotmain(cartid)) {
         DBG(("cartridge_attach MAIN ID: %d\n", cartid));
         mem_cartridge_type = cartid;
+        mem_direct_tabs_refresh();
         cart_romhbank_set_slotmain(0);
         cart_romlbank_set_slotmain(0);
     } else {
@@ -1236,6 +1238,7 @@ void cart_detach_slotmain(void)
 
         /* reset "Main Slot" */
         mem_cartridge_type = CARTRIDGE_NONE;
+        mem_direct_tabs_refresh();
         c64cart_type = CARTRIDGE_NONE;
         crttype = CARTRIDGE_NONE;
         if (cartfile) {

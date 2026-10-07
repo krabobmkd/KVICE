@@ -1369,6 +1369,14 @@ void roml_no_ultimax_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1
       must NOT be called by any functions called here, as this will cause an
       endless loop
 */
+/* 1 when raml_no_ultimax_store() only stores to the C64 RAM: no main slot
+   cartridge, no Expert cartridge (c64mem.c direct write tables, rebuilt by
+   mem_direct_tabs_refresh() when one of them changes) */
+int cartmem_raml_store_is_ram(void)
+{
+    return mem_cartridge_type == CARTRIDGE_NONE && !expert_cart_enabled();
+}
+
 void raml_no_ultimax_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     /* DBG(("game ram    w 8000: %04x %02x\n", addr, value)); */

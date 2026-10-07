@@ -41,7 +41,7 @@
 #define UD_IS_ACTION(ud) ((ULONG)(ud) > 0xFFFF)
 #define UD_ACTION(ud) ((((ULONG)(ud)) >> 16) - 1)
 
-#define MENU_TEMPLATE_MAX 32
+#define MENU_TEMPLATE_MAX 40
 
 /* nm_MutualExclude of 3 sibling radio items: each excludes the 2 others */
 #define MX3(i) (7 & ~(1 << (i)))
@@ -99,6 +99,10 @@ static void buildMenuTemplate(void)
     ADD(NM_SUB,   NULL, 0, CHECKIT, MX3(0), ACTION_UD(AMIGA_ACTION_BORDERS_FULL));
     ADD(NM_SUB,   NULL, 0, CHECKIT, MX3(1), ACTION_UD(AMIGA_ACTION_BORDERS_HALF));
     ADD(NM_SUB,   NULL, 0, CHECKIT, MX3(2), ACTION_UD(AMIGA_ACTION_BORDERS_NONE));
+
+    ADD(NM_TITLE, NULL, 0, 0, 0, MSG_MENU_SNAPSHOT);
+    ADD(NM_ITEM,  NULL, "L", 0, 0, ACTION_UD(AMIGA_ACTION_SNAPSHOT_LOAD));
+    ADD(NM_ITEM,  NULL, "W", 0, 0, ACTION_UD(AMIGA_ACTION_SNAPSHOT_SAVE));
 
     ADD(NM_END, NULL, 0, 0, 0, 0);
 }

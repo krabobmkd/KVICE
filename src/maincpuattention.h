@@ -1,8 +1,8 @@
 /** \file   maincpuattention.h
  * \brief   Main CPU "attention" flags: the rare per opcode work
  *
- * The main CPU loop checks some rarely set flags after each opcode: the
- * profiler, autostart, the CP/M cartridge Z80, the cycle limit. Each flag is
+ * The main CPU loop checks some rarely set flags around each opcode: the
+ * profiler, autostart, the CP/M cartridge Z80, the jammed CPU. Each flag is
  * one byte of a single 32 bit word, so the loop does one test of the word
  * (any) instead of one test or function call per flag. The flags are
  * written as plain variables through the macros below (profiler.h,
@@ -39,9 +39,9 @@ typedef union maincpu_attention_u {
     uint32_t any;           /* != 0 when at least one flag is set */
     struct {
         uint8_t profiling;  /* monitor profiler running */
-        uint8_t autostart;  /* autostart enabled, autostart_advance() */
+        uint8_t autostart;  /* autostart in progress: autostart_advance() */
         uint8_t z80;        /* CP/M cartridge Z80 running */
-        uint8_t clk_limit;  /* maincpu_clk_limit != 0 */
+        uint8_t jammed;     /* CPU jammed (JAM opcode): CPU_IS_JAMMED */
     } flags;
 } maincpu_attention_t;
 

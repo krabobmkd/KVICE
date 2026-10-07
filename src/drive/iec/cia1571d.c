@@ -158,7 +158,7 @@ int mos5710_dump(diskunit_context_t *ctxptr, uint16_t addr)
     return 0;
 }
 
-static void cia_set_int_clk(cia_context_t *cia_context, int value, CLOCK clk)
+static void cia_set_int_clk(cia_context_t *cia_context PARAMREG(a0), int value PARAMREG(a1), CLOCK clk PARAMREG(d0))
 {
     diskunit_context_t *dc;
 
@@ -168,7 +168,7 @@ static void cia_set_int_clk(cia_context_t *cia_context, int value, CLOCK clk)
                       value, clk);
 }
 
-static void cia_restore_int(cia_context_t *cia_context, int value)
+static void cia_restore_int(cia_context_t *cia_context PARAMREG(a0), int value PARAMREG(d0))
 {
     diskunit_context_t *dc;
 
@@ -182,11 +182,11 @@ static void cia_restore_int(cia_context_t *cia_context, int value)
  * Hardware binding
  */
 
-static void do_reset_cia(cia_context_t *cia_context)
+static void do_reset_cia(cia_context_t *cia_context PARAMREG(a0))
 {
 }
 
-static void pulse_ciapc(cia_context_t *cia_context, CLOCK rclk)
+static void pulse_ciapc(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0))
 {
     drivecia1571_context_t *ciap;
 
@@ -197,26 +197,11 @@ static void pulse_ciapc(cia_context_t *cia_context, CLOCK rclk)
     }
 }
 
-static void undump_ciapa(cia_context_t *cia_context, CLOCK rclk, uint8_t byte)
+static void undump_ciapa(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), uint8_t byte PARAMREG(d2))
 {
 }
 
-static void undump_ciapb(cia_context_t *cia_context, CLOCK rclk, uint8_t byte)
-{
-    drivecia1571_context_t *ciap;
-
-    ciap = (drivecia1571_context_t *)(cia_context->prv);
-
-    if (ciap->diskunit->parallel_cable == DRIVE_PC_STANDARD) {
-        parallel_cable_drive_write(DRIVE_PC_STANDARD, byte, PARALLEL_WRITE, ciap->number);
-    }
-}
-
-static void store_ciapa(cia_context_t *cia_context, CLOCK rclk, uint8_t byte)
-{
-}
-
-static void store_ciapb(cia_context_t *cia_context, CLOCK rclk, uint8_t byte)
+static void undump_ciapb(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), uint8_t byte PARAMREG(d2))
 {
     drivecia1571_context_t *ciap;
 
@@ -227,13 +212,28 @@ static void store_ciapb(cia_context_t *cia_context, CLOCK rclk, uint8_t byte)
     }
 }
 
-static uint8_t read_ciapa(cia_context_t *cia_context)
+static void store_ciapa(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), uint8_t byte PARAMREG(d2))
+{
+}
+
+static void store_ciapb(cia_context_t *cia_context PARAMREG(a0), CLOCK rclk PARAMREG(d0), uint8_t byte PARAMREG(d2))
+{
+    drivecia1571_context_t *ciap;
+
+    ciap = (drivecia1571_context_t *)(cia_context->prv);
+
+    if (ciap->diskunit->parallel_cable == DRIVE_PC_STANDARD) {
+        parallel_cable_drive_write(DRIVE_PC_STANDARD, byte, PARALLEL_WRITE, ciap->number);
+    }
+}
+
+static uint8_t read_ciapa(cia_context_t *cia_context PARAMREG(a0))
 {
     return (uint8_t)((0xff & ~(cia_context->c_cia[CIA_DDRA]))
             | (cia_context->c_cia[CIA_PRA] & cia_context->c_cia[CIA_DDRA]));
 }
 
-static uint8_t read_ciapb(cia_context_t *cia_context)
+static uint8_t read_ciapb(cia_context_t *cia_context PARAMREG(a0))
 {
     drivecia1571_context_t *ciap;
     uint8_t byte = 0xff;
@@ -248,15 +248,15 @@ static uint8_t read_ciapb(cia_context_t *cia_context)
             | (cia_context->c_cia[CIA_PRB] & cia_context->c_cia[CIA_DDRB]));
 }
 
-static void read_ciaicr(cia_context_t *cia_context)
+static void read_ciaicr(cia_context_t *cia_context PARAMREG(a0))
 {
 }
 
-static void read_sdr(cia_context_t *cia_context)
+static void read_sdr(cia_context_t *cia_context PARAMREG(a0))
 {
 }
 
-static void store_sdr(cia_context_t *cia_context, uint8_t byte)
+static void store_sdr(cia_context_t *cia_context PARAMREG(a0), uint8_t byte PARAMREG(d0))
 {
     drivecia1571_context_t *cia1571p;
 

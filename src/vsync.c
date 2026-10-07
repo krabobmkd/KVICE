@@ -69,6 +69,7 @@
 #include "types.h"
 #include "videoarch.h"
 #include "vsync.h"
+#include "timestats.h"
 #include "vsyncapi.h"
 
 #include "ui.h"
@@ -515,7 +516,20 @@ static void update_performance_metrics(tick_t frame_tick)
     }
 }
 
+#ifdef VICE_AMIGA_TIME_STATS
+static void vsync_do_end_of_line_(void);
+
 void vsync_do_end_of_line(void)
+{
+    TIMESTATS_ENTER(TSTAT_VSYNC);
+    vsync_do_end_of_line_();
+    TIMESTATS_LEAVE();
+}
+
+static void vsync_do_end_of_line_(void)
+#else
+void vsync_do_end_of_line(void)
+#endif
 {
     const int microseconds_between_sync = 2 * 1000;
 
@@ -546,6 +560,27 @@ void vsync_do_end_of_line(void)
 
         return;
     }
+
+    /* -limitcycles: once per line instead of after each opcode in the main
+       CPU loop, the exit is at most one line late */
+    if (maincpu_clk_limit && main_cpu_clock > maincpu_clk_limit) {
+        log_error(LOG_DEFAULT, "cycle limit reached.");
+        archdep_vice_exit(1);
+    }
+
+#if defined(AMIGA_COMPILE) || defined(KVICE_LINUX)
+    /* Amiga (and the KVICE Linux profiling build, to measure the same
+       thing): the sound flush and the sync below every 16 lines (about 1 ms)
+       instead of each line, a host clock read and a sound flush cost about
+       the same for 1 line or 16 */
+    {
+        static unsigned int amiga_line_count = 0;
+
+        if ((++amiga_line_count & 15) != 0) {
+            return;
+        }
+    }
+#endif
 
     /* deal with any accumulated sound immediately */
     tick_based_sync_timing = sound_flush();
@@ -696,7 +731,20 @@ bool vsync_should_skip_frame(struct video_canvas_s *canvas)
 }
 
 /* This is called at the end of each screen frame. */
+#ifdef VICE_AMIGA_TIME_STATS
+static void vsync_do_vsync_(struct video_canvas_s *c);
+
 void vsync_do_vsync(struct video_canvas_s *c)
+{
+    TIMESTATS_ENTER(TSTAT_VSYNC);
+    vsync_do_vsync_(c);
+    TIMESTATS_LEAVE();
+}
+
+static void vsync_do_vsync_(struct video_canvas_s *c)
+#else
+void vsync_do_vsync(struct video_canvas_s *c)
+#endif
 {
     static tick_t last_vsync;
 

@@ -47,6 +47,15 @@ int amiga_video_get_scale(void);
 void amiga_video_set_borders(int mode);
 int amiga_video_get_borders(void);
 
+/* "no rom" state: the emulator screen shows "(no rom)", the emulated
+   screen is not drawn */
+void amiga_video_show_no_rom(int on);
+
+/* around a requester or the settings window opened on the Workbench (or
+   default public) screen: shown in front of the fullscreen, then back */
+void amiga_video_requester_begin(void);
+void amiga_video_requester_end(void);
+
 /* window <-> fullscreen (F10, Display menu): done at the next event round */
 void amiga_video_set_fullscreen(int on);
 int amiga_video_is_fullscreen(void);

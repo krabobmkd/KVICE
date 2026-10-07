@@ -9,6 +9,12 @@
  *   uint8_t ram_read(uint16_t addr PARAMREG(d0));
  *   void ram_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
  *
+ * The CIA code (cia.h, ciacore.c and the cia_context callbacks) uses:
+ * cia_context in a0, a CLOCK in d0 (the d0:d1 pair), a small parameter in
+ * d0, or after a CLOCK: a1 for an int, d2 for a uint8_t or bool (address
+ * registers can not hold bytes; d2 is saved by the callee when it changes
+ * it).
+ *
  * The prototype, the definition and the function type must all agree, gcc
  * does not check what is stored in a table: a handler without PARAMREG()
  * would silently read its parameters from the stack. Check build: compile

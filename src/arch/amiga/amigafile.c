@@ -41,7 +41,9 @@
 /* drawer of the last chosen file, the next requester opens there */
 static char last_drawer[ARCHDEP_PATH_MAX] = "";
 
-char *amiga_file_request(struct Window *window, const char *title, const char *pattern)
+/* load (open) or save requester */
+static char *file_request(struct Window *window, const char *title, const char *pattern,
+                          BOOL save)
 {
     struct FileRequester *req;
     char *path = NULL;
@@ -55,6 +57,7 @@ char *amiga_file_request(struct Window *window, const char *title, const char *p
             ASLFR_InitialPattern, (ULONG)(pattern != NULL ? pattern : "#?"),
             ASLFR_DoPatterns, TRUE,
             ASLFR_RejectIcons, TRUE,
+            ASLFR_DoSaveMode, save,
             window != NULL ? ASLFR_Window : TAG_IGNORE, (ULONG)window,
             /* block the emulator window input while the requester is open */
             window != NULL ? ASLFR_SleepWindow : TAG_IGNORE, TRUE,
@@ -74,6 +77,16 @@ char *amiga_file_request(struct Window *window, const char *title, const char *p
     }
     FreeAslRequest(req);
     return path;
+}
+
+char *amiga_file_request(struct Window *window, const char *title, const char *pattern)
+{
+    return file_request(window, title, pattern, FALSE);
+}
+
+char *amiga_file_save_request(struct Window *window, const char *title, const char *pattern)
+{
+    return file_request(window, title, pattern, TRUE);
 }
 
 char *amiga_drawer_request(struct Window *window, const char *title, const char *initial)

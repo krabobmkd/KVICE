@@ -82,6 +82,7 @@
 #include "vicii-resources.h"
 #include "vicii-timing.h"
 #include "vicii.h"
+#include "timestats.h"
 #include "viciitypes.h"
 #include "vsync.h"
 #include "video.h"
@@ -1213,7 +1214,20 @@ void vicii_update_video_mode(unsigned int cycle)
 
 /* Redraw the current raster line.  This happens at cycle VICII_DRAW_CYCLE
    of each line.  */
+#ifdef VICE_AMIGA_TIME_STATS
+static void vicii_raster_draw_alarm_handler_(CLOCK offset, void *data);
+
 void vicii_raster_draw_alarm_handler(CLOCK offset, void *data)
+{
+    TIMESTATS_ENTER(TSTAT_VIC_LINE);
+    vicii_raster_draw_alarm_handler_(offset, data);
+    TIMESTATS_LEAVE();
+}
+
+static void vicii_raster_draw_alarm_handler_(CLOCK offset, void *data)
+#else
+void vicii_raster_draw_alarm_handler(CLOCK offset, void *data)
+#endif
 {
     uint8_t prev_sprite_sprite_collisions;
     uint8_t prev_sprite_background_collisions;
@@ -1240,7 +1254,9 @@ void vicii_raster_draw_alarm_handler(CLOCK offset, void *data)
 
     vicii_sprites_reset_xshift();
 
+    TIMESTATS_ENTER(TSTAT_VIC_DRAW);
     raster_line_emulate(&vicii.raster);
+    TIMESTATS_LEAVE();
 
 #if 0
     if (vicii.raster.current_line >= 60 && vicii.raster.current_line <= 60) {

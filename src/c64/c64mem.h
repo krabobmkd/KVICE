@@ -63,6 +63,16 @@ void mem_set_tape_motor_in(int val);
 
 extern uint8_t mem_chargen_rom[C64_CHARGEN_ROM_SIZE];
 
+/* Direct access tables of the current config, for the CPU: page pointer for
+   a plain RAM/ROM page, NULL when the handler must be called (c64mem.c) */
+extern uint8_t **_mem_read_direct_ptr;
+extern uint8_t **_mem_write_direct_ptr;
+/* zero page $02-$ff: mem_ram or NULL */
+extern uint8_t *_mem_zero_read_direct;
+extern uint8_t *_mem_zero_write_direct;
+/* to call when a cartridge is attached, detached, enabled or disabled */
+void mem_direct_tabs_refresh(void);
+
 void mem_set_write_hook(int config, int page, store_func_t *f);
 void mem_read_tab_set(unsigned int base, unsigned int index, read_func_ptr_t read_func);
 void mem_read_base_set(unsigned int base, unsigned int index, uint8_t *mem_ptr);

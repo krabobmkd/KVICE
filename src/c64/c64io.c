@@ -32,6 +32,7 @@
 
 #include "archdep.h"
 #include "cartio.h"
+#include "timestats.h"
 #include "cartridge.h"
 #include "cmdline.h"
 #include "lib.h"
@@ -292,7 +293,23 @@ static void io_source_log_collisions(uint16_t addr, int amount, io_source_list_t
     }
 }
 
+#ifdef VICE_AMIGA_TIME_STATS
+static inline uint8_t io_read_(io_source_list_t *list, uint16_t addr);
+
 static inline uint8_t io_read(io_source_list_t *list, uint16_t addr)
+{
+    uint8_t r;
+
+    TIMESTATS_ENTER(TSTAT_IO);
+    r = io_read_(list, addr);
+    TIMESTATS_LEAVE();
+    return r;
+}
+
+static inline uint8_t io_read_(io_source_list_t *list, uint16_t addr)
+#else
+static inline uint8_t io_read(io_source_list_t *list, uint16_t addr)
+#endif
 {
     io_source_list_t *current = list->next;
     int io_source_counter = 0;
@@ -390,7 +407,20 @@ static inline uint8_t io_peek(io_source_list_t *list, uint16_t addr)
     return vicii_read_phi1();
 }
 
+#ifdef VICE_AMIGA_TIME_STATS
+static inline void io_store_(io_source_list_t *list, uint16_t addr, uint8_t value);
+
 static inline void io_store(io_source_list_t *list, uint16_t addr, uint8_t value)
+{
+    TIMESTATS_ENTER(TSTAT_IO);
+    io_store_(list, addr, value);
+    TIMESTATS_LEAVE();
+}
+
+static inline void io_store_(io_source_list_t *list, uint16_t addr, uint8_t value)
+#else
+static inline void io_store(io_source_list_t *list, uint16_t addr, uint8_t value)
+#endif
 {
     int writes = 0;
     uint16_t addy = 0xffff;

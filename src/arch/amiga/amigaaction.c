@@ -41,8 +41,15 @@
 #include "resources.h"
 #include "vsync.h"
 #include "archdep_exit.h"
+#include "interrupt.h"
 #include "log.h"
+#include "sound.h"
 #include "ui.h"
+#include "util.h"
+
+#include <string.h>
+#include <intuition/intuition.h>
+#include <proto/intuition.h>
 
 /* Display settings, drafted: window resizing is not implemented yet.
  * TODO: turn them into VICE resources so they are saved in vicerc. */
@@ -59,7 +66,12 @@
 /* ask a file name: the emulation is frozen meanwhile */
 static char *request_file(ULONG title_msg, const char *pattern)
 {
-    char *path = amiga_file_request(amiga_video_window(), LOC(title_msg), pattern);
+    char *path;
+
+    /* from the fullscreen: the requester screen in front, then back */
+    amiga_video_requester_begin();
+    path = amiga_file_request(amiga_video_window(), LOC(title_msg), pattern);
+    amiga_video_requester_end();
 
     /* the time spent in the requester must not count as emulation lag */
     vsync_suspend_speed_eval();
@@ -140,7 +152,9 @@ static BOOL Action_Drive8Drawer(void)
     char *path;
 
     resources_get_string("FSDevice8Dir", &current);
+    amiga_video_requester_begin();
     path = amiga_drawer_request(amiga_video_window(), LOC(MSG_REQ_DRAWER8), current);
+    amiga_video_requester_end();
     vsync_suspend_speed_eval();
     if (path == NULL) {
         return FALSE;
@@ -259,6 +273,105 @@ static int Checked_BordersNone(void) { return amiga_video_get_borders() == AMIGA
 
 /* ------------------------------------------------------------------------- */
 
+/* ------------------------------------------------------------------------- */
+/* Snapshot menu: the whole machine state in a .vsf file */
+
+#define PATTERN_SNAPSHOT "#?.vsf"
+
+/* a snapshot error in a requester (on the requester screen in fullscreen) */
+static void snapshot_error(ULONG format_msg, const char *path)
+{
+    struct EasyStruct es;
+    ULONG args[1];
+
+    es.es_StructSize = sizeof es;
+    es.es_Flags = 0;
+    es.es_Title = (UBYTE *)LOC(MSG_WINDOW_TITLE);
+    es.es_TextFormat = (UBYTE *)LOC(format_msg);
+    es.es_GadgetFormat = (UBYTE *)LOC(MSG_ERROR_OK);
+    args[0] = (ULONG)path;
+    log_error(LOG_DEFAULT, "snapshot: cannot %s `%s'.",
+              format_msg == MSG_ERROR_SNAPSHOT_LOAD ? "load" : "save", path);
+    amiga_video_requester_begin();
+    EasyRequestArgs(amiga_video_window(), &es, NULL, args);
+    amiga_video_requester_end();
+}
+
+/* CPU traps: between two instructions, the machine state is consistent.
+ * data: the lib_malloc'd file name, freed here. */
+static void snapshot_load_trap(uint16_t addr, void *data)
+{
+    char *path = (char *)data;
+
+    vsync_suspend_speed_eval();
+    sound_suspend();
+    if (machine_read_snapshot(path, 0) < 0) {
+        snapshot_error(MSG_ERROR_SNAPSHOT_LOAD, path);
+    }
+    lib_free(path);
+}
+
+static void snapshot_save_trap(uint16_t addr, void *data)
+{
+    char *path = (char *)data;
+
+    vsync_suspend_speed_eval();
+    sound_suspend();
+    /* the attached disk images in the snapshot (their state is part of the
+     * machine), not the ROMs (always there) */
+    if (machine_write_snapshot(path, 0, 1, 0) < 0) {
+        snapshot_error(MSG_ERROR_SNAPSHOT_SAVE, path);
+    }
+    lib_free(path);
+}
+
+/* at the next instruction, or now when paused (the CPU is already stopped
+ * between two instructions) */
+static void snapshot_run(void (*trap)(uint16_t, void *), char *path)
+{
+    if (ui_pause_active()) {
+        trap(0, path);
+    } else {
+        interrupt_maincpu_trigger_trap(trap, path);
+    }
+}
+
+static BOOL Action_SnapshotLoad(void)
+{
+    char *path = request_file(MSG_REQ_SNAPSHOT_LOAD, PATTERN_SNAPSHOT);
+
+    if (path == NULL) {
+        return FALSE;
+    }
+    snapshot_run(snapshot_load_trap, path);
+    return TRUE;
+}
+
+static BOOL Action_SnapshotSave(void)
+{
+    char *path;
+    size_t len;
+
+    amiga_video_requester_begin();
+    path = amiga_file_save_request(amiga_video_window(), LOC(MSG_REQ_SNAPSHOT_SAVE),
+                                   PATTERN_SNAPSHOT);
+    amiga_video_requester_end();
+    vsync_suspend_speed_eval();
+    if (path == NULL) {
+        return FALSE;
+    }
+    /* the requester pattern only shows .vsf files: add the extension */
+    len = strlen(path);
+    if (len < 4 || util_strcasecmp(path + len - 4, ".vsf") != 0) {
+        char *named = util_concat(path, ".vsf", NULL);
+
+        lib_free(path);
+        path = named;
+    }
+    snapshot_run(snapshot_save_trap, path);
+    return TRUE;
+}
+
 /* MUST stay in the ACTION_* order */
 static AmigaAction s_actions[AMIGA_ACTION_COUNT] = {
     /* AMIGA_ACTION_AUTOSTART       */ { Action_Autostart,     NULL,                  MSG_AUTOSTART,       NULL },
@@ -278,7 +391,9 @@ static AmigaAction s_actions[AMIGA_ACTION_COUNT] = {
     /* AMIGA_ACTION_WINDOW_SIZE_3X3 */ { Action_WindowSize3x3, Checked_WindowSize3x3, MSG_WINDOW_SIZE_3X3, NULL },
     /* AMIGA_ACTION_BORDERS_FULL    */ { Action_BordersFull,   Checked_BordersFull,   MSG_BORDERS_FULL,    NULL },
     /* AMIGA_ACTION_BORDERS_HALF    */ { Action_BordersHalf,   Checked_BordersHalf,   MSG_BORDERS_HALF,    NULL },
-    /* AMIGA_ACTION_BORDERS_NONE    */ { Action_BordersNone,   Checked_BordersNone,   MSG_BORDERS_NONE,    NULL }
+    /* AMIGA_ACTION_BORDERS_NONE    */ { Action_BordersNone,   Checked_BordersNone,   MSG_BORDERS_NONE,    NULL },
+    /* AMIGA_ACTION_SNAPSHOT_LOAD   */ { Action_SnapshotLoad,  NULL,                  MSG_SNAPSHOT_LOAD,   NULL },
+    /* AMIGA_ACTION_SNAPSHOT_SAVE   */ { Action_SnapshotSave,  NULL,                  MSG_SNAPSHOT_SAVE,   NULL }
 };
 
 void AmigaAction_Init(void)

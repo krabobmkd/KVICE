@@ -44,6 +44,7 @@
 #include "sid-snapshot.h"
 #include "sid.h"
 #include "sound.h"
+#include "timestats.h"
 #include "snapshot.h"
 #include "types.h"
 
@@ -251,7 +252,9 @@ static uint32_t sidreadclocks[9];
 static vreal_t lowPassParam[0x800];
 static vreal_t bandPassParam[0x800];
 static vreal_t filterResTable[16];
+#ifndef FIXPOINT_ARITHMETIC
 static const float filterRefFreq = 44100.0;
+#endif
 static signed char ampMod1x8[256];
 
 /* manage temporary buffers. if the requested size is smaller or equal to the
@@ -885,7 +888,19 @@ static int fastsid_calculate_samples(sound_t *psid, float *pbuf, int nr, CLOCK *
     return nr;
 }
 #else
+static int fastsid_calculate_samples_(sound_t *psid, int16_t *pbuf, int nr, int interleave);
+
 static int fastsid_calculate_samples(sound_t *psid, int16_t *pbuf, int nr, int interleave, CLOCK *delta_t)
+{
+    int n;
+
+    TIMESTATS_ENTER(TSTAT_SID);
+    n = fastsid_calculate_samples_(psid, pbuf, nr, interleave);
+    TIMESTATS_LEAVE();
+    return n;
+}
+
+static int fastsid_calculate_samples_(sound_t *psid, int16_t *pbuf, int nr, int interleave)
 {
     int i;
     int16_t *tmp_buf;
@@ -905,6 +920,62 @@ static int fastsid_calculate_samples(sound_t *psid, int16_t *pbuf, int nr, int i
 }
 #endif
 
+#ifdef FIXPOINT_ARITHMETIC
+/* Integer only version (no float math on the Amiga): the same tables as the
+   float version below, in vreal_t (FIXPOINT_PREC bits). Note the float
+   version can not be used with an integer vreal_t: its loop counter is a
+   vreal_t, rk / 2048 is then always 0 and every cutoff gives the same
+   filter. */
+static void init_filter(sound_t *psid, int freq)
+{
+    int k;
+    /* 400^(k / 2048) in 8.24 fixed point, multiplied by 400^(1 / 2048)
+       (2.30 fixed point) at each step */
+    uint64_t v = (uint64_t)1 << 24;
+    const uint64_t step = 1076887676;
+    const uint64_t c005 = ((uint64_t)5 << 24) / 100;
+
+    psid->filterValue = 0;
+    psid->filterType = 0;
+    psid->filterCurType = 0;
+    psid->filterDy = 0;
+    psid->filterResDy = 0;
+
+    /* low pass: ((400^(k / 2048) / 60) + 0.05) * 44100 / freq, kept in
+       [0.01, 1.0] */
+    for (k = 0; k < 0x800; k++) {
+        vreal_t h = (vreal_t)((((v / 60) + c005) * 44100 / (unsigned int)freq) >> (24 - FIXPOINT_PREC));
+
+        if (h < REAL_VALUE(0.01)) {
+            h = REAL_VALUE(0.01);
+        }
+        if (h > REAL_VALUE(1.0)) {
+            h = REAL_VALUE(1.0);
+        }
+        lowPassParam[k] = h;
+        v = (v * step + (1 << 29)) >> 30;
+    }
+
+    /* band pass: (0.002 + k * (0.22 - 0.002) / 2048) * 44100 / freq, the
+       4096 of FIXPOINT_PREC is in the constants */
+#if FIXPOINT_PREC != 12
+#error "fastsid band pass table: FIXPOINT_PREC must be 12"
+#endif
+    for (k = 0; k < 0x800; k++) {
+        bandPassParam[k] = (vreal_t)((4096 + 218 * k) * 441 / (5 * freq));
+    }
+
+    /* resonance: from 2.0 down to 1.0 */
+    for (k = 0; k < 16; k++) {
+        filterResTable[k] = REAL_VALUE(2) - (k * REAL_VALUE(1) + 14) / 15;
+    }
+
+    /* XXX: if psid->emulatefilter = 0, ampMod1x8 is never referenced */
+    for (k = 0; k < 256; k++) {
+        ampMod1x8[k] = (signed char)(psid->emulatefilter ? (k - 0x80) * 7 / 10 : k - 0x80);
+    }
+}
+#else
 static void init_filter(sound_t *psid, int freq)
 {
     uint16_t uk;
@@ -973,6 +1044,7 @@ static void init_filter(sound_t *psid, int freq)
         ampMod1x8[uk] = (signed char)((si - 0x80) * filterAmpl);
     }
 }
+#endif
 
 /* SID initialization routine */
 static sound_t *fastsid_open(uint8_t *sidstate)

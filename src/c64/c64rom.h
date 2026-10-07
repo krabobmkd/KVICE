@@ -106,5 +106,6 @@ int c64rom_print_kernal_info(void);
 int c64rom_print_basic_info(void);
 
 int c64rom_isloaded(void);
+int c64rom_all_loaded(void);
 
 #endif

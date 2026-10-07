@@ -35,6 +35,7 @@
 #   include <stdlib.h>
 #   include <unistd.h>
 #   include "amigawait.h"
+#include "timestats.h"
 #   include <exec/types.h>
 #   include <devices/timer.h>
 #   include <exec/execbase.h>
@@ -188,7 +189,9 @@ static inline void sleep_impl(tick_t sleep_ticks)
 {
     tick_t start = tick_now();
 
+    TIMESTATS_ENTER(TSTAT_WAIT);
     amiga_wait_until(start + sleep_ticks);
+    TIMESTATS_LEAVE();
     amiga_slept_ticks += tick_now() - start;
 }
 #elif defined(HAVE_NANOSLEEP)

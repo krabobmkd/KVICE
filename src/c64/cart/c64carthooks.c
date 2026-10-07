@@ -4540,5 +4540,6 @@ fail:
     }
 fail2:
     mem_cartridge_type = CARTRIDGE_NONE; /* Failed to load cartridge! */
+    mem_direct_tabs_refresh();
     return -1;
 }

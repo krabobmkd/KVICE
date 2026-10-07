@@ -42,6 +42,7 @@ uint8_t ultimax_romh_read_hirom(uint16_t addr PARAMREG(d0));
 void romh_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
 void roml_no_ultimax_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
 void raml_no_ultimax_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+int cartmem_raml_store_is_ram(void);
 void romh_no_ultimax_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
 void ramh_no_ultimax_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
 

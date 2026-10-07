@@ -36,6 +36,9 @@ void amiga_settings_open(void);
 void amiga_mui_handle_events(void);
 /* free MUI resources, safe to call more than once */
 void amiga_mui_close_all(void);
+/* "no rom" state: when ROMs are missing, show "(no rom)", open the settings
+   and handle the UI until they are all loaded (called before the CPU loop) */
+void amiga_wait_for_roms(void);
 
 extern ULONG mui_sigs;
 
