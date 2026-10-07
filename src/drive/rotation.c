@@ -1143,9 +1143,21 @@ static void rotation_1541_simple(drive_t *dptr)
  ******************************************************************************/
 void rotation_rotate_disk(drive_t *dptr)
 {
+    rotation_t *rptr = &rotation[dptr->diskunit->mynumber];
+
     if ((dptr->byte_ready_active & BRA_MOTOR_ON) == 0) {
         dptr->req_ref_cycles = 0;
         return;
+    }
+
+    /* drive_cpu_trigger_reset() sets the drive clock back to 0 at once, the
+       rotation is only reset when the drive CPU executes that reset. In
+       between (a reset from a UI action in the vsync presync: the drive did
+       not run yet in vsync_hook(), its motor still on), "clock - last clock"
+       would wrap to about 2^64 cycles to rotate: an endless loop. The
+       rotation starts again from the current clock. */
+    if (*(dptr->diskunit->clk_ptr) < rptr->rotation_last_clk) {
+        rptr->rotation_last_clk = *(dptr->diskunit->clk_ptr);
     }
 
     rotation_do_wobble(dptr);

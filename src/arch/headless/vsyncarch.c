@@ -34,6 +34,9 @@
 #include "mainlock.h"
 #include "ui.h"
 #include "vsyncapi.h"
+#ifdef KVICE_LINUX
+#include "kvice_framecheck.h"
+#endif
 #include "videoarch.h"
 
 #include "joystick.h"
@@ -63,6 +66,10 @@ static int pause_pending = 0;
 
 void vsyncarch_presync(void)
 {
+#ifdef KVICE_LINUX
+    /* KVICE test build: a UI action here, as the Amiga menus */
+    kvice_test_presync();
+#endif
     ui_update_lightpen();
     joystick();
 }
