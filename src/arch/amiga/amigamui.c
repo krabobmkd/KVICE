@@ -71,7 +71,9 @@
 #include "iecrom.h"
 #include "keyboard.h"
 #include "keymap.h"
+#include "joyport.h"
 #include "joystick.h"
+#include "amigajoy.h"
 #include "lib.h"
 #include "log.h"
 #include "machine.h"
@@ -106,6 +108,8 @@ MUI_NewObjectB(const char *cl, Tag tags, ...)
 #define RID_ROM_DEFAULT 5   /* "Set ROM defaults for this model" */
 #define RID_MODEL   7   /* the C64 model cycle changed: its description */
 #define RID_DRIVE_TYPE 8    /* the drive 8 type cycle changed: its ROM file */
+#define RID_INPUT_PORTS 20  /* an Amiga port type cycle changed */
+#define RID_INPUT_APPLY 21  /* "Apply input configuration" */
 #define RID_BROWSE_ROM  10  /* + 0..2: "..." of a ROM file row */
 #define RID_BROWSE_FILE 6   /* "..." of the file row (custom keymap) */
 
@@ -387,27 +391,54 @@ static setting_t *new_setting(int page, bind_type_t type, const char *resource, 
     return s;
 }
 
-static void add_amiga_port_entries(setting_t *s)
+/* analog paddles: joystick port only, the mouse port is input.device's */
+static void add_amiga_port_entries(setting_t *s, int paddles)
 {
     setting_add_entry(s, LOC(MSG_AMIGA_PORT_NONE), 0);
     setting_add_entry(s, LOC(MSG_AMIGA_PORT_JOYSTICK), 1);
-    setting_add_entry(s, LOC(MSG_AMIGA_PORT_PADDLES), 2);
-}
-
-/* host joystick devices known to VICE, registered by arch/amiga/joy.c */
-static void add_joydev_entries(setting_t *s)
-{
-    int i;
-
-    setting_add_entry(s, LOC(MSG_DEVICE_NONE), JOYDEV_NONE);
-    for (i = 0; i < joystick_device_count(); i++) {
-        joystick_device_t *joydev = joystick_device_by_index(i);
-
-        if (joydev != NULL && joydev->name != NULL) {
-            setting_add_entry(s, joydev->name, JOYDEV_REALJOYSTICK_MIN + i);
-        }
+    if (paddles) {
+        setting_add_entry(s, LOC(MSG_AMIGA_PORT_PADDLES), 2);
     }
 }
+
+/* Input page: the Amiga port types (mouse port, joystick port) and what
+ * drives each C64 control port: none, or the device of an Amiga port. All
+ * applied together by input_apply() ("Apply input configuration", Use,
+ * Save): the Amiga ports are opened again when their type changed. */
+#define C64_FROM_NONE           0
+#define C64_FROM_MOUSE_PORT     1   /* lowlevel port 0 */
+#define C64_FROM_JOYSTICK_PORT  2   /* lowlevel port 1 */
+static setting_t *amiga_port_setting[2];
+static setting_t *c64_port_setting[2];
+static Object *input_apply_button = NULL;
+
+static void add_c64_port_entries(setting_t *s)
+{
+    setting_add_entry(s, LOC(MSG_DEVICE_NONE), C64_FROM_NONE);
+    setting_add_entry(s, LOC(MSG_C64_FROM_MOUSE_PORT), C64_FROM_MOUSE_PORT);
+    setting_add_entry(s, LOC(MSG_C64_FROM_JOYSTICK_PORT), C64_FROM_JOYSTICK_PORT);
+}
+
+/* the Amiga port driving C64 control port \a c64port (1 or 2) */
+static int get_c64_port(int c64port)
+{
+    int dev = JOYDEV_NONE;
+
+    resources_get_int_sprintf("JoyDevice%d", &dev, c64port);
+    if (dev < JOYDEV_REALJOYSTICK_MIN) {
+        return C64_FROM_NONE;
+    }
+    switch (amiga_joy_device_port(dev - JOYDEV_REALJOYSTICK_MIN)) {
+        case 0:  return C64_FROM_MOUSE_PORT;
+        case 1:  return C64_FROM_JOYSTICK_PORT;
+        default: return C64_FROM_NONE;
+    }
+}
+
+static int get_c64_port1(void) { return get_c64_port(1); }
+static int get_c64_port2(void) { return get_c64_port(2); }
+/* applied by input_apply(), after the Amiga ports */
+static void set_c64_port_none(int value) { }
 
 /* 1 when the machine settings (video, CIA, SID, board) are the ones of
  * \a model: the ROM files are not compared, they are chosen apart */
@@ -534,14 +565,18 @@ static void build_settings(void)
     memset(settings_count, 0, sizeof settings_count);
 
     /* Input */
-    s = new_setting(PAGE_INPUT, BIND_CYCLE, "AmigaJoyPort0", MSG_AMIGA_PORT0);
-    add_amiga_port_entries(s);
-    s = new_setting(PAGE_INPUT, BIND_CYCLE, "AmigaJoyPort1", MSG_AMIGA_PORT1);
-    add_amiga_port_entries(s);
-    s = new_setting(PAGE_INPUT, BIND_CYCLE, "JoyDevice1", MSG_C64_PORT1);
-    add_joydev_entries(s);
-    s = new_setting(PAGE_INPUT, BIND_CYCLE, "JoyDevice2", MSG_C64_PORT2);
-    add_joydev_entries(s);
+    s = amiga_port_setting[0] = new_setting(PAGE_INPUT, BIND_CYCLE, "AmigaJoyPort0", MSG_AMIGA_PORT0);
+    add_amiga_port_entries(s, 0);
+    s = amiga_port_setting[1] = new_setting(PAGE_INPUT, BIND_CYCLE, "AmigaJoyPort1", MSG_AMIGA_PORT1);
+    add_amiga_port_entries(s, 1);
+    s = c64_port_setting[0] = new_setting(PAGE_INPUT, BIND_CYCLE, NULL, MSG_C64_PORT1);
+    s->getter = get_c64_port1;
+    s->setter = set_c64_port_none;
+    add_c64_port_entries(s);
+    s = c64_port_setting[1] = new_setting(PAGE_INPUT, BIND_CYCLE, NULL, MSG_C64_PORT2);
+    s->getter = get_c64_port2;
+    s->setter = set_c64_port_none;
+    add_c64_port_entries(s);
 
     /* Keyboard: the custom file is applied before the choice (Use) */
     s = new_setting(PAGE_KEYBOARD, BIND_CYCLE, "AmigaKeyboardSymbolic", MSG_KEYBOARD_MAPPING);
@@ -894,7 +929,13 @@ static Object *make_page(int page)
         return NULL;
     }
     if (page == PAGE_INPUT) {
-        DoMethod(group, OM_ADDMEMBER, (ULONG)make_text(LOC(MSG_AMIGA_PORT_NEXT_START)));
+        /* applies the 4 choices at once, the window stays open */
+        input_apply_button = make_button(LOC(MSG_INPUT_APPLY));
+        DoMethod(group, OM_ADDMEMBER, (ULONG)MUI_NewObjectB(MUIC_Group,
+                 MUIA_Group_Horiz, TRUE,
+                 MUIA_Group_Child, (ULONG)input_apply_button,
+                 MUIA_Group_Child, (ULONG)make_space(),
+                 TAG_DONE));
     }
     if (page == PAGE_DRIVE8) {
         DoMethod(group, OM_ADDMEMBER, (ULONG)make_text(LOC(MSG_DRIVE8_DRAWER_NOTE)));
@@ -984,6 +1025,7 @@ static int apply_rom_settings(void)
 
 /* Returns -1 when a ROM file was not accepted: the window stays open */
 static void drive_watch_update(void);
+static void input_apply(void);
 
 /* the configuration file keeps the drive types set to "none" only for a
  * missing ROM, and the sound turned off only because ahi.device could not
@@ -1023,6 +1065,10 @@ static int apply_settings(void)
         }
     }
     for (page = 0; page < PAGE_COUNT; page++) {
+        if (page == PAGE_INPUT) {
+            /* together, below */
+            continue;
+        }
         for (i = 0; i < settings_count[page]; i++) {
             if (settings[page][i].type != BIND_ROMFILE
                     && settings[page][i].type != BIND_FILE) {
@@ -1030,6 +1076,7 @@ static int apply_settings(void)
             }
         }
     }
+    input_apply();
     ret = apply_rom_settings();
     /* drive 8 type may have changed */
     drive_watch_update();
@@ -1197,6 +1244,16 @@ static int create_app(void)
         DoMethod(drive_type_setting->obj, MUIM_Notify, MUIA_Cycle_Active, MUIV_EveryTime,
                  (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_DRIVE_TYPE);
     }
+    for (page = 0; page < 2; page++) {
+        if (amiga_port_setting[page] != NULL && amiga_port_setting[page]->obj != NULL) {
+            DoMethod(amiga_port_setting[page]->obj, MUIM_Notify, MUIA_Cycle_Active, MUIV_EveryTime,
+                     (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_INPUT_PORTS);
+        }
+    }
+    if (input_apply_button != NULL) {
+        DoMethod(input_apply_button, MUIM_Notify, MUIA_Pressed, FALSE,
+                 (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_INPUT_APPLY);
+    }
     return 0;
 }
 
@@ -1311,6 +1368,82 @@ static void model_info_update(void)
     snprintf(model_info, sizeof model_info, LOC(MSG_MODEL_INFO), video,
              c64model_get_new_sid(model) > 0 ? "MOS 8580" : "MOS 6581");
     set(model_info_text, MUIA_Text_Contents, (ULONG)model_info);
+}
+
+/* cycle entry value of a setting as shown */
+static int cycle_value(setting_t *s)
+{
+    ULONG v = 0;
+
+    get(s->obj, MUIA_Cycle_Active, &v);
+    return (int)v < s->count ? s->values[v] : 0;
+}
+
+/* an Amiga port type changed: a C64 port driven by an Amiga port now not
+ * used drives nothing (shown at once, applied by input_apply()) */
+static void input_ports_changed(void)
+{
+    int c;
+
+    for (c = 0; c < 2; c++) {
+        int from;
+
+        if (c64_port_setting[c] == NULL || c64_port_setting[c]->obj == NULL) {
+            continue;
+        }
+        from = cycle_value(c64_port_setting[c]);
+        if (from != C64_FROM_NONE
+                && cycle_value(amiga_port_setting[from - 1]) == 0) {
+            nnset(c64_port_setting[c]->obj, MUIA_Cycle_Active, 0);
+        }
+    }
+}
+
+/* the Input page: the Amiga ports opened again when their type changed
+ * (lowlevel.library, analog reader), then each C64 control port given the
+ * device of its Amiga port, as a joystick or as paddles */
+static void input_apply(void)
+{
+    int changed = 0;
+    int i, c;
+
+    if (amiga_port_setting[0] == NULL || amiga_port_setting[0]->obj == NULL) {
+        return;
+    }
+    for (i = 0; i < 2; i++) {
+        int type = cycle_value(amiga_port_setting[i]);
+        int current = 0;
+
+        resources_get_int_sprintf("AmigaJoyPort%d", &current, i);
+        if (type != current) {
+            resources_set_int_sprintf("AmigaJoyPort%d", type, i);
+            changed = 1;
+        }
+    }
+    if (changed) {
+        amiga_joy_reconfigure();
+    }
+    for (c = 0; c < 2; c++) {
+        int from = cycle_value(c64_port_setting[c]);
+        int index = from != C64_FROM_NONE ? amiga_joy_device_index(from - 1) : -1;
+        int dev = index >= 0 ? JOYDEV_REALJOYSTICK_MIN + index : JOYDEV_NONE;
+
+        /* each C64 port as the controller plugged: paddles for analog */
+        if (index >= 0) {
+            resources_set_int_sprintf("JoyPort%dDevice",
+                                      amiga_joy_port_is_analog(from - 1)
+                                      ? JOYPORT_ID_PADDLES : JOYPORT_ID_JOYSTICK,
+                                      c + 1);
+        }
+        if (resources_set_int_sprintf("JoyDevice%d", dev, c + 1) < 0) {
+            log_error(LOG_DEFAULT, "settings: cannot set C64 control port %d.", c + 1);
+        }
+    }
+    /* what is really in use now (an Amiga port may have failed to open) */
+    for (i = 0; i < 2; i++) {
+        setting_to_ui(amiga_port_setting[i]);
+        setting_to_ui(c64_port_setting[i]);
+    }
 }
 
 /* ROM file resource of a drive type, NULL if none */
@@ -1462,6 +1595,12 @@ void amiga_mui_handle_events(void)
                 break;
             case RID_DRIVE_TYPE:
                 drive_rom_info_update();
+                break;
+            case RID_INPUT_PORTS:
+                input_ports_changed();
+                break;
+            case RID_INPUT_APPLY:
+                input_apply();
                 break;
             case RID_BROWSE_FILE:
                 browse_file();

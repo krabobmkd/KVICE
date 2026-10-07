@@ -3330,6 +3330,36 @@ void joystick_close(void)
     joystick_devices = NULL;
 }
 
+/** \brief  Unregister every host joystick device, to register new ones
+ *
+ * For arch drivers that reconfigure their devices while running (Amiga:
+ * the controller type of each port is chosen in the settings). The
+ * emulated ports that used a device get none, set them again after
+ * registering the new devices.
+ */
+void joystick_devices_unregister_all(void)
+{
+    int i;
+
+    for (i = 0; i < JOYPORT_MAX_PORTS; i++) {
+        if (joystick_port_map[i] >= JOYDEV_REALJOYSTICK_MIN) {
+            joystick_port_map[i] = JOYDEV_NONE;
+        }
+    }
+    for (i = 0; i < (int)num_joystick_devices; i++) {
+        joystick_device_t *joydev = joystick_devices[i];
+
+        if (joy_driver.close != NULL) {
+            joy_driver.close(joydev);
+        }
+        joystick_device_free(joydev);
+        joystick_devices[i] = NULL;
+    }
+    /* the array stays allocated for joystick_device_register() */
+    num_joystick_devices = 0;
+    joystick_clear_all();
+}
+
 void joystick_resources_shutdown(void)
 {
     if (joymap_factory) {

@@ -62,6 +62,8 @@ struct PPSticksValues {
     WORD bt; // 1 & 2
 };
 // implement or not in code at compilation
+// VICE: not used, taking the mouse port from input.device is dangerous:
+// analog paddles are only offered on the joystick port (joy.c).
 //#define PPJSCODE_TAKEPORT0CONTROL 1
 //#define PPJSCODE_ALLOWLOWLEVELTIMER 1
 

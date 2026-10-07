@@ -422,6 +422,8 @@ void joy_hat_event   (joystick_hat_t    *hat,    int32_t value);
 
 void joystick(void);
 void joystick_close(void);
+/* every host device unregistered, to register new ones (Amiga settings) */
+void joystick_devices_unregister_all(void);
 void joystick_resources_shutdown(void);
 void joystick_ui_reset_device_list(void);
 const char *joystick_ui_get_next_device_name(int *id);
