@@ -36,6 +36,7 @@
 #include <proto/graphics.h>
 
 #include "amiga_planarscale.h"
+#include "amiga_scalerow.h"
 
 static struct ColorMap *dst_cm = NULL;
 
@@ -109,10 +110,13 @@ void planarscale_draw(struct RastPort *rp, const UBYTE *src, ULONG src_pitch,
                       int upd_x0, int upd_y0, int upd_x1, int upd_y1)
 {
     ULONG step_x, step_y, ax0, ay;
-    ULONG size = (ULONG)dst_w * (ULONG)dst_h;
+    /* rows of a multiple of 4 bytes: aligned words on the lines written
+       together (amiga_scalerow.h) */
+    ULONG stride = ((ULONG)dst_w + 3) & ~3UL;
+    ULONG size = stride * (ULONG)dst_h;
     const UBYTE *src_area;
     UBYTE *line;
-    int w, y;
+    int w, y, nl, h;
 
     if (src_w <= 0 || src_h <= 0 || dst_w <= 0 || dst_h <= 0) {
         return;
@@ -163,26 +167,29 @@ void planarscale_draw(struct RastPort *rp, const UBYTE *src, ULONG src_pitch,
     ax0 = (ULONG)(upd_x0 - dst_x) * step_x;
     ay = (ULONG)(upd_y0 - dst_y) * step_y;
     w = upd_x1 - upd_x0;
-    /* the buffer is laid out like the destination area: dst_w bytes per row */
-    line = chunky + (ULONG)(upd_y0 - dst_y) * (ULONG)dst_w + (ULONG)(upd_x0 - dst_x);
+    h = upd_y1 - upd_y0;
+    /* the buffer is laid out like the destination area, stride bytes per row */
+    line = chunky + (ULONG)(upd_y0 - dst_y) * stride + (ULONG)(upd_x0 - dst_x);
 
-    for (y = upd_y0; y < upd_y1; y++) {
+    for (y = 0; y < h; y += nl) {
         const UBYTE *s = src_area + (ay >> 16) * src_pitch;
-        UBYTE *d = line;
-        ULONG ax = ax0;
-        int n = w;
 
-        while (n-- > 0) {
-            *d++ = pens[s[ax >> 16]];
-            ax += step_x;
+        /* up to 3 lines of the same source row, written together */
+        nl = scalerow_lines(ay, step_y, h - y, 1);
+        if (nl == 3) {
+            scalerow8(line, s, ax0, step_x, w, pens, 3, stride);
+        } else if (nl == 2) {
+            scalerow8(line, s, ax0, step_x, w, pens, 2, stride);
+        } else {
+            scalerow8(line, s, ax0, step_x, w, pens, 1, stride);
         }
-        line += dst_w;
-        ay += step_y;
+        line += stride * (ULONG)nl;
+        ay += step_y * (ULONG)nl;
     }
 
     /* layers clipping and chunky to planar by the OS */
     WriteChunkyPixels(rp, (ULONG)upd_x0, (ULONG)upd_y0,
                       (ULONG)(upd_x1 - 1), (ULONG)(upd_y1 - 1),
-                      chunky + (ULONG)(upd_y0 - dst_y) * (ULONG)dst_w + (ULONG)(upd_x0 - dst_x),
-                      (LONG)dst_w);
+                      chunky + (ULONG)(upd_y0 - dst_y) * stride + (ULONG)(upd_x0 - dst_x),
+                      (LONG)stride);
 }

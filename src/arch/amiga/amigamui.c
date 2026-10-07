@@ -110,6 +110,7 @@ MUI_NewObjectB(const char *cl, Tag tags, ...)
 #define RID_DRIVE_TYPE 8    /* the drive 8 type cycle changed: its ROM file */
 #define RID_INPUT_PORTS 20  /* an Amiga port type cycle changed */
 #define RID_INPUT_APPLY 21  /* "Apply input configuration" */
+#define RID_DRIVE_ROM_EDIT 22 /* the read-only ROM file string was edited */
 #define RID_BROWSE_ROM  10  /* + 0..2: "..." of a ROM file row */
 #define RID_BROWSE_FILE 6   /* "..." of the file row (custom keymap) */
 
@@ -578,10 +579,8 @@ static void build_settings(void)
     s->setter = set_c64_port_none;
     add_c64_port_entries(s);
 
-    /* Keyboard: the custom file is applied before the choice (Use) */
-    s = new_setting(PAGE_KEYBOARD, BIND_CYCLE, "AmigaKeyboardSymbolic", MSG_KEYBOARD_MAPPING);
-    setting_add_entry(s, LOC(MSG_KEYBOARD_SYMBOLIC), 1);
-    setting_add_entry(s, LOC(MSG_KEYBOARD_POSITIONAL), 0);
+    /* Keyboard: the custom file is applied before the choice (Use). The
+       symbolic / positional mapping is in the Keyboard menu only (at once) */
     s = new_setting(PAGE_KEYBOARD, BIND_CYCLE, NULL, MSG_KEYMAP);
     s->getter = get_keymap_file;
     s->setter = set_keymap_file;
@@ -715,6 +714,30 @@ static Object *make_string(void)
                           MUIA_Frame, MUIV_Frame_String,
                           MUIA_String_MaxLen, MAX_PATH_LEN,
                           MUIA_CycleChain, 1,
+                          TAG_DONE);
+}
+
+/* a string gadget only to show a text: it shrinks with the layout (a text
+ * object would be as wide as its text) and its text can be marked and
+ * copied. Typed characters are rejected, other edits are undone (see
+ * RID_DRIVE_ROM_EDIT). */
+static Object *make_readonly_string(void)
+{
+    static char reject_all[256];
+    int i, n = 0;
+
+    if (reject_all[0] == '\0') {
+        for (i = 0x20; i < 0x100; i++) {
+            if (i < 0x7f || i >= 0xa0) {
+                reject_all[n++] = (char)i;
+            }
+        }
+        reject_all[n] = '\0';
+    }
+    return MUI_NewObjectB(MUIC_String,
+                          MUIA_Frame, MUIV_Frame_String,
+                          MUIA_String_MaxLen, MAX_PATH_LEN + 40,
+                          MUIA_String_Reject, (ULONG)reject_all,
                           TAG_DONE);
 }
 
@@ -906,7 +929,8 @@ static Object *make_page(int page)
             DoMethod(columns, OM_ADDMEMBER, (ULONG)s->obj);
             if (s == drive_type_setting) {
                 /* the ROM file of the type, under its cycle */
-                drive_rom_text = make_text("");
+                /* a long path: shrinks with the window, can be copied */
+                drive_rom_text = make_readonly_string();
                 DoMethod(columns, OM_ADDMEMBER, (ULONG)make_label(LOC(MSG_DRIVE_ROM_FILE)));
                 DoMethod(columns, OM_ADDMEMBER, (ULONG)drive_rom_text);
             }
@@ -1244,6 +1268,10 @@ static int create_app(void)
         DoMethod(drive_type_setting->obj, MUIM_Notify, MUIA_Cycle_Active, MUIV_EveryTime,
                  (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_DRIVE_TYPE);
     }
+    if (drive_rom_text != NULL) {
+        DoMethod(drive_rom_text, MUIM_Notify, MUIA_String_Contents, MUIV_EveryTime,
+                 (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_DRIVE_ROM_EDIT);
+    }
     for (page = 0; page < 2; page++) {
         if (amiga_port_setting[page] != NULL && amiga_port_setting[page]->obj != NULL) {
             DoMethod(amiga_port_setting[page]->obj, MUIM_Notify, MUIA_Cycle_Active, MUIV_EveryTime,
@@ -1494,7 +1522,7 @@ static void drive_rom_info_update(void)
     if (found != NULL) {
         lib_free(found);
     }
-    set(drive_rom_text, MUIA_Text_Contents, (ULONG)drive_rom_info);
+    nnset(drive_rom_text, MUIA_String_Contents, (ULONG)drive_rom_info);
 }
 
 /* "Set ROM defaults for this model": the ROM rows show the files of the
@@ -1595,6 +1623,17 @@ void amiga_mui_handle_events(void)
                 break;
             case RID_DRIVE_TYPE:
                 drive_rom_info_update();
+                break;
+            case RID_DRIVE_ROM_EDIT:
+                /* read only: Del, Backspace or paste undone */
+                {
+                    STRPTR str = NULL;
+
+                    get(drive_rom_text, MUIA_String_Contents, &str);
+                    if (str == NULL || strcmp((const char *)str, drive_rom_info) != 0) {
+                        nnset(drive_rom_text, MUIA_String_Contents, (ULONG)drive_rom_info);
+                    }
+                }
                 break;
             case RID_INPUT_PORTS:
                 input_ports_changed();
