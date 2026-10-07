@@ -43,6 +43,7 @@ option(VICE_AMIGA_TRACE "print startup traces to stdout (arch/amiga/amigatrace.h
 option(VICE_AMIGA_SAVE_ASM "keep the generated assembler (.s) and preprocessed (.i) files next to the objects in the build dir" ON)
 option(VICE_AMIGA_TIME_STATS "measure: print the host time spent in CPU, VIC-II, screen output, SID, sound and waiting every 5 s" OFF)
 option(VICE_AMIGA_DIV64_STATS "measure: print 64 bit divisions per second and their callers every 5 s" OFF)
+option(VICE_AMIGA_STACK_WATCH "measure: print the stack really used, at exit (STACK_WATCH in arch/amiga/main.c)" OFF)
 
 set(VICE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../src")
 # ROMs and data files of VICE 3.10 (C64/, DRIVES/...): ../data when copied
@@ -223,6 +224,9 @@ function(vice_amiga_setup_target target)
 	endif()
 	if(VICE_AMIGA_TRACE)
 		target_compile_definitions(${target} PRIVATE VICE_AMIGA_TRACE=1)
+	endif()
+	if(VICE_AMIGA_STACK_WATCH)
+		target_compile_definitions(${target} PRIVATE STACK_WATCH=1)
 	endif()
 	target_compile_options(${target} PRIVATE
 		-O3 -fomit-frame-pointer -Wno-unused-parameter

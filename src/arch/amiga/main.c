@@ -41,10 +41,51 @@
 #include <proto/exec.h>
 #include <exec/tasks.h>
 
+//thank you:
+//thank you #define STACK_WATCH 1
+
 /* VICE keeps ARCHDEP_PATH_MAX (4KB) buffers on the stack in many places.
  * The 3.2 port declared "__stack = 512K", but with bebbo's libnix that
- * variable alone does not swap the stack, so check it like EmojiGear does. */
-#define VICE_AMIGA_MIN_STACK (120 * 1024)
+ * variable alone does not swap the stack, so check it like EmojiGear does.
+ * Measure the real use with STACK_WATCH (cmake -DVICE_AMIGA_STACK_WATCH=ON)
+ * in a typical session, then set this to that size + some KB.
+ * krb: after some uses and measure total stack use in less than 8k.
+ * We'll consider 28k "in case of", but not more.
+ */
+#define VICE_AMIGA_MIN_STACK (26 * 1024)
+
+#ifdef STACK_WATCH
+/* the free stack is filled with this at startup: at exit, the first word
+ * that changed (from the stack bottom) is the deepest point reached */
+#define STACK_WATCH_PATTERN 0xCAFEBABEUL
+
+static void stack_watch_fill(struct Task *task)
+{
+    ULONG anchor = 0;
+    /* 64 bytes under the current frame are left as they are */
+    ULONG *near = (ULONG *)((ULONG)&anchor - 64);
+    ULONG *p = (ULONG *)((ULONG)task->tc_SPLower + 4);
+
+    while (p < near) {
+        *p++ = STACK_WATCH_PATTERN;
+    }
+}
+
+/* atexit(): registered first, so called last, after VICE shut down. VICE
+ * quits with exit() from inside the emulation, main() does not return. */
+static void stack_watch_report(void)
+{
+    struct Task *task = FindTask(NULL);
+    ULONG *p = (ULONG *)((ULONG)task->tc_SPLower + 4);
+
+    while (p < (ULONG *)task->tc_SPUpper && *p == STACK_WATCH_PATTERN) {
+        p++;
+    }
+    printf("**** STACK_WATCH: total=%ld  real use=%ld\n",
+           (long)((ULONG)task->tc_SPUpper - (ULONG)task->tc_SPLower),
+           (long)((ULONG)task->tc_SPUpper - (ULONG)p));
+}
+#endif
 
 
 /** \brief  Program driver
@@ -75,10 +116,15 @@ int main(int argc, char **argv)
     atexit(amiga_trace_atexit_end);
 #endif
     if (stacksize < VICE_AMIGA_MIN_STACK) {
-        printf("x64 needs at least 128k stack (has %d). Use \"stack 262144\" or set it in the icon.\n",
-               stacksize);
+        printf("x64 needs at least %dk stack (has %d). Use \"stack 32768\" or set it in the icon.\n",
+               VICE_AMIGA_MIN_STACK / 1024, stacksize);
         return 1;
     }
+#ifdef STACK_WATCH
+    /* first atexit() handler of VICE: reports after all the others */
+    atexit(stack_watch_report);
+    stack_watch_fill(task);
+#endif
 
     return main_program(argc, argv);
 }
