@@ -7,9 +7,10 @@
  *
  * - 0: not used
  * - 1: digital joystick or CD32 pad, read with lowlevel.library ReadJoyPort()
- * - 2: analog paddles / proportional joystick on the DB9 POT pins (ports 0
- *      and 1 only), read by the VBlank interrupt of amiga_propjoy.c (code
- *      from AmigaMame). To use them in the emulation, select the "Paddles"
+ * - 2: analog paddles / proportional joystick on the DB9 POT pins of the
+ *      joystick port (1) only, read by the VBlank interrupt of
+ *      amiga_propjoy.c (code from AmigaMame). The mouse port belongs to
+ *      input.device (Workbench mouse): taking it is dangerous, not done. To use them in the emulation, select the "Paddles"
  *      device on the C64 control port and "-paddlesNinputjoyaxis".
  *
  * Each used port becomes one VICE host joystick device. Devices are
@@ -112,11 +113,12 @@ static int set_port_type(int val, void *param)
     if (val < AMIGA_JOY_TYPE_NONE || val > AMIGA_JOY_TYPE_MAX) {
         return -1;
     }
-    if (val == AMIGA_JOY_TYPE_PADDLES && port > 1) {
-        /* only the two DB9 ports have POT pins */
-        return -1;
+    if (val == AMIGA_JOY_TYPE_PADDLES && port != 1) {
+        /* only the joystick port: the mouse port is input.device's, ports
+           2/3 have no POT pins. An older configuration may have it: none. */
+        val = AMIGA_JOY_TYPE_NONE;
     }
-    /* taken into account at the next start */
+    /* taken into account at the start, or by amiga_joy_reconfigure() */
     amiga_port_type[port] = val;
     return 0;
 }
@@ -133,7 +135,7 @@ static const resource_int_t resources_int[] = {
     RESOURCE_INT_LIST_END
 };
 
-#define PORT_TYPE_HELP "0: none, 1: joystick/CD32 pad (lowlevel.library), 2: analog paddles (ports 0/1)"
+#define PORT_TYPE_HELP "0: none, 1: joystick/CD32 pad (lowlevel.library), 2: analog paddles (joystick port only)"
 
 static const cmdline_option_t cmdline_options[] = {
     { "-amigajoyport0", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
@@ -308,6 +310,17 @@ static void propjoy_log(int elevel, const char *message)
     log_warning(amiga_joy_log, "%s", message);
 }
 
+/* port name as on the Amiga and in the settings, not lowlevel numbers */
+static const char *port_name(int port)
+{
+    switch (port) {
+        case 0:  return "Amiga mouse port";
+        case 1:  return "Amiga joystick port";
+        case 2:  return "Amiga extra port 3";
+        default: return "Amiga extra port 4";
+    }
+}
+
 static void register_device(int port, int type)
 {
     joystick_device_t *joydev;
@@ -323,7 +336,7 @@ static void register_device(int port, int type)
     joydev->disable_sort = true;
 
     if (type == AMIGA_JOY_TYPE_LOWLEVEL) {
-        joydev->name = lib_msprintf("Amiga port %d joystick", port);
+        joydev->name = lib_msprintf("%s joystick", port_name(port));
         joystick_device_add_hat(joydev, joystick_hat_new("Directions"));
         for (i = 0; i < LL_NUM_BUTTONS; i++) {
             joystick_button_t *button = joystick_button_new(ll_buttons[i].name);
@@ -334,7 +347,7 @@ static void register_device(int port, int type)
     } else {
         joystick_axis_t *axis;
 
-        joydev->name = lib_msprintf("Amiga port %d paddles", port);
+        joydev->name = lib_msprintf("%s analog", port_name(port));
         for (i = 0; i < 2; i++) {
             axis = joystick_axis_new(i == 0 ? "Paddle X" : "Paddle Y");
             axis->code = i;
@@ -354,18 +367,13 @@ static void register_device(int port, int type)
     log_message(amiga_joy_log, "VICE joystick device %d: %s.", priv->index, joydev->name);
 }
 
-void joystick_arch_init(void)
+/* open lowlevel.library and the analog reader for the ports as configured,
+ * and register a VICE joystick device for each used port */
+static void amiga_joy_open_ports(void)
 {
     ULONG paddle_flags = 0;
     ULONG retcode = PROPJOYRET_OK;
     int i, port;
-
-    amiga_joy_log = log_open("AmigaJoy");
-    if (!atexit_registered) {
-        atexit(amiga_joy_close_all);
-        atexit_registered = 1;
-    }
-    joystick_driver_register(&amiga_joy_driver);
 
     for (port = 0; port < AMIGA_JOY_PORTS; port++) {
         if (amiga_port_type[port] == AMIGA_JOY_TYPE_LOWLEVEL && LowLevelBase == NULL) {
@@ -407,6 +415,70 @@ void joystick_arch_init(void)
         }
     }
     AMIGA_TRACE(("%s: %d device(s)", __func__, joystick_device_count()));
+}
+
+void joystick_arch_init(void)
+{
+    amiga_joy_log = log_open("AmigaJoy");
+    if (!atexit_registered) {
+        atexit(amiga_joy_close_all);
+        atexit_registered = 1;
+    }
+    joystick_driver_register(&amiga_joy_driver);
+    amiga_joy_open_ports();
+}
+
+/* the Amiga ports again as configured now (settings "Apply"): the inputs
+ * are closed, then opened again. The C64 ports must be given their device
+ * again after this (JoyDevice1/2), see amiga_joy_device_index(). */
+void amiga_joy_reconfigure(void)
+{
+    log_message(amiga_joy_log, "reconfiguring the Amiga ports.");
+    joystick_devices_unregister_all();
+    amiga_joy_close_all();
+    amiga_joy_open_ports();
+}
+
+/* VICE joystick device index of an Amiga port (lowlevel numbering), -1 if
+ * the port has none (not used, or it could not be opened) */
+int amiga_joy_device_index(int port)
+{
+    int i;
+
+    for (i = 0; i < joystick_device_count(); i++) {
+        joystick_device_t *joydev = joystick_device_by_index(i);
+
+        if (joydev != NULL && joydev->priv != NULL
+                && ((amiga_joy_priv_t *)joydev->priv)->port == port) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* Amiga port (lowlevel numbering) of a VICE joystick device, -1 if none */
+int amiga_joy_device_port(int index)
+{
+    joystick_device_t *joydev;
+
+    if (index < 0 || index >= joystick_device_count()) {
+        return -1;
+    }
+    joydev = joystick_device_by_index(index);
+    if (joydev == NULL || joydev->priv == NULL) {
+        return -1;
+    }
+    return ((amiga_joy_priv_t *)joydev->priv)->port;
+}
+
+/* 1 when the device of an Amiga port reads analog paddles */
+int amiga_joy_port_is_analog(int port)
+{
+    int index = amiga_joy_device_index(port);
+
+    return index >= 0
+           && ((amiga_joy_priv_t *)joystick_device_by_index(index)->priv)->type
+              == AMIGA_JOY_TYPE_PADDLES;
 }
 
 void joystick_arch_shutdown(void)

@@ -29,4 +29,10 @@
 int amiga_joy_resources_init(void);
 int amiga_joy_cmdline_options_init(void);
 
+/* Amiga ports (lowlevel numbering: 0 mouse port, 1 joystick port) */
+void amiga_joy_reconfigure(void);
+int amiga_joy_device_index(int port);
+int amiga_joy_device_port(int index);
+int amiga_joy_port_is_analog(int port);
+
 #endif

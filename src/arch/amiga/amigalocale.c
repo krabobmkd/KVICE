@@ -120,8 +120,8 @@ static const char *default_strings[] = {
     "Joystick / CD32 pad",
     /* MSG_AMIGA_PORT_PADDLES */
     "Analog paddles",
-    /* MSG_AMIGA_PORT_NEXT_START */
-    "Amiga port changes apply at the next start.",
+    /* MSG_INPUT_APPLY */
+    "Apply input configuration",
     /* MSG_C64_PORT1 */
     "C64 control port 1:",
     /* MSG_C64_PORT2 */
@@ -304,7 +304,12 @@ static const char *default_strings[] = {
     /* MSG_ERROR_NO_BASIC: %s is empty */
     "No BASIC program in memory.%s",
     /* MSG_ERROR_SAVE_BASIC: %s is the file */
-    "Cannot save the BASIC program\n%s"
+    "Cannot save the BASIC program\n%s",
+
+    /* MSG_C64_FROM_MOUSE_PORT */
+    "Amiga mouse port",
+    /* MSG_C64_FROM_JOYSTICK_PORT */
+    "Amiga joystick port"
 };
 
 /* compile-time check: one default string per MSG_* id */

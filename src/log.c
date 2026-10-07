@@ -95,8 +95,19 @@ static char *log_file_name = NULL; /* name of the log file */
 
 static int log_limit = LOG_LIMIT_DEBUG; /* before the default is set, we want all messages */
 
-static int log_to_file = 1;
-static int log_to_stdout = 1;
+/* Amiga release build (no VICE_AMIGA_TRACE): no log, neither in the Shell
+   nor in PROGDIR:vice.log, "-logtostdout" / "-logtofile" turn them on. The
+   trace build logs as VICE does. */
+#if defined(AMIGA_COMPILE) && !defined(VICE_AMIGA_TRACE)
+#define LOG_TO_FILE_DEFAULT     0
+#define LOG_TO_STDOUT_DEFAULT   0
+#else
+#define LOG_TO_FILE_DEFAULT     1
+#define LOG_TO_STDOUT_DEFAULT   1
+#endif
+
+static int log_to_file = LOG_TO_FILE_DEFAULT;
+static int log_to_stdout = LOG_TO_STDOUT_DEFAULT;
 static int log_to_monitor = 0;
 
 static int log_colorize = 1;
@@ -347,9 +358,9 @@ static const resource_int_t resources_int[] = {
       &log_limit, set_log_limit, NULL },
     { "LogColorize", 1, RES_EVENT_NO, NULL,
       &log_colorize, set_log_colorize, NULL },
-    { "LogToFile", 1, RES_EVENT_NO, NULL,
+    { "LogToFile", LOG_TO_FILE_DEFAULT, RES_EVENT_NO, NULL,
       &log_to_file, set_log_to_file, NULL },
-    { "LogToStdout", 1, RES_EVENT_NO, NULL,
+    { "LogToStdout", LOG_TO_STDOUT_DEFAULT, RES_EVENT_NO, NULL,
       &log_to_stdout, set_log_to_stdout, NULL },
     { "LogToMonitor", 0, RES_EVENT_NO, NULL,
       &log_to_monitor, set_log_to_monitor, NULL },

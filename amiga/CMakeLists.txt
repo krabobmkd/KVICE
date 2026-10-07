@@ -11,7 +11,7 @@
 # Programs of the Amiga package (one option each):
 #   x64     C64 (the fast VIC-II emulation)       ON  (ported)
 #   xvic    VIC-20                                OFF (not ported yet)
-#   xplus4  Plus/4, C16, C116 (TED machines)      OFF (not ported yet)
+#   xplus4  Plus/4, C16, C116 (TED machines)      OFF (being ported)
 #   xpet    PET / CBM                             OFF (not ported yet)
 #   c1541   disk image tool                       OFF (not ported yet)
 #
@@ -30,7 +30,7 @@ project(ViceAmiga LANGUAGES C VERSION 3.10)
 
 option(VICE_BUILD_X64    "build x64, the C64 emulator" ON)
 option(VICE_BUILD_XVIC   "build xvic, the VIC-20 emulator (not ported yet)" OFF)
-option(VICE_BUILD_XPLUS4 "build xplus4, the Plus/4 C16 C116 emulator (not ported yet)" OFF)
+option(VICE_BUILD_XPLUS4 "build xplus4, the Plus/4 C16 C116 emulator (being ported)" OFF)
 option(VICE_BUILD_XPET   "build xpet, the PET CBM emulator (not ported yet)" OFF)
 option(VICE_BUILD_C1541  "build c1541, the disk image tool (not ported yet)" OFF)
 
@@ -292,7 +292,15 @@ if(VICE_BUILD_X64)
 	vice_amiga_data(C64)
 endif()
 
-foreach(prog XVIC XPLUS4 XPET C1541)
+if(VICE_BUILD_XPLUS4)
+	vice_amiga_emulator(xplus4 ${VICE_XPLUS4_SRC})
+	target_include_directories(xplus4 PRIVATE
+		${VICE_SRC}/plus4/cart
+		${VICE_SRC}/drive/iec/plus4exp)
+	vice_amiga_data(PLUS4)
+endif()
+
+foreach(prog XVIC XPET C1541)
 	if(VICE_BUILD_${prog})
 		string(TOLOWER ${prog} prog_name)
 		message(WARNING "${prog_name} is not ported to AmigaOS yet: skipped. "

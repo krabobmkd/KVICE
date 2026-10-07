@@ -332,7 +332,7 @@ void mem_proc_port_set_motor_in(int val)
 
 /* ------------------------------------------------------------------------- */
 
-uint8_t zero_read(uint16_t addr)
+uint8_t zero_read(uint16_t addr PARAMREG(d0))
 {
     addr &= 0xff;
 
@@ -352,7 +352,7 @@ uint8_t zero_read(uint16_t addr)
     return ted.last_cpu_val;
 }
 
-void zero_store(uint16_t addr, uint8_t value)
+void zero_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     addr &= 0xff;
 
@@ -435,7 +435,7 @@ void mem_config_rom_set(unsigned int config)
 
 /* ------------------------------------------------------------------------- */
 
-static uint8_t zero_read_watch(uint16_t addr)
+static uint8_t zero_read_watch(uint16_t addr PARAMREG(d0))
 {
     addr &= 0xff;
     monitor_watch_push_load_addr(addr, e_comp_space);
@@ -443,7 +443,7 @@ static uint8_t zero_read_watch(uint16_t addr)
     return ted.last_cpu_val;
 }
 
-static void zero_store_watch(uint16_t addr, uint8_t value)
+static void zero_store_watch(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     addr &= 0xff;
     ted.last_cpu_val = value;
@@ -451,7 +451,7 @@ static void zero_store_watch(uint16_t addr, uint8_t value)
     mem_write_tab[mem_config][0](addr, value);
 }
 
-static uint8_t read_watch(uint16_t addr)
+static uint8_t read_watch(uint16_t addr PARAMREG(d0))
 {
     monitor_watch_push_load_addr(addr, e_comp_space);
     ted.last_cpu_val = mem_read_tab[mem_config][addr >> 8](addr);
@@ -459,7 +459,7 @@ static uint8_t read_watch(uint16_t addr)
 }
 
 
-static void store_watch(uint16_t addr, uint8_t value)
+static void store_watch(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     ted.last_cpu_val = value;
     monitor_watch_push_store_addr(addr, e_comp_space);
@@ -474,37 +474,37 @@ void mem_toggle_watchpoints(int flag, void *context)
 
 /* ------------------------------------------------------------------------- */
 
-static uint8_t ram_read(uint16_t addr)
+static uint8_t ram_read(uint16_t addr PARAMREG(d0))
 {
     ted.last_cpu_val = mem_ram[addr];
     return ted.last_cpu_val;
 }
 
-static uint8_t ram_read_32k(uint16_t addr)
+static uint8_t ram_read_32k(uint16_t addr PARAMREG(d0))
 {
     ted.last_cpu_val = mem_ram[addr & 0x7fff];
     return ted.last_cpu_val;
 }
 
-static uint8_t ram_read_16k(uint16_t addr)
+static uint8_t ram_read_16k(uint16_t addr PARAMREG(d0))
 {
     ted.last_cpu_val = mem_ram[addr & 0x3fff];
     return ted.last_cpu_val;
 }
 
-static void ram_store(uint16_t addr, uint8_t value)
+static void ram_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     ted.last_cpu_val = value;
     mem_ram[addr] = value;
 }
 
-static void ram_store_32k(uint16_t addr, uint8_t value)
+static void ram_store_32k(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     ted.last_cpu_val = value;
     mem_ram[addr & 0x7fff] = value;
 }
 
-static void ram_store_16k(uint16_t addr, uint8_t value)
+static void ram_store_16k(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     ted.last_cpu_val = value;
     mem_ram[addr & 0x3fff] = value;
@@ -514,12 +514,12 @@ static void ram_store_16k(uint16_t addr, uint8_t value)
 
 /* Generic memory access.  */
 
-void mem_store(uint16_t addr, uint8_t value)
+void mem_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     _mem_write_tab_ptr[addr >> 8](addr, value);
 }
 
-uint8_t mem_read(uint16_t addr)
+uint8_t mem_read(uint16_t addr PARAMREG(d0))
 {
     return _mem_read_tab_ptr[addr >> 8](addr);
 }
@@ -580,7 +580,7 @@ uint8_t *mem_get_open_space(void)
     underlying RAM either. You can prove this quite easily on a stock 16k
     machine, where the memory is mirrored 4x across the entire address space."
 */
-static uint8_t h256k_ram_ffxx_read(uint16_t addr)
+static uint8_t h256k_ram_ffxx_read(uint16_t addr PARAMREG(d0))
 {
     if ((addr >= 0xff20) && (addr != 0xff3e) && (addr != 0xff3f)) {
         ted.last_cpu_val = h256k_read(addr);
@@ -590,7 +590,7 @@ static uint8_t h256k_ram_ffxx_read(uint16_t addr)
     return ted.last_cpu_val;
 }
 
-static uint8_t cs256k_ram_ffxx_read(uint16_t addr)
+static uint8_t cs256k_ram_ffxx_read(uint16_t addr PARAMREG(d0))
 {
     if ((addr >= 0xff20) && (addr != 0xff3e) && (addr != 0xff3f)) {
         ted.last_cpu_val = cs256k_read(addr);
@@ -600,7 +600,7 @@ static uint8_t cs256k_ram_ffxx_read(uint16_t addr)
     return ted.last_cpu_val;
 }
 
-static uint8_t ram_ffxx_read(uint16_t addr)
+static uint8_t ram_ffxx_read(uint16_t addr PARAMREG(d0))
 {
     if ((addr >= 0xff20) && (addr != 0xff3e) && (addr != 0xff3f)) {
         ted.last_cpu_val = ram_read(addr);
@@ -610,7 +610,7 @@ static uint8_t ram_ffxx_read(uint16_t addr)
     return ted.last_cpu_val;
 }
 
-static uint8_t ram_ffxx_read_32k(uint16_t addr)
+static uint8_t ram_ffxx_read_32k(uint16_t addr PARAMREG(d0))
 {
     if ((addr >= 0xff20) && (addr != 0xff3e) && (addr != 0xff3f)) {
         ted.last_cpu_val = ram_read_32k(addr);
@@ -620,7 +620,7 @@ static uint8_t ram_ffxx_read_32k(uint16_t addr)
     return ted.last_cpu_val;
 }
 
-static uint8_t ram_ffxx_read_16k(uint16_t addr)
+static uint8_t ram_ffxx_read_16k(uint16_t addr PARAMREG(d0))
 {
     if ((addr >= 0xff20) && (addr != 0xff3e) && (addr != 0xff3f)) {
         ted.last_cpu_val = ram_read_16k(addr);
@@ -631,7 +631,7 @@ static uint8_t ram_ffxx_read_16k(uint16_t addr)
 }
 
 
-static void h256k_ram_ffxx_store(uint16_t addr, uint8_t value)
+static void h256k_ram_ffxx_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     ted.last_cpu_val = value;
     if (addr < 0xff20 || addr == 0xff3e || addr == 0xff3f) {
@@ -641,7 +641,7 @@ static void h256k_ram_ffxx_store(uint16_t addr, uint8_t value)
     }
 }
 
-static void cs256k_ram_ffxx_store(uint16_t addr, uint8_t value)
+static void cs256k_ram_ffxx_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     ted.last_cpu_val = value;
     if (addr < 0xff20 || addr == 0xff3e || addr == 0xff3f) {
@@ -651,7 +651,7 @@ static void cs256k_ram_ffxx_store(uint16_t addr, uint8_t value)
     }
 }
 
-static void ram_ffxx_store(uint16_t addr, uint8_t value)
+static void ram_ffxx_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     ted.last_cpu_val = value;
     if (addr < 0xff20 || addr == 0xff3e || addr == 0xff3f) {
@@ -661,7 +661,7 @@ static void ram_ffxx_store(uint16_t addr, uint8_t value)
     }
 }
 
-static void ram_ffxx_store_32k(uint16_t addr, uint8_t value)
+static void ram_ffxx_store_32k(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     ted.last_cpu_val = value;
     if (addr < 0xff20 || addr == 0xff3e || addr == 0xff3f) {
@@ -671,7 +671,7 @@ static void ram_ffxx_store_32k(uint16_t addr, uint8_t value)
     }
 }
 
-static void ram_ffxx_store_16k(uint16_t addr, uint8_t value)
+static void ram_ffxx_store_16k(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     ted.last_cpu_val = value;
     if (addr < 0xff20 || addr == 0xff3e || addr == 0xff3f) {
@@ -685,7 +685,7 @@ static void ram_ffxx_store_16k(uint16_t addr, uint8_t value)
     and ff3f returns the contents of the underlying ROM, exactly as is does with
     ff20 - ff3d.
 */
-static uint8_t rom_ffxx_read(uint16_t addr)
+static uint8_t rom_ffxx_read(uint16_t addr PARAMREG(d0))
 {
     if (addr >= 0xff20) {
         ted.last_cpu_val = plus4memrom_rom_read(addr);
@@ -695,7 +695,7 @@ static uint8_t rom_ffxx_read(uint16_t addr)
     return ted.last_cpu_val;
 }
 
-static void rom_ffxx_store(uint16_t addr, uint8_t value)
+static void rom_ffxx_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     ted.last_cpu_val = value;
     if (addr < 0xff20 || addr == 0xff3e || addr == 0xff3f) {
@@ -705,7 +705,7 @@ static void rom_ffxx_store(uint16_t addr, uint8_t value)
     }
 }
 
-static void h256k_rom_ffxx_store(uint16_t addr, uint8_t value)
+static void h256k_rom_ffxx_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     ted.last_cpu_val = value;
     if (addr < 0xff20 || addr == 0xff3e || addr == 0xff3f) {
@@ -715,7 +715,7 @@ static void h256k_rom_ffxx_store(uint16_t addr, uint8_t value)
     }
 }
 
-static void cs256k_rom_ffxx_store(uint16_t addr, uint8_t value)
+static void cs256k_rom_ffxx_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     ted.last_cpu_val = value;
     if (addr < 0xff20 || addr == 0xff3e || addr == 0xff3f) {
@@ -725,7 +725,7 @@ static void cs256k_rom_ffxx_store(uint16_t addr, uint8_t value)
     }
 }
 
-static void rom_ffxx_store_32k(uint16_t addr, uint8_t value)
+static void rom_ffxx_store_32k(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     ted.last_cpu_val = value;
     if (addr < 0xff20 || addr == 0xff3e || addr == 0xff3f) {
@@ -735,7 +735,7 @@ static void rom_ffxx_store_32k(uint16_t addr, uint8_t value)
     }
 }
 
-static void rom_ffxx_store_16k(uint16_t addr, uint8_t value)
+static void rom_ffxx_store_16k(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     ted.last_cpu_val = value;
     if (addr < 0xff20 || addr == 0xff3e || addr == 0xff3f) {
@@ -1218,7 +1218,7 @@ void store_bank_io(uint16_t addr, uint8_t byte)
 }
 
 /* read i/o without side-effects */
-static uint8_t peek_bank_io(uint16_t addr)
+static uint8_t peek_bank_io(uint16_t addr PARAMREG(d0))
 {
     if ((addr >= 0xff00) && (addr <= 0xff3f)) {
         return ted_peek(addr);
@@ -1235,7 +1235,7 @@ static uint8_t peek_bank_io(uint16_t addr)
 }
 
 /* read i/o with side-effects */
-static uint8_t read_bank_io(uint16_t addr)
+static uint8_t read_bank_io(uint16_t addr PARAMREG(d0))
 {
     if ((addr >= 0xff00) && (addr <= 0xff3f)) {
         return ted_peek(addr);
@@ -1531,7 +1531,7 @@ static mem_config_t mem_config_table[] = {
     { "CART-2", "CART-2" }  /* 0xfddf */
 };
 
-static void mem_config_rom_set_store(uint16_t addr, uint8_t value)
+static void mem_config_rom_set_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     mem_config_rom_set((addr & 0xf) << 1);
 }

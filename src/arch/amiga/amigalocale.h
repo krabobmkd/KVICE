@@ -85,7 +85,7 @@ enum {
     MSG_AMIGA_PORT_NONE,
     MSG_AMIGA_PORT_JOYSTICK,
     MSG_AMIGA_PORT_PADDLES,
-    MSG_AMIGA_PORT_NEXT_START,
+    MSG_INPUT_APPLY,       /* slot of the former "next start" note */
     MSG_C64_PORT1,
     MSG_C64_PORT2,
     MSG_DEVICE_NONE,
@@ -196,6 +196,10 @@ enum {
     MSG_REQ_SAVE_BASIC,
     MSG_ERROR_NO_BASIC,
     MSG_ERROR_SAVE_BASIC,
+
+    /* Settings: Input, what drives a C64 control port */
+    MSG_C64_FROM_MOUSE_PORT,
+    MSG_C64_FROM_JOYSTICK_PORT,
 
     /* Must be last */
     MSG_COUNT
