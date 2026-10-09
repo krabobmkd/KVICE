@@ -33,6 +33,7 @@
 
 #include "vic20ui.h"
 #include "amigalocale.h"
+#include "amigabasic.h"
 #include "amigamachine.h"
 #include "machine.h"
 #include "resources.h"
@@ -206,9 +207,11 @@ static const unsigned char vic20_letters[26][2] = {
 #include "amiga_positional_vkm_vic20.h"
 
 const amiga_machine_t amiga_machine = {
-    "VICE xvic",
+    "KVICE xvic",
+    "xvic",
     "VIC-20",
     "VIC20",
+    2,          /* pixel width: the VIC pixels are wide, VICE does not double them */
     vic20_roms, sizeof vic20_roms / sizeof vic20_roms[0],
     vic20_roms_loaded,
     MSG_MODEL,
@@ -219,6 +222,7 @@ const amiga_machine_t amiga_machine = {
     vic20_model_rom_names,
     &vic20_ram,
     0x8000,     /* BASIC RAM end (with the 24 KB expansion) */
+    AMIGA_BASIC_V2,
     vic20_symkeys, sizeof vic20_symkeys / sizeof vic20_symkeys[0],
     vic20_letters,
     7, 1,       /* RETURN */

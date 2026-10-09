@@ -49,7 +49,11 @@
 `ifdef' them out once all video chips actually honour this.  */
 #define RASTER_PIXEL2(c) (vic.pixel_table.doub[(c)])
 
+/* KVICE Amiga: one pixel per VIC pixel, the screen scalers make them
+ * wider (amiga_machine.pixel_width), half the drawing work */
+#ifndef __AMIGA__
 #define VIC_DUPLICATES_PIXELS
+#endif
 
 #ifdef VIC_DUPLICATES_PIXELS
 typedef uint16_t VIC_PIXEL;

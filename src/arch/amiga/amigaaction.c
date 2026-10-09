@@ -28,6 +28,7 @@
 #include <stdlib.h>
 
 #include "amigaaction.h"
+#include "amigabasic.h"
 #include "amigamachine.h"
 #include "screenshot.h"
 #include "kbd.h"
@@ -406,35 +407,40 @@ static BOOL Action_ExtractDisk8(void)
     return counts[1] == 0;
 }
 
-/* the BASIC program in memory to a .prg file, as SAVE"NAME",8 writes it:
- * the load address, then the bytes from the program start (TXTTAB, $2b/$2c)
- * to the variables start (VARTAB, $2d/$2e). LOAD or autostart it back. */
-static BOOL Action_SaveBasic(void)
+/* the BASIC program in memory: from the program start (TXTTAB, $2b/$2c)
+ * to the variables start (VARTAB, $2d/$2e). FALSE, told, if there is none. */
+static BOOL basic_program_range(unsigned int *start, unsigned int *end)
 {
-    unsigned int start = mem_ram[0x2b] | (mem_ram[0x2c] << 8);
-    unsigned int end = mem_ram[0x2d] | (mem_ram[0x2e] << 8);
-    char *path;
-    size_t len;
-    FILE *fd;
-    BOOL ok;
+    *start = mem_ram[0x2b] | (mem_ram[0x2c] << 8);
+    *end = mem_ram[0x2d] | (mem_ram[0x2e] << 8);
 
     /* NEW leaves 2 zero bytes; a machine code program may have moved the
        pointers anywhere */
-    if (start < 0x0400 || end <= start + 2 || end > amiga_machine.basic_top) {
+    if (*start < 0x0400 || *end <= *start + 2 || *end > amiga_machine.basic_top) {
         path_request(MSG_ERROR_NO_BASIC, MSG_ERROR_OK, "");
         return FALSE;
     }
+    return TRUE;
+}
+
+/* save requester for a file ending with ext (".prg"), added if missing,
+ * replacing an existing file confirmed. NULL if cancelled, else lib_free(). */
+static char *basic_save_path(ULONG title_msg, const char *pattern, const char *ext)
+{
+    char *path;
+    size_t len, ext_len = strlen(ext);
+
     amiga_video_requester_begin();
-    path = amiga_file_save_request(amiga_video_window(), LOC(MSG_REQ_SAVE_BASIC), "#?.prg");
+    path = amiga_file_save_request(amiga_video_window(), LOC(title_msg), pattern);
     amiga_video_requester_end();
     vsync_suspend_speed_eval();
     if (path == NULL) {
-        return FALSE;
+        return NULL;
     }
     /* ".prg" or ".PRG" at the end, else added */
     len = strlen(path);
-    if (len < 4 || util_strcasecmp(path + len - 4, ".prg") != 0) {
-        char *named = util_concat(path, ".prg", NULL);
+    if (len < ext_len || util_strcasecmp(path + len - ext_len, ext) != 0) {
+        char *named = util_concat(path, ext, NULL);
 
         lib_free(path);
         path = named;
@@ -442,6 +448,26 @@ static BOOL Action_SaveBasic(void)
     if (util_file_exists(path)
             && path_request(MSG_CONFIRM_REPLACE, MSG_REPLACE_CANCEL, path) != 1) {
         lib_free(path);
+        return NULL;
+    }
+    return path;
+}
+
+/* the BASIC program in memory to a .prg file, as SAVE"NAME",8 writes it:
+ * the load address, then the bytes from the program start (TXTTAB, $2b/$2c)
+ * to the variables start (VARTAB, $2d/$2e). LOAD or autostart it back. */
+static BOOL Action_SaveBasic(void)
+{
+    unsigned int start, end;
+    char *path;
+    FILE *fd;
+    BOOL ok;
+
+    if (!basic_program_range(&start, &end)) {
+        return FALSE;
+    }
+    path = basic_save_path(MSG_REQ_SAVE_BASIC, "#?.prg", ".prg");
+    if (path == NULL) {
         return FALSE;
     }
     fd = fopen(path, MODE_WRITE);
@@ -770,6 +796,200 @@ static BOOL Action_SnapshotSave(void)
     return TRUE;
 }
 
+/* BASIC menu: the program in memory as a .bas UTF-8 text file, as LIST
+ * shows it (amigabasic.c) */
+static BOOL Action_SaveBas(void)
+{
+    unsigned int start, end;
+    char *path;
+    FILE *fd;
+    int lines = -1;
+
+    if (!basic_program_range(&start, &end)) {
+        return FALSE;
+    }
+    path = basic_save_path(MSG_REQ_SAVE_BAS, "#?.bas", ".bas");
+    if (path == NULL) {
+        return FALSE;
+    }
+    fd = fopen(path, MODE_WRITE);
+    if (fd != NULL) {
+        lines = amiga_basic_write_utf8(mem_ram, start, end, amiga_machine.basic_dialect, fd);
+        if (fclose(fd) != 0) {
+            lines = -1;
+        }
+    }
+    if (lines >= 0) {
+        log_message(LOG_DEFAULT, "BASIC program, %d lines, saved as text to `%s'.", lines, path);
+    } else {
+        log_error(LOG_DEFAULT, "cannot save the BASIC program to `%s'.", path);
+        path_request(MSG_ERROR_SAVE_BASIC, MSG_ERROR_OK, path);
+    }
+    lib_free(path);
+    return lines >= 0;
+}
+
+/* a message requester with a text built here (no format in it) */
+static void text_request(const char *text)
+{
+    struct EasyStruct es;
+    ULONG args[1];
+
+    es.es_StructSize = sizeof es;
+    es.es_Flags = 0;
+    es.es_Title = (UBYTE *)amiga_machine.title;
+    es.es_TextFormat = (UBYTE *)"%s";
+    es.es_GadgetFormat = (UBYTE *)LOC(MSG_ERROR_OK);
+    args[0] = (ULONG)text;
+    amiga_video_requester_begin();
+    EasyRequestArgs(amiga_video_window(), &es, NULL, args);
+    amiga_video_requester_end();
+    vsync_suspend_speed_eval();
+}
+
+/* one problem of a .bas file as a line of text */
+static void bas_issue_text(const amiga_basic_issue_t *issue, char *out, size_t size)
+{
+    static const ULONG kind_msg[AMIGA_BAS_KIND_COUNT] = {
+        MSG_BAS_ERR_UTF8, MSG_BAS_ERR_CHAR, MSG_BAS_ERR_CONTROL, MSG_BAS_ERR_BRACE,
+        MSG_BAS_ERR_NUMBER, MSG_BAS_ERR_TOO_LONG, MSG_BAS_ERR_MEMORY, MSG_BAS_ERR_NO_LINES,
+        MSG_BAS_WARN_DUPLICATE, MSG_BAS_WARN_EMPTY
+    };
+    size_t n = 0;
+
+    if (issue->file_line > 0 && issue->basic_line >= 0) {
+        n = (size_t)snprintf(out, size, LOC(MSG_BAS_AT_LINE),
+                             (long)issue->file_line, issue->basic_line);
+    } else if (issue->file_line > 0) {
+        n = (size_t)snprintf(out, size, LOC(MSG_BAS_AT_FILE_LINE), (long)issue->file_line);
+    }
+    if (n >= size) {
+        return;
+    }
+    if (issue->kind == AMIGA_BAS_ERR_CONTROL || issue->kind == AMIGA_BAS_ERR_BRACE) {
+        snprintf(out + n, size - n, LOC(kind_msg[issue->kind]), issue->detail);
+    } else {
+        snprintf(out + n, size - n, LOC(kind_msg[issue->kind]), issue->value, issue->value2);
+    }
+}
+
+/* the report of a .bas load, in the log and in a requester */
+static void bas_report(const amiga_basic_report_t *report)
+{
+    char text[1600];
+    char line[160];
+    size_t n;
+    int i;
+
+    if (report->errors > 0) {
+        snprintf(text, sizeof text, LOC(MSG_BAS_NOT_LOADED), (long)report->errors);
+    } else {
+        snprintf(text, sizeof text, LOC(MSG_BAS_WARNINGS), (long)report->lines,
+                 (long)report->warnings);
+    }
+    for (i = 0; i < report->count; i++) {
+        bas_issue_text(&report->issues[i], line, sizeof line);
+        log_message(LOG_DEFAULT, "load .bas: %s", line);
+        n = strlen(text);
+        snprintf(text + n, sizeof text - n, "\n%s", line);
+    }
+    if (report->errors + report->warnings > report->count) {
+        n = strlen(text);
+        snprintf(line, sizeof line, LOC(MSG_BAS_MORE),
+                 (long)(report->errors + report->warnings - report->count));
+        snprintf(text + n, sizeof text - n, "\n%s", line);
+    }
+    text_request(text);
+}
+
+/* BASIC menu: a .bas UTF-8 text tokenized into memory, as typing its lines
+ * would (amigabasic.c). Nothing changes if the text has errors, the report
+ * says where. The program replaces the one in memory, like LOAD. */
+static BOOL Action_LoadBas(void)
+{
+    unsigned int start = mem_ram[0x2b] | (mem_ram[0x2c] << 8);
+    /* MEMSIZ, top of the BASIC memory (16 KB on a C16) */
+    unsigned int limit = mem_ram[0x37] | (mem_ram[0x38] << 8);
+    amiga_basic_report_t report;
+    char *path, *text = NULL;
+    long size = -1;
+    FILE *fd;
+    int ok;
+
+    if (limit > amiga_machine.basic_top) {
+        limit = amiga_machine.basic_top;
+    }
+    if (start < 0x0400 || start + 2 >= limit) {
+        path_request(MSG_ERROR_BASIC_MEMORY, MSG_ERROR_OK, "");
+        return FALSE;
+    }
+    amiga_video_requester_begin();
+    path = amiga_file_request(amiga_video_window(), LOC(MSG_REQ_LOAD_BAS), "#?.bas");
+    amiga_video_requester_end();
+    vsync_suspend_speed_eval();
+    if (path == NULL) {
+        return FALSE;
+    }
+    fd = fopen(path, MODE_READ);
+    if (fd != NULL && fseek(fd, 0, SEEK_END) == 0) {
+        size = ftell(fd);
+        /* more than 1 MB of text cannot fit in 64 KB */
+        if (size >= 0 && size <= 1024 * 1024 && fseek(fd, 0, SEEK_SET) == 0) {
+            text = lib_malloc((size_t)size + 1);
+            if (fread(text, 1, (size_t)size, fd) != (size_t)size) {
+                size = -1;
+            }
+        } else {
+            size = -1;
+        }
+    }
+    if (fd != NULL) {
+        fclose(fd);
+    }
+    if (size < 0) {
+        log_error(LOG_DEFAULT, "cannot read the BASIC text `%s'.", path);
+        path_request(MSG_ERROR_READ_BAS, MSG_ERROR_OK, path);
+        if (text != NULL) {
+            lib_free(text);
+        }
+        lib_free(path);
+        return FALSE;
+    }
+
+    ok = amiga_basic_read_utf8(text, (unsigned long)size, amiga_machine.basic_dialect,
+                               mem_ram, start, limit, &report) == 0;
+    lib_free(text);
+    if (ok) {
+        static char loaded[64];
+        int i;
+
+        /* VARTAB, ARYTAB, STREND after the program: no variables, as after
+         * LOAD and CLR */
+        for (i = 0x2d; i <= 0x31; i += 2) {
+            mem_ram[i] = (uint8_t)(report.end & 0xff);
+            mem_ram[i + 1] = (uint8_t)(report.end >> 8);
+        }
+        log_message(LOG_DEFAULT, "BASIC program, %d lines, loaded from `%s' ($%04x-$%04x).",
+                    report.lines, path, start, report.end);
+        snprintf(loaded, sizeof loaded, LOC(MSG_BAS_LOADED), (long)report.lines);
+        /* about 3 seconds */
+        amiga_video_show_message(loaded, 150);
+    } else {
+        log_error(LOG_DEFAULT, "BASIC text `%s' not loaded: %d error(s).", path, report.errors);
+    }
+    if (report.errors > 0 || report.warnings > 0) {
+        bas_report(&report);
+    }
+    lib_free(path);
+    return ok;
+}
+
+static BOOL Action_About(void)
+{
+    amiga_about_open();
+    return TRUE;
+}
+
 /* MUST stay in the ACTION_* order */
 static AmigaAction s_actions[AMIGA_ACTION_COUNT] = {
     /* AMIGA_ACTION_AUTOSTART       */ { Action_Autostart,     NULL,                  MSG_AUTOSTART,       NULL },
@@ -797,7 +1017,10 @@ static AmigaAction s_actions[AMIGA_ACTION_COUNT] = {
     /* AMIGA_ACTION_CREATE_DISK8    */ { Action_CreateDisk8,   NULL,                  MSG_CREATE_DISK8,    NULL },
     /* AMIGA_ACTION_EXTRACT_DISK8   */ { Action_ExtractDisk8,  NULL,                  MSG_EXTRACT_DISK8,   NULL },
     /* AMIGA_ACTION_SAVE_BASIC      */ { Action_SaveBasic,     NULL,                  MSG_SAVE_BASIC,      NULL },
-    /* AMIGA_ACTION_SAVE_SCREENSHOT */ { Action_SaveScreenshot, NULL,                 MSG_SAVE_SCREENSHOT, NULL }
+    /* AMIGA_ACTION_SAVE_SCREENSHOT */ { Action_SaveScreenshot, NULL,                 MSG_SAVE_SCREENSHOT, NULL },
+    /* AMIGA_ACTION_SAVE_BAS        */ { Action_SaveBas,       NULL,                  MSG_SAVE_BAS,        NULL },
+    /* AMIGA_ACTION_LOAD_BAS        */ { Action_LoadBas,       NULL,                  MSG_LOAD_BAS,        NULL },
+    /* AMIGA_ACTION_ABOUT           */ { Action_About,         NULL,                  MSG_ABOUT,           NULL }
 };
 
 void AmigaAction_Init(void)
