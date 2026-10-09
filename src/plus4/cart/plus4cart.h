@@ -29,6 +29,7 @@
 #define VICE_PLUS4CART_H
 
 #include "types.h"
+#include "paramreg.h"
 
 /* Cartridge ROM limit = 4MB */
 #define PLUS4CART_ROM_LIMIT (1024 * 1024 * 4)
@@ -47,10 +48,10 @@
 #define CART_READ_VALID                 1
 
 /* expansion port access functions */
-uint8_t plus4cart_kernal_read(uint16_t addr);
+uint8_t plus4cart_kernal_read(uint16_t addr PARAMREG(d0));
 
-uint8_t plus4cart_c1lo_read(uint16_t addr);
-uint8_t plus4cart_c1hi_read(uint16_t addr);
+uint8_t plus4cart_c1lo_read(uint16_t addr PARAMREG(d0));
+uint8_t plus4cart_c1hi_read(uint16_t addr PARAMREG(d0));
 
 int plus4cart_fd00_read(uint16_t addr, uint8_t *value);
 int plus4cart_fe00_read(uint16_t addr, uint8_t *value);

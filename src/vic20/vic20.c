@@ -910,7 +910,13 @@ int machine_specific_init(void)
     vic20_log = log_open("VIC20");
 
     if (mem_load() < 0) {
+#ifdef AMIGA_COMPILE
+        /* not fatal: the emulation waits for the ROMs to be chosen in the
+           settings window (amiga_wait_for_roms(), "no rom" state) */
+        log_warning(vic20_log, "ROMs missing: the emulation waits for them (Settings, Machine).");
+#else
         return -1;
+#endif
     }
 
     event_init();

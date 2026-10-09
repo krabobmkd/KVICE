@@ -59,6 +59,14 @@ static char *basic_rom_name = NULL;
 static char *kernal_rom_name = NULL;
 
 /* Flag: Do we have RAM block `n'?  */
+/* Amiga: all the RAM expansion blocks (35 KB) by default, most programs
+   need some; the unexpanded ones need "None" in Settings, Machine */
+#ifdef AMIGA_COMPILE
+#define RAM_BLOCK_DEFAULT 1
+#else
+#define RAM_BLOCK_DEFAULT 0
+#endif
+
 int ram_block_0_enabled;
 int ram_block_1_enabled;
 int ram_block_2_enabled;
@@ -191,15 +199,15 @@ static const resource_int_t resources_int[] =
 {
     { "MachineVideoStandard", MACHINE_SYNC_PAL, RES_EVENT_SAME, NULL,
       &sync_factor, set_sync_factor, NULL },
-    { "RAMBlock0", 0, RES_EVENT_SAME, NULL,
+    { "RAMBlock0", RAM_BLOCK_DEFAULT, RES_EVENT_SAME, NULL,
       &ram_block_0_enabled, set_ram_block_0_enabled, NULL },
-    { "RAMBlock1", 0, RES_EVENT_SAME, NULL,
+    { "RAMBlock1", RAM_BLOCK_DEFAULT, RES_EVENT_SAME, NULL,
       &ram_block_1_enabled, set_ram_block_1_enabled, NULL },
-    { "RAMBlock2", 0, RES_EVENT_SAME, NULL,
+    { "RAMBlock2", RAM_BLOCK_DEFAULT, RES_EVENT_SAME, NULL,
       &ram_block_2_enabled, set_ram_block_2_enabled, NULL },
-    { "RAMBlock3", 0, RES_EVENT_SAME, NULL,
+    { "RAMBlock3", RAM_BLOCK_DEFAULT, RES_EVENT_SAME, NULL,
       &ram_block_3_enabled, set_ram_block_3_enabled, NULL },
-    { "RAMBlock5", 0, RES_EVENT_SAME, NULL,
+    { "RAMBlock5", RAM_BLOCK_DEFAULT, RES_EVENT_SAME, NULL,
       &ram_block_5_enabled, set_ram_block_5_enabled, NULL },
     { "VFLImod", 0, RES_EVENT_SAME, NULL,
       &vflimod_enabled, set_vflimod_enabled, NULL },

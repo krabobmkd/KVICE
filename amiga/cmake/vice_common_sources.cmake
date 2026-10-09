@@ -63,7 +63,6 @@ set(VICE_COMMON_SRC
 	${VICE_SRC}/arch/amiga/c128ui.c
 	${VICE_SRC}/arch/amiga/c64dtvui.c
 	${VICE_SRC}/arch/amiga/c64scui.c
-	${VICE_SRC}/arch/amiga/c64ui.c
 	${VICE_SRC}/arch/amiga/cbm2ui.c
 	${VICE_SRC}/arch/amiga/cbm5x0ui.c
 	${VICE_SRC}/arch/amiga/console.c
@@ -71,12 +70,10 @@ set(VICE_COMMON_SRC
 	${VICE_SRC}/arch/amiga/main.c
 	${VICE_SRC}/arch/amiga/mousedrv.c
 	${VICE_SRC}/arch/amiga/petui.c
-	${VICE_SRC}/arch/amiga/plus4ui.c
 	${VICE_SRC}/arch/amiga/scpu64ui.c
 	${VICE_SRC}/arch/amiga/ui.c
 	${VICE_SRC}/arch/amiga/uimon.c
 	${VICE_SRC}/arch/amiga/uistatusbar.c
-	${VICE_SRC}/arch/amiga/vic20ui.c
 	${VICE_SRC}/arch/amiga/video.c
 	${VICE_SRC}/arch/amiga/vsidui.c
 	${VICE_SRC}/arch/amiga/vsyncarch.c

@@ -58,6 +58,10 @@ void amiga_kbd_set_symbolic(int on);
 
 /* an IDCMP_RAWKEY message (code with IECODE_UP_PREFIX), mods: KBD_MOD_* */
 void amiga_kbd_rawkey(unsigned int code, unsigned int qualifier, int mods);
+/* the lower case character of a rawkey with the Amiga keymap (no
+   qualifier), whatever the symbolic/positional mode: for the Amiga+key
+   shortcuts. -1 if none. */
+int amiga_kbd_rawkey_shortcut_char(unsigned int code);
 /* all keys up (window inactive, mode change) */
 void amiga_kbd_clear(void);
 

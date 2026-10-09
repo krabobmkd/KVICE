@@ -33,6 +33,8 @@
 int vic20rom_load_kernal(const char *rom_name);
 int vic20rom_load_basic(const char *rom_name);
 int vic20rom_load_chargen(const char *rom_name);
+int vic20rom_all_loaded(void);
+void vic20rom_get_loaded(int *kernal, int *basic, int *chargen);
 
 int vic20rom_kernal_checksum(void);
 int vic20rom_basic_checksum(void);

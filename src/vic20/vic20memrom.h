@@ -28,17 +28,18 @@
 #define VICE_VIC20MEMROM_H
 
 #include "types.h"
+#include "paramreg.h"
 
 extern uint8_t vic20memrom_kernal_rom[];
 extern uint8_t vic20memrom_kernal_trap_rom[];
 extern uint8_t vic20memrom_basic_rom[];
 extern uint8_t vic20memrom_chargen_rom[];
 
-uint8_t vic20memrom_kernal_read(uint16_t addr);
-uint8_t vic20memrom_basic_read(uint16_t addr);
+uint8_t vic20memrom_kernal_read(uint16_t addr PARAMREG(d0));
+uint8_t vic20memrom_basic_read(uint16_t addr PARAMREG(d0));
 uint8_t vic20memrom_chargen_read(uint16_t addr);
 
-uint8_t vic20memrom_trap_read(uint16_t addr);
-void vic20memrom_trap_store(uint16_t addr, uint8_t value);
+uint8_t vic20memrom_trap_read(uint16_t addr PARAMREG(d0));
+void vic20memrom_trap_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
 
 #endif

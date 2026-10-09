@@ -48,6 +48,26 @@ static log_t vic20rom_log = LOG_DEFAULT;
 /* Flag: nonzero if the Kernal and BASIC ROMs have been loaded.  */
 static int vicrom_loaded = 0;
 
+/* which ROMs the last load succeeded for: the machine can wait for the
+   missing ones (Amiga "no rom" state) instead of failing */
+static int kernal_ok = 0;
+static int basic_ok = 0;
+static int chargen_ok = 0;
+
+/* 1 when the Kernal, BASIC and character ROMs are all loaded */
+int vic20rom_all_loaded(void)
+{
+    return vicrom_loaded && kernal_ok && basic_ok && chargen_ok;
+}
+
+/* each ROM's state of the last load, 1 when loaded */
+void vic20rom_get_loaded(int *kernal, int *basic, int *chargen)
+{
+    *kernal = vicrom_loaded && kernal_ok;
+    *basic = vicrom_loaded && basic_ok;
+    *chargen = vicrom_loaded && chargen_ok;
+}
+
 
 int vic20rom_kernal_checksum(void)
 {
@@ -114,9 +134,11 @@ int vic20rom_load_kernal(const char *rom_name)
                      vic20memrom_kernal_rom, VIC20_KERNAL_ROM_SIZE,
                      VIC20_KERNAL_ROM_SIZE) < 0) {
         log_error(vic20rom_log, "Couldn't load kernal ROM.");
+        kernal_ok = 0;
         restore_trapflags();
         return -1;
     }
+    kernal_ok = 1;
 
     vic20rom_kernal_checksum();
     memcpy(vic20memrom_kernal_trap_rom, vic20memrom_kernal_rom,
@@ -158,9 +180,11 @@ int vic20rom_load_basic(const char *rom_name)
                          vic20memrom_basic_rom, VIC20_BASIC_ROM_SIZE,
                          VIC20_BASIC_ROM_SIZE) < 0) {
             log_error(vic20rom_log, "Couldn't load basic ROM.");
+            basic_ok = 0;
             return -1;
         }
     }
+    basic_ok = 1;
     return vic20rom_basic_checksum();
 }
 
@@ -177,15 +201,18 @@ int vic20rom_load_chargen(const char *rom_name)
                          vic20memrom_chargen_rom, VIC20_CHARGEN_ROM_SIZE,
                          VIC20_CHARGEN_ROM_SIZE) < 0) {
             log_error(vic20rom_log, "Couldn't load character ROM.");
+            chargen_ok = 0;
             return -1;
         }
     }
+    chargen_ok = 1;
     return 0;
 }
 
 int mem_load(void)
 {
     const char *rom_name = NULL;
+    int ret = 0;
 
     if (vic20rom_log == LOG_DEFAULT) {
         vic20rom_log = log_open("VIC20MEM");
@@ -193,26 +220,19 @@ int mem_load(void)
 
     vicrom_loaded = 1;
 
-    if (resources_get_string("KernalName", &rom_name) < 0) {
-        return -1;
+    /* all three are tried, so each one's state is known (vic20rom_all_loaded) */
+    if (resources_get_string("KernalName", &rom_name) < 0
+        || vic20rom_load_kernal(rom_name) < 0) {
+        ret = -1;
     }
-    if (vic20rom_load_kernal(rom_name) < 0) {
-        return -1;
+    if (resources_get_string("BasicName", &rom_name) < 0
+        || vic20rom_load_basic(rom_name) < 0) {
+        ret = -1;
     }
-
-    if (resources_get_string("BasicName", &rom_name) < 0) {
-        return -1;
-    }
-    if (vic20rom_load_basic(rom_name) < 0) {
-        return -1;
-    }
-
-    if (resources_get_string("ChargenName", &rom_name) < 0) {
-        return -1;
-    }
-    if (vic20rom_load_chargen(rom_name) < 0) {
-        return -1;
+    if (resources_get_string("ChargenName", &rom_name) < 0
+        || vic20rom_load_chargen(rom_name) < 0) {
+        ret = -1;
     }
 
-    return 0;
+    return ret;
 }

@@ -189,7 +189,7 @@ static void h256k_reg_store(uint16_t addr, uint8_t value)
     h256k_bound = (value & 0x80) >> 7;
 }
 
-void h256k_store(uint16_t addr, uint8_t value)
+void h256k_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     int real_bank;
 
@@ -221,7 +221,7 @@ void h256k_ram_inject(uint16_t addr, uint8_t value)
     h256k_store(addr, value);
 }
 
-uint8_t h256k_read(uint16_t addr)
+uint8_t h256k_read(uint16_t addr PARAMREG(d0))
 {
     int real_bank;
 

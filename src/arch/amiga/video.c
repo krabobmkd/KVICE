@@ -68,6 +68,7 @@
 
 #include "amigavideo.h"
 #include "amigaaction.h"
+#include "amigamachine.h"
 #include "kbd.h"
 #include "amigalocale.h"
 #include "amigamenu.h"
@@ -78,6 +79,7 @@
 #include "archdep_default_portable_resource_file_name.h"
 #include "amiga_cgxscale.h"
 #include "amiga_planarscale.h"
+#include "amiga_scalerow.h"
 #include "amiga_screenmode.h"
 
 /* optional: NULL when there is no RTG system (plain AGA/ECS Amiga) */
@@ -650,7 +652,7 @@ static void amiga_open_window(unsigned int width, unsigned int height)
     AMIGA_TRACE(("open window %ux%u at %d,%d", known_size ? (unsigned)window_inner_w : width,
                  known_size ? (unsigned)window_inner_h : height, window_left, window_top));
     amiga_window = OpenWindowTags(NULL,
-            WA_Title, (ULONG)LOC(MSG_WINDOW_TITLE),
+            WA_Title, (ULONG)amiga_machine.title,
             (window_left >= 0 ? WA_Left : TAG_IGNORE), window_left,
             (window_top >= 0 ? WA_Top : TAG_IGNORE), window_top,
             /* inner size: independent of the border sizes */
@@ -936,7 +938,7 @@ static int amiga_open_fullscreen(void)
             SA_Depth, depth,
             /* palette from the start, no flash */
             (colors32 != NULL ? SA_Colors32 : TAG_IGNORE), (ULONG)colors32,
-            SA_Title, (ULONG)LOC(MSG_WINDOW_TITLE),
+            SA_Title, (ULONG)amiga_machine.title,
             /* the menus need the title bar */
             SA_ShowTitle, fs_menu ? TRUE : FALSE,
             SA_Quiet, fs_menu ? FALSE : TRUE,
@@ -1069,6 +1071,29 @@ int amiga_video_is_fullscreen(void)
 #define AMIGA_RAWKEY_L 0x28
 #define AMIGA_RAWKEY_W 0x11
 
+/* the letter of an Amiga+key shortcut. Like Intuition does for the menu
+ * shortcuts, it is the character of the Amiga keymap (AZERTY, QWERTZ...),
+ * not the key position: this does not depend on the symbolic/positional
+ * C64 keyboard mode. Without keymap.library, the US key positions. */
+static int amiga_shortcut_char(UWORD code)
+{
+    int c = amiga_kbd_rawkey_shortcut_char(code);
+
+    if (c >= 0) {
+        return c;
+    }
+    switch (code & 0x7f) {
+        case AMIGA_RAWKEY_F: return 'f';
+        case AMIGA_RAWKEY_Q: return 'q';
+        case AMIGA_RAWKEY_R: return 'r';
+        case AMIGA_RAWKEY_P: return 'p';
+        case AMIGA_RAWKEY_A: return 'a';
+        case AMIGA_RAWKEY_L: return 'l';
+        case AMIGA_RAWKEY_W: return 'w';
+        default: return -1;
+    }
+}
+
 /* Fullscreen without menus: Amiga+key of the menu shortcuts that still make
  * sense there (with menus, Intuition turns them into menu picks). Returns 1
  * when the key was one of them. */
@@ -1076,23 +1101,23 @@ static int amiga_fullscreen_shortcut(UWORD code)
 {
     int action;
 
-    switch (code & 0x7f) {
-        case AMIGA_RAWKEY_P:
+    switch (amiga_shortcut_char(code)) {
+        case 'p':
             action = AMIGA_ACTION_PAUSE;
             break;
-        case AMIGA_RAWKEY_Q:
+        case 'q':
             action = AMIGA_ACTION_QUIT;
             break;
-        case AMIGA_RAWKEY_A:
+        case 'a':
             action = AMIGA_ACTION_AUTOSTART;
             break;
-        case AMIGA_RAWKEY_R:
+        case 'r':
             action = AMIGA_ACTION_RESET;
             break;
-        case AMIGA_RAWKEY_L:
+        case 'l':
             action = AMIGA_ACTION_SNAPSHOT_LOAD;
             break;
-        case AMIGA_RAWKEY_W:
+        case 'w':
             action = AMIGA_ACTION_SNAPSHOT_SAVE;
             break;
         default:
@@ -1152,6 +1177,12 @@ void amiga_video_requester_end(void)
 
 /** \brief  The emulator window, for requesters (may be NULL)
  */
+/* the emulator canvas (screenshot), NULL before it is created */
+struct video_canvas_s *amiga_video_canvas(void)
+{
+    return amiga_canvas;
+}
+
 struct Window *amiga_video_window(void)
 {
     /* requesters must not open on the fullscreen: it is drawn over */
@@ -1270,8 +1301,8 @@ void amiga_video_handle_events(void)
                 }
                 /* Amiga+F: window <-> fullscreen. In the window it comes as
                  * the menu shortcut, the fullscreen window has no menu. */
-                if ((code & 0x7f) == AMIGA_RAWKEY_F
-                        && (qualifier & (IEQUALIFIER_LCOMMAND | IEQUALIFIER_RCOMMAND))) {
+                if ((qualifier & (IEQUALIFIER_LCOMMAND | IEQUALIFIER_RCOMMAND))
+                        && amiga_shortcut_char(code) == 'f') {
                     if (!(code & IECODE_UP_PREFIX)) {
                         fullscreen_request = !fullscreen;
                     }
@@ -1463,16 +1494,25 @@ static void amiga_draw_rect(const draw_buffer_t *db, unsigned int xs, unsigned i
     if (use_cgxscale || use_planarscale) {
         int dw = (int)draw_width;
         int dh = (int)draw_height;
+        ULONG step_x, step_y;
 
+        if (dw <= 0 || dh <= 0) {
+            return;
+        }
+        /* the destination pixels that show the dirty part, with the
+         * scalers' own rounding: x * dw / bw would miss the first line of
+         * a changed row, still showing the row above (stale lines) */
+        step_x = SCALEROW_STEP(bw, dw);
+        step_y = SCALEROW_STEP(bh, dh);
         /* shown area -> whole window inner area, dirty part only */
         (use_cgxscale ? cgxscale_draw : planarscale_draw)(
                       draw_rp, db->draw_buffer, db->draw_buffer_pitch,
                       crop_x, crop_y, bw, bh,
                       bl, bt, dw, dh,
-                      bl + rx0 * dw / bw,
-                      bt + ry0 * dh / bh,
-                      bl + (rx1 * dw + bw - 1) / bw,
-                      bt + (ry1 * dh + bh - 1) / bh);
+                      bl + SCALEROW_FIRST_DST(rx0, step_x),
+                      bt + SCALEROW_FIRST_DST(ry0, step_y),
+                      bl + SCALEROW_FIRST_DST(rx1, step_x),
+                      bt + SCALEROW_FIRST_DST(ry1, step_y));
         return;
     }
     if (!use_rtg) {

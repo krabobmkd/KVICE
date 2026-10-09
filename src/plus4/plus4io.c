@@ -494,7 +494,7 @@ void cartio_set_highest_order(unsigned int nr)
 
 /* ---------------------------------------------------------------------------------------------------------- */
 
-uint8_t plus4io_fd00_read(uint16_t addr)
+uint8_t plus4io_fd00_read(uint16_t addr PARAMREG(d0))
 {
     uint8_t value;
 
@@ -523,14 +523,14 @@ uint8_t plus4io_fd00_peek(uint16_t addr)
     return value;
 }
 
-void plus4io_fd00_store(uint16_t addr, uint8_t value)
+void plus4io_fd00_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     DBGRW(("IO: io-fd00 w %04x %02x", addr, value));
     ted.last_cpu_val = value;
     io_store(&plus4io_fd00_head, addr, value);
 }
 
-uint8_t plus4io_fe00_read(uint16_t addr)
+uint8_t plus4io_fe00_read(uint16_t addr PARAMREG(d0))
 {
     uint8_t value;
     DBGRW(("IO: io-fe00 r %04x", addr));
@@ -555,7 +555,7 @@ uint8_t plus4io_fe00_peek(uint16_t addr)
     return value;
 }
 
-void plus4io_fe00_store(uint16_t addr, uint8_t value)
+void plus4io_fe00_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     DBGRW(("IO: io-fe00 w %04x %02x", addr, value));
     ted.last_cpu_val = value;

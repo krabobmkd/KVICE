@@ -28,6 +28,8 @@
 #include <stdlib.h>
 
 #include "amigaaction.h"
+#include "amigamachine.h"
+#include "screenshot.h"
 #include "kbd.h"
 #include "amigalocale.h"
 #include "amigamui.h"
@@ -139,7 +141,7 @@ static LONG path_request(ULONG text_msg, ULONG gadgets_msg, const char *path)
 
     es.es_StructSize = sizeof es;
     es.es_Flags = 0;
-    es.es_Title = (UBYTE *)LOC(MSG_WINDOW_TITLE);
+    es.es_Title = (UBYTE *)amiga_machine.title;
     es.es_TextFormat = (UBYTE *)LOC(text_msg);
     es.es_GadgetFormat = (UBYTE *)LOC(gadgets_msg);
     args[0] = (ULONG)path;
@@ -392,7 +394,7 @@ static BOOL Action_ExtractDisk8(void)
         counts[2] = (long)drawer;
         es.es_StructSize = sizeof es;
         es.es_Flags = 0;
-        es.es_Title = (UBYTE *)LOC(MSG_WINDOW_TITLE);
+        es.es_Title = (UBYTE *)amiga_machine.title;
         es.es_TextFormat = (UBYTE *)LOC(MSG_EXTRACT_DONE);
         es.es_GadgetFormat = (UBYTE *)LOC(MSG_ERROR_OK);
         amiga_video_requester_begin();
@@ -418,7 +420,7 @@ static BOOL Action_SaveBasic(void)
 
     /* NEW leaves 2 zero bytes; a machine code program may have moved the
        pointers anywhere */
-    if (start < 0x0400 || end <= start + 2 || end > 0xa000) {
+    if (start < 0x0400 || end <= start + 2 || end > amiga_machine.basic_top) {
         path_request(MSG_ERROR_NO_BASIC, MSG_ERROR_OK, "");
         return FALSE;
     }
@@ -455,6 +457,50 @@ static BOOL Action_SaveBasic(void)
     } else {
         log_error(LOG_DEFAULT, "cannot save the BASIC program to `%s'.", path);
         path_request(MSG_ERROR_SAVE_BASIC, MSG_ERROR_OK, path);
+    }
+    lib_free(path);
+    return ok;
+}
+
+/* Display menu: the emulator screen as an IFF ILBM picture (VICE IFF
+ * screenshot driver: the canvas at its size, the borders as VICE draws
+ * them, the machine palette) */
+static BOOL Action_SaveScreenshot(void)
+{
+    struct video_canvas_s *canvas = amiga_video_canvas();
+    char *path;
+    size_t len;
+    BOOL ok;
+
+    if (canvas == NULL) {
+        return FALSE;
+    }
+    amiga_video_requester_begin();
+    path = amiga_file_save_request(amiga_video_window(), LOC(MSG_REQ_SAVE_SCREENSHOT), "#?.iff");
+    amiga_video_requester_end();
+    vsync_suspend_speed_eval();
+    if (path == NULL) {
+        return FALSE;
+    }
+    /* ".iff" or ".IFF" at the end, else added */
+    len = strlen(path);
+    if (len < 4 || util_strcasecmp(path + len - 4, ".iff") != 0) {
+        char *named = util_concat(path, ".iff", NULL);
+
+        lib_free(path);
+        path = named;
+    }
+    if (util_file_exists(path)
+            && path_request(MSG_CONFIRM_REPLACE, MSG_REPLACE_CANCEL, path) != 1) {
+        lib_free(path);
+        return FALSE;
+    }
+    ok = screenshot_save("IFF", path, canvas) == 0;
+    if (ok) {
+        log_message(LOG_DEFAULT, "Screenshot saved to `%s'.", path);
+    } else {
+        log_error(LOG_DEFAULT, "cannot save the screenshot to `%s'.", path);
+        path_request(MSG_ERROR_SAVE_SCREENSHOT, MSG_ERROR_OK, path);
     }
     lib_free(path);
     return ok;
@@ -638,7 +684,7 @@ static void snapshot_error(ULONG format_msg, const char *path)
 
     es.es_StructSize = sizeof es;
     es.es_Flags = 0;
-    es.es_Title = (UBYTE *)LOC(MSG_WINDOW_TITLE);
+    es.es_Title = (UBYTE *)amiga_machine.title;
     es.es_TextFormat = (UBYTE *)LOC(format_msg);
     es.es_GadgetFormat = (UBYTE *)LOC(MSG_ERROR_OK);
     args[0] = (ULONG)path;
@@ -750,7 +796,8 @@ static AmigaAction s_actions[AMIGA_ACTION_COUNT] = {
     /* AMIGA_ACTION_KEYBOARD_POSITIONAL */ { Action_KeyboardPositional, Checked_KeyboardPositional, MSG_KEYBOARD_POSITIONAL, NULL },
     /* AMIGA_ACTION_CREATE_DISK8    */ { Action_CreateDisk8,   NULL,                  MSG_CREATE_DISK8,    NULL },
     /* AMIGA_ACTION_EXTRACT_DISK8   */ { Action_ExtractDisk8,  NULL,                  MSG_EXTRACT_DISK8,   NULL },
-    /* AMIGA_ACTION_SAVE_BASIC      */ { Action_SaveBasic,     NULL,                  MSG_SAVE_BASIC,      NULL }
+    /* AMIGA_ACTION_SAVE_BASIC      */ { Action_SaveBasic,     NULL,                  MSG_SAVE_BASIC,      NULL },
+    /* AMIGA_ACTION_SAVE_SCREENSHOT */ { Action_SaveScreenshot, NULL,                 MSG_SAVE_SCREENSHOT, NULL }
 };
 
 void AmigaAction_Init(void)

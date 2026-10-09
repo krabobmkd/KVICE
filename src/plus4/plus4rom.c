@@ -47,6 +47,24 @@ static log_t plus4rom_log = LOG_DEFAULT;
 /* Flag: nonzero if the Kernal and BASIC ROMs have been loaded.  */
 int plus4_rom_loaded = 0;
 
+/* which ROMs the last load succeeded for: the machine can wait for the
+   missing ones (Amiga "no rom" state) instead of failing */
+static int kernal_ok = 0;
+static int basic_ok = 0;
+
+/* 1 when the Kernal and BASIC ROMs are loaded */
+int plus4rom_all_loaded(void)
+{
+    return plus4_rom_loaded && kernal_ok && basic_ok;
+}
+
+/* each ROM's state of the last load, 1 when loaded */
+void plus4rom_get_loaded(int *kernal, int *basic)
+{
+    *kernal = plus4_rom_loaded && kernal_ok;
+    *basic = plus4_rom_loaded && basic_ok;
+}
+
 #define NUM_TRAP_DEVICES 9  /* FIXME: is there a better constant ? */
 static int trapfl[NUM_TRAP_DEVICES];
 static int trapdevices[NUM_TRAP_DEVICES + 1] = { 1, 4, 5, 6, 7, 8, 9, 10, 11, -1 };
@@ -90,11 +108,13 @@ int plus4rom_load_kernal(const char *rom_name)
                      PLUS4_KERNAL_ROM_SIZE, PLUS4_KERNAL_ROM_SIZE) < 0) {
         log_error(plus4rom_log, "Couldn't load kernal ROM `%s'.",
                   rom_name);
+        kernal_ok = 0;
         restore_trapflags();
         return -1;
     }
     memcpy(plus4memrom_kernal_trap_rom, plus4memrom_kernal_rom,
            PLUS4_KERNAL_ROM_SIZE);
+    kernal_ok = 1;
 
     restore_trapflags();
 
@@ -113,14 +133,17 @@ int plus4rom_load_basic(const char *rom_name)
         log_error(plus4rom_log,
                   "Couldn't load basic ROM `%s'.",
                   rom_name);
+        basic_ok = 0;
         return -1;
     }
+    basic_ok = 1;
     return 0;
 }
 
 int mem_load(void)
 {
     const char *rom_name = NULL;
+    int ret = 0;
 
     if (plus4rom_log == LOG_DEFAULT) {
         plus4rom_log = log_open("PLUS4MEM");
@@ -128,17 +151,16 @@ int mem_load(void)
 
     plus4_rom_loaded = 1;
 
-    if (resources_get_string("KernalName", &rom_name) < 0) {
-        return -1;
+    /* both are tried, so each one's state is known (plus4rom_all_loaded) */
+    if (resources_get_string("KernalName", &rom_name) < 0
+        || plus4rom_load_kernal(rom_name) < 0) {
+        ret = -1;
     }
-    if (plus4rom_load_kernal(rom_name) < 0) {
-        return -1;
+    if (resources_get_string("BasicName", &rom_name) < 0
+        || plus4rom_load_basic(rom_name) < 0) {
+        ret = -1;
     }
-
-    if (resources_get_string("BasicName", &rom_name) < 0) {
-        return -1;
-    }
-    if (plus4rom_load_basic(rom_name) < 0) {
+    if (ret < 0) {
         return -1;
     }
 

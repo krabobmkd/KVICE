@@ -28,6 +28,7 @@
 #define VICE_CS256K_H
 
 #include "types.h"
+#include "paramreg.h"
 
 extern int cs256k_enabled;
 
@@ -36,8 +37,8 @@ void cs256k_reset(void);
 void cs256k_shutdown(void);
 
 void cs256k_ram_inject(uint16_t addr, uint8_t value);
-void cs256k_store(uint16_t addr, uint8_t value);
-uint8_t cs256k_read(uint16_t addr);
+void cs256k_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t cs256k_read(uint16_t addr PARAMREG(d0));
 
 int set_cs256k_enabled(int value);
 

@@ -10,8 +10,8 @@
 #
 # Programs of the Amiga package (one option each):
 #   x64     C64 (the fast VIC-II emulation)       ON  (ported)
-#   xvic    VIC-20                                OFF (not ported yet)
-#   xplus4  Plus/4, C16, C116 (TED machines)      OFF (being ported)
+#   xvic    VIC-20                                OFF (being ported)
+#   xplus4  Plus/4, C16, C116 (TED machines)      ON  (ported)
 #   xpet    PET / CBM                             OFF (not ported yet)
 #   c1541   disk image tool                       OFF (not ported yet)
 #
@@ -29,8 +29,8 @@ cmake_minimum_required (VERSION 3.13)
 project(ViceAmiga LANGUAGES C VERSION 3.10)
 
 option(VICE_BUILD_X64    "build x64, the C64 emulator" ON)
-option(VICE_BUILD_XVIC   "build xvic, the VIC-20 emulator (not ported yet)" OFF)
-option(VICE_BUILD_XPLUS4 "build xplus4, the Plus/4 C16 C116 emulator (being ported)" OFF)
+option(VICE_BUILD_XVIC   "build xvic, the VIC-20 emulator (being ported)" ON)
+option(VICE_BUILD_XPLUS4 "build xplus4, the Plus/4 C16 C116 emulator" ON)
 option(VICE_BUILD_XPET   "build xpet, the PET CBM emulator (not ported yet)" OFF)
 option(VICE_BUILD_C1541  "build c1541, the disk image tool (not ported yet)" OFF)
 
@@ -39,7 +39,7 @@ option(AMIGA_USE_68030 "compile for 68030" ON)
 option(AMIGA_USE_68040 "compile for 68040" OFF)
 option(AMIGA_USE_68060 "compile for 68060" OFF)
 option(VICE_USE_HARDFLOAT "use 6888x/040/060 FPU instructions" OFF)
-option(VICE_AMIGA_TRACE "print startup traces to stdout (arch/amiga/amigatrace.h)" OFF)
+option(VICE_AMIGA_TRACE "print startup traces to stdout (arch/amiga/amigatrace.h)" ON)
 option(VICE_AMIGA_SAVE_ASM "keep the generated assembler (.s) and preprocessed (.i) files next to the objects in the build dir" ON)
 option(VICE_AMIGA_TIME_STATS "measure: print the host time spent in CPU, VIC-II, screen output, SID, sound and waiting every 5 s" OFF)
 option(VICE_AMIGA_DIV64_STATS "measure: print 64 bit divisions per second and their callers every 5 s" OFF)
@@ -109,9 +109,9 @@ endforeach()
 # needed by hvsc, header-only in the autotools build list
 list(APPEND VICE_COMMON_SRC ${VICE_SRC}/lib/md5/md5.c)
 
-# The Amiga arch layer, shared by all the emulators.
-# TODO when porting another emulator: amigamui.c "Machine" page uses the C64
-# model API (c64model.c), it must become machine specific.
+# The Amiga arch layer, shared by all the emulators (display, scalers, UI).
+# What is machine specific comes from the amiga_machine table
+# (amigamachine.h) of the machine UI file in each emulator's own list.
 list(APPEND VICE_COMMON_SRC
 	${VICE_SRC}/arch/amiga/amigatrace.c
 	${VICE_SRC}/arch/amiga/soundahi.c
@@ -188,28 +188,35 @@ set(VICE_INCLUDE_DIRS
 	${CMAKE_CURRENT_BINARY_DIR}/generated
 )
 
-# the default positional keymap built in (kbd.c), used when
-# amiga_positional.vkm is not found on disk: a C string of the file without
-# its comment lines, made again when the file changes
-set(KVICE_BUILTIN_VKM "${CMAKE_CURRENT_SOURCE_DIR}/data/C64/amiga_positional.vkm")
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${KVICE_BUILTIN_VKM}")
-file(READ "${KVICE_BUILTIN_VKM}" vkm_text)
-# comments out first: they have ';' (CMake list separator) and brackets
-# (a vkm comment runs to the end of its line)
-string(REGEX REPLACE "/\\*[^\n]*" "" vkm_text "${vkm_text}")
-string(REGEX REPLACE "#[^\n]*" "" vkm_text "${vkm_text}")
-string(REGEX REPLACE "[;\r\\\"]" "" vkm_text "${vkm_text}")
-string(REPLACE "\n" ";" vkm_lines "${vkm_text}")
-set(vkm_c "/* made by CMakeLists.txt from data/C64/amiga_positional.vkm */\n")
-string(APPEND vkm_c "static const char amiga_positional_vkm[] =\n")
-foreach(vkm_line IN LISTS vkm_lines)
-	string(STRIP "${vkm_line}" vkm_line)
-	if(NOT vkm_line STREQUAL "")
-		string(APPEND vkm_c "    \"${vkm_line}\\n\"\n")
-	endif()
-endforeach()
-string(APPEND vkm_c "    ;\n")
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/amiga_positional_vkm.h" "${vkm_c}")
+# the default positional keymap of each machine built in (its UI file,
+# c64ui.c...), used when data/<machine>/amiga_positional.vkm is not found on
+# disk: a C string of the file without its comment lines, in
+# generated/amiga_positional_vkm_<machine>.h, made again when the file changes
+function(vice_amiga_builtin_vkm machine)
+	set(vkm_file "${CMAKE_CURRENT_SOURCE_DIR}/data/${machine}/amiga_positional.vkm")
+	set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${vkm_file}")
+	file(READ "${vkm_file}" vkm_text)
+	# comments out first: they have ';' (CMake list separator) and brackets
+	# (a vkm comment runs to the end of its line)
+	string(REGEX REPLACE "/\\*[^\n]*" "" vkm_text "${vkm_text}")
+	string(REGEX REPLACE "#[^\n]*" "" vkm_text "${vkm_text}")
+	string(REGEX REPLACE "[;\r\\\"]" "" vkm_text "${vkm_text}")
+	string(REPLACE "\n" ";" vkm_lines "${vkm_text}")
+	set(vkm_c "/* made by CMakeLists.txt from data/${machine}/amiga_positional.vkm */\n")
+	string(APPEND vkm_c "static const char amiga_positional_vkm[] =\n")
+	foreach(vkm_line IN LISTS vkm_lines)
+		string(STRIP "${vkm_line}" vkm_line)
+		if(NOT vkm_line STREQUAL "")
+			string(APPEND vkm_c "    \"${vkm_line}\\n\"\n")
+		endif()
+	endforeach()
+	string(APPEND vkm_c "    ;\n")
+	string(TOLOWER "${machine}" machine_lc)
+	file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/amiga_positional_vkm_${machine_lc}.h" "${vkm_c}")
+endfunction()
+vice_amiga_builtin_vkm(C64)
+vice_amiga_builtin_vkm(PLUS4)
+vice_amiga_builtin_vkm(VIC20)
 
 # same compile settings for every target
 function(vice_amiga_setup_target target)
@@ -300,7 +307,15 @@ if(VICE_BUILD_XPLUS4)
 	vice_amiga_data(PLUS4)
 endif()
 
-foreach(prog XVIC XPET C1541)
+if(VICE_BUILD_XVIC)
+	vice_amiga_emulator(xvic ${VICE_XVIC_SRC})
+	target_include_directories(xvic PRIVATE
+		${VICE_SRC}/vic20
+		${VICE_SRC}/vic20/cart)
+	vice_amiga_data(VIC20)
+endif()
+
+foreach(prog XPET C1541)
 	if(VICE_BUILD_${prog})
 		string(TOLOWER ${prog} prog_name)
 		message(WARNING "${prog_name} is not ported to AmigaOS yet: skipped. "

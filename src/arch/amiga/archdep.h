@@ -40,12 +40,12 @@
 #define ARCHDEP_VICII_DSCAN   0     /**< VICII double scan */
 #define ARCHDEP_VDC_DSIZE     1     /**< VDC double size */
 #define ARCHDEP_VDC_DSCAN     1     /**< VDC double scan */
-#define ARCHDEP_VIC_DSIZE     1     /**< VIC double size */
-#define ARCHDEP_VIC_DSCAN     1     /**< VIC double scan */
+#define ARCHDEP_VIC_DSIZE     0     /**< VIC double size */
+#define ARCHDEP_VIC_DSCAN     0     /**< VIC double scan */
 #define ARCHDEP_CRTC_DSIZE    1     /**< CRTC double size */
 #define ARCHDEP_CRTC_DSCAN    1     /**< CRTC double scan */
-#define ARCHDEP_TED_DSIZE     1     /**< TED double size */
-#define ARCHDEP_TED_DSCAN     1     /**< TED double scan */
+#define ARCHDEP_TED_DSIZE     0     /**< TED double size */
+#define ARCHDEP_TED_DSCAN     0     /**< TED double scan */
 
 /* No key symcode.  */
 #define ARCHDEP_KEYBOARD_SYM_NONE 0 /**< no keyboard symcode (?) */

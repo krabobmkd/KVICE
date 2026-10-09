@@ -374,7 +374,7 @@ void cartridge_resources_shutdown(void)
 /* c000 - ffff */
 /* a cartridge may "force" data on the bus when the regular kernal should
    be selected instead */
-uint8_t plus4cart_kernal_read(uint16_t addr)
+uint8_t plus4cart_kernal_read(uint16_t addr PARAMREG(d0))
 {
     uint8_t value = 0xff;
     int ret = CART_READ_THROUGH;
@@ -443,7 +443,7 @@ int plus4cart_fe00_peek(uint16_t addr, uint8_t *value)
 }
 
 /* 8000 - bfff */
-uint8_t plus4cart_c1lo_read(uint16_t addr)
+uint8_t plus4cart_c1lo_read(uint16_t addr PARAMREG(d0))
 {
     DBGRW(("plus4cart_c1lo_read mem_cartridge_type: %04x addr: %04x", (unsigned)mem_cartridge_type, addr));
     if (CARTRIDGE_PLUS4_IS_GENERIC(mem_cartridge_type)) {
@@ -469,7 +469,7 @@ uint8_t plus4cart_c1lo_read(uint16_t addr)
 }
 
 /* c000 - ffff */
-uint8_t plus4cart_c1hi_read(uint16_t addr)
+uint8_t plus4cart_c1hi_read(uint16_t addr PARAMREG(d0))
 {
     DBGRW(("plus4cart_c1hi_read mem_cartridge_type: %04x addr: %04x", (unsigned)mem_cartridge_type, addr));
     if (CARTRIDGE_PLUS4_IS_GENERIC(mem_cartridge_type)) {
