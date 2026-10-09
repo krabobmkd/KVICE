@@ -83,7 +83,7 @@ int mem_cart_blocks = 0;
 
 /* ------------------------------------------------------------------------- */
 
-uint8_t cartridge_read_ram123(uint16_t addr)
+uint8_t cartridge_read_ram123(uint16_t addr PARAMREG(d0))
 {
     switch (mem_cartridge_type) {
         /* main slot */
@@ -117,7 +117,7 @@ uint8_t cartridge_read_ram123(uint16_t addr)
     return vic20_cpu_last_data;
 }
 
-uint8_t cartridge_peek_ram123(uint16_t addr)
+uint8_t cartridge_peek_ram123(uint16_t addr PARAMREG(d0))
 {
     switch (mem_cartridge_type) {
         /* main slot */
@@ -142,7 +142,7 @@ uint8_t cartridge_peek_ram123(uint16_t addr)
     return 0;
 }
 
-void cartridge_store_ram123(uint16_t addr, uint8_t value)
+void cartridge_store_ram123(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     vic20_cpu_last_data = value;
     switch (mem_cartridge_type) {
@@ -172,7 +172,7 @@ void cartridge_store_ram123(uint16_t addr, uint8_t value)
     vic20_mem_v_bus_store(addr);
 }
 
-uint8_t cartridge_read_blk1(uint16_t addr)
+uint8_t cartridge_read_blk1(uint16_t addr PARAMREG(d0))
 {
     switch (mem_cartridge_type) {
         /* main slot */
@@ -198,7 +198,7 @@ uint8_t cartridge_read_blk1(uint16_t addr)
     return vic20_cpu_last_data;
 }
 
-uint8_t cartridge_peek_blk1(uint16_t addr)
+uint8_t cartridge_peek_blk1(uint16_t addr PARAMREG(d0))
 {
     switch (mem_cartridge_type) {
         /* main slot */
@@ -218,7 +218,7 @@ uint8_t cartridge_peek_blk1(uint16_t addr)
     return 0;
 }
 
-void cartridge_store_blk1(uint16_t addr, uint8_t value)
+void cartridge_store_blk1(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     vic20_cpu_last_data = value;
     switch (mem_cartridge_type) {
@@ -241,7 +241,7 @@ void cartridge_store_blk1(uint16_t addr, uint8_t value)
     }
 }
 
-uint8_t cartridge_read_blk2(uint16_t addr)
+uint8_t cartridge_read_blk2(uint16_t addr PARAMREG(d0))
 {
     switch (mem_cartridge_type) {
         /* main slot */
@@ -267,7 +267,7 @@ uint8_t cartridge_read_blk2(uint16_t addr)
     return vic20_cpu_last_data;
 }
 
-uint8_t cartridge_peek_blk2(uint16_t addr)
+uint8_t cartridge_peek_blk2(uint16_t addr PARAMREG(d0))
 {
     switch (mem_cartridge_type) {
         /* main slot */
@@ -287,7 +287,7 @@ uint8_t cartridge_peek_blk2(uint16_t addr)
     return 0;
 }
 
-void cartridge_store_blk2(uint16_t addr, uint8_t value)
+void cartridge_store_blk2(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     vic20_cpu_last_data = value;
     switch (mem_cartridge_type) {
@@ -310,7 +310,7 @@ void cartridge_store_blk2(uint16_t addr, uint8_t value)
     }
 }
 
-uint8_t cartridge_read_blk3(uint16_t addr)
+uint8_t cartridge_read_blk3(uint16_t addr PARAMREG(d0))
 {
     switch (mem_cartridge_type) {
         /* main slot */
@@ -339,7 +339,7 @@ uint8_t cartridge_read_blk3(uint16_t addr)
     return vic20_cpu_last_data;
 }
 
-uint8_t cartridge_peek_blk3(uint16_t addr)
+uint8_t cartridge_peek_blk3(uint16_t addr PARAMREG(d0))
 {
     switch (mem_cartridge_type) {
         /* main slot */
@@ -359,7 +359,7 @@ uint8_t cartridge_peek_blk3(uint16_t addr)
     return 0;
 }
 
-void cartridge_store_blk3(uint16_t addr, uint8_t value)
+void cartridge_store_blk3(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     vic20_cpu_last_data = value;
     switch (mem_cartridge_type) {
@@ -383,7 +383,7 @@ void cartridge_store_blk3(uint16_t addr, uint8_t value)
 }
 
 /* A000-BFFF */
-uint8_t cartridge_read_blk5(uint16_t addr)
+uint8_t cartridge_read_blk5(uint16_t addr PARAMREG(d0))
 {
     int res = CART_READ_THROUGH;
     uint8_t value;
@@ -435,7 +435,7 @@ uint8_t cartridge_read_blk5(uint16_t addr)
 }
 
 /* A000-BFFF */
-uint8_t cartridge_peek_blk5(uint16_t addr)
+uint8_t cartridge_peek_blk5(uint16_t addr PARAMREG(d0))
 {
     int res = CART_READ_THROUGH;
     uint8_t value;
@@ -471,7 +471,7 @@ uint8_t cartridge_peek_blk5(uint16_t addr)
 }
 
 /* A000-BFFF */
-void cartridge_store_blk5(uint16_t addr, uint8_t value)
+void cartridge_store_blk5(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     /* "Slot 0" */
 

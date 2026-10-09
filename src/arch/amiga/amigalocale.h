@@ -201,6 +201,16 @@ enum {
     MSG_C64_FROM_MOUSE_PORT,
     MSG_C64_FROM_JOYSTICK_PORT,
 
+    /* Settings: Machine, the model cycle of the machines but the C64 */
+    MSG_MODEL,
+    MSG_MODEL_INFO_RAM,
+    MSG_RAM_EXPANSION,
+
+    /* Display menu: the emulator screen to an IFF picture */
+    MSG_SAVE_SCREENSHOT,
+    MSG_REQ_SAVE_SCREENSHOT,
+    MSG_ERROR_SAVE_SCREENSHOT,
+
     /* Must be last */
     MSG_COUNT
 };

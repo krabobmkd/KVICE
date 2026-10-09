@@ -28,6 +28,7 @@
 #define VICE_H256K_H
 
 #include "types.h"
+#include "paramreg.h"
 
 #define H256K_DISABLED  0
 #define H256K_256K      1
@@ -39,8 +40,8 @@ void h256k_init(void);
 void h256k_reset(void);
 void h256k_shutdown(void);
 
-void h256k_store(uint16_t addr, uint8_t value);
-uint8_t h256k_read(uint16_t addr);
+void h256k_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t h256k_read(uint16_t addr PARAMREG(d0));
 
 void h256k_ram_inject(uint16_t addr, uint8_t value);
 

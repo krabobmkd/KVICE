@@ -28,15 +28,16 @@
 #define VICE_PLUS4MEMROM_H
 
 #include "types.h"
+#include "paramreg.h"
 
 extern uint8_t plus4memrom_basic_rom[];
 extern uint8_t plus4memrom_kernal_rom[];
 extern uint8_t plus4memrom_kernal_trap_rom[];
 
-uint8_t plus4memrom_kernal_read(uint16_t addr);
-uint8_t plus4memrom_basic_read(uint16_t addr);
-uint8_t plus4memrom_trap_read(uint16_t addr);
-void plus4memrom_trap_store(uint16_t addr, uint8_t value);
+uint8_t plus4memrom_kernal_read(uint16_t addr PARAMREG(d0));
+uint8_t plus4memrom_basic_read(uint16_t addr PARAMREG(d0));
+uint8_t plus4memrom_trap_read(uint16_t addr PARAMREG(d0));
+void plus4memrom_trap_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
 
 uint8_t plus4memrom_rom_read(uint16_t addr);
 void plus4memrom_rom_store(uint16_t addr, uint8_t value);
@@ -44,14 +45,14 @@ void plus4memrom_rom_store(uint16_t addr, uint8_t value);
 /* c0 - internal "function rom" */
 int plus4cart_load_func_lo(const char *rom_name);
 int plus4cart_load_func_hi(const char *rom_name);
-uint8_t plus4memrom_extromlo1_read(uint16_t addr);
-uint8_t plus4memrom_extromhi1_read(uint16_t addr);
+uint8_t plus4memrom_extromlo1_read(uint16_t addr PARAMREG(d0));
+uint8_t plus4memrom_extromhi1_read(uint16_t addr PARAMREG(d0));
 
 /* c2 - internal expansion rom */
 /* FIXME: c2 can also be used at the expansion port */
 int plus4cart_load_c2lo(const char *rom_name);
 int plus4cart_load_c2hi(const char *rom_name);
-uint8_t plus4memrom_extromlo3_read(uint16_t addr);
-uint8_t plus4memrom_extromhi3_read(uint16_t addr);
+uint8_t plus4memrom_extromlo3_read(uint16_t addr PARAMREG(d0));
+uint8_t plus4memrom_extromhi3_read(uint16_t addr PARAMREG(d0));
 
 #endif

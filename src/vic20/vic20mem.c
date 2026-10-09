@@ -112,54 +112,54 @@ static int watchpoints_active = 0;
 
 /* ------------------------------------------------------------------------- */
 
-uint8_t zero_read(uint16_t addr)
+uint8_t zero_read(uint16_t addr PARAMREG(d0))
 {
     vic20_cpu_last_data = mem_ram[addr & 0xff];
     vic20_mem_v_bus_read(addr);
     return vic20_cpu_last_data;
 }
 
-void zero_store(uint16_t addr, uint8_t value)
+void zero_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     vic20_cpu_last_data = value;
     vic20_mem_v_bus_store(addr);
     mem_ram[addr & 0xff] = value;
 }
 
-static uint8_t ram_read(uint16_t addr)
+static uint8_t ram_read(uint16_t addr PARAMREG(d0))
 {
     vic20_cpu_last_data = mem_ram[addr];
     return vic20_cpu_last_data;
 }
 
-static uint8_t ram_read_v_bus(uint16_t addr)
+static uint8_t ram_read_v_bus(uint16_t addr PARAMREG(d0))
 {
     vic20_cpu_last_data = mem_ram[addr];
     vic20_mem_v_bus_read(addr);
     return vic20_cpu_last_data;
 }
 
-static void ram_store(uint16_t addr, uint8_t value)
+static void ram_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     vic20_cpu_last_data = value;
     mem_ram[addr & (VIC20_RAM_SIZE - 1)] = value;
 }
 
-static void ram_store_v_bus(uint16_t addr, uint8_t value)
+static void ram_store_v_bus(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     vic20_cpu_last_data = value;
     vic20_mem_v_bus_store(addr);
     mem_ram[addr & (VIC20_RAM_SIZE - 1)] = value;
 }
 
-static uint8_t ram_peek(uint16_t addr)
+static uint8_t ram_peek(uint16_t addr PARAMREG(d0))
 {
     return mem_ram[addr];
 }
 
 /* ------------------------------------------------------------------------- */
 
-static uint8_t colorram_read(uint16_t addr)
+static uint8_t colorram_read(uint16_t addr PARAMREG(d0))
 {
     if (vflimod_enabled) {
         addr = (addr & 0x3ff) | (vic20_vflihack_userport << 10);
@@ -171,7 +171,7 @@ static uint8_t colorram_read(uint16_t addr)
     return vic20_cpu_last_data;
 }
 
-static void colorram_store(uint16_t addr, uint8_t value)
+static void colorram_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     vic20_cpu_last_data = value;
     vic20_v_bus_last_data = vic20_cpu_last_data; /* TODO verify this */
@@ -183,73 +183,73 @@ static void colorram_store(uint16_t addr, uint8_t value)
     }
 }
 
-static uint8_t colorram_peek(uint16_t addr)
+static uint8_t colorram_peek(uint16_t addr PARAMREG(d0))
 {
     return mem_ram[addr] | (vic20_v_bus_last_data & 0xf0);
 }
 
 /* ------------------------------------------------------------------------- */
 
-static uint8_t io3_peek(uint16_t addr)
+static uint8_t io3_peek(uint16_t addr PARAMREG(d0))
 {
     return vic20io3_peek(addr);
 }
 
-static uint8_t io2_peek(uint16_t addr)
+static uint8_t io2_peek(uint16_t addr PARAMREG(d0))
 {
     return vic20io2_peek(addr);
 }
 
-static uint8_t io0_peek(uint16_t addr)
+static uint8_t io0_peek(uint16_t addr PARAMREG(d0))
 {
     return vic20io0_peek(addr);
 }
 
 /*-------------------------------------------------------------------*/
 
-static uint8_t chargen_read(uint16_t addr)
+static uint8_t chargen_read(uint16_t addr PARAMREG(d0))
 {
     vic20_cpu_last_data = vic20memrom_chargen_read(addr);
     vic20_mem_v_bus_read(addr);
     return vic20_cpu_last_data;
 }
 
-static uint8_t chargen_peek(uint16_t addr)
+static uint8_t chargen_peek(uint16_t addr PARAMREG(d0))
 {
     return vic20memrom_chargen_read(addr);
 }
 
 /*-------------------------------------------------------------------*/
 
-static uint8_t read_unconnected_v_bus(uint16_t addr)
+static uint8_t read_unconnected_v_bus(uint16_t addr PARAMREG(d0))
 {
     vic20_cpu_last_data = vic20_v_bus_last_data;
     vic20_mem_v_bus_read(addr);
     return vic20_cpu_last_data;
 }
 
-static uint8_t read_unconnected_c_bus(uint16_t addr)
+static uint8_t read_unconnected_c_bus(uint16_t addr PARAMREG(d0))
 {
     return vic20_cpu_last_data;
 }
 
-static void store_dummy_v_bus(uint16_t addr, uint8_t value)
+static void store_dummy_v_bus(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     vic20_cpu_last_data = value;
     vic20_mem_v_bus_store(addr);
 }
 
-static void store_dummy_c_bus(uint16_t addr, uint8_t value)
+static void store_dummy_c_bus(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     vic20_cpu_last_data = value;
 }
 
-static uint8_t peek_unconnected_v_bus(uint16_t addr)
+static uint8_t peek_unconnected_v_bus(uint16_t addr PARAMREG(d0))
 {
     return vic20_v_bus_last_data;
 }
 
-static uint8_t peek_unconnected_c_bus(uint16_t addr)
+static uint8_t peek_unconnected_c_bus(uint16_t addr PARAMREG(d0))
 {
     return vic20_cpu_last_data;
 }
@@ -257,27 +257,27 @@ static uint8_t peek_unconnected_c_bus(uint16_t addr)
 /*-------------------------------------------------------------------*/
 /* Watchpoint functions */
 
-static uint8_t zero_read_watch(uint16_t addr)
+static uint8_t zero_read_watch(uint16_t addr PARAMREG(d0))
 {
     addr &= 0xff;
     monitor_watch_push_load_addr(addr, e_comp_space);
     return _mem_read_tab_nowatch[0](addr);
 }
 
-static void zero_store_watch(uint16_t addr, uint8_t value)
+static void zero_store_watch(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     addr &= 0xff;
     monitor_watch_push_store_addr(addr, e_comp_space);
     _mem_write_tab_nowatch[0](addr, value);
 }
 
-static uint8_t read_watch(uint16_t addr)
+static uint8_t read_watch(uint16_t addr PARAMREG(d0))
 {
     monitor_watch_push_load_addr(addr, e_comp_space);
     return _mem_read_tab_nowatch[addr >> 8](addr);
 }
 
-static void store_watch(uint16_t addr, uint8_t value)
+static void store_watch(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     monitor_watch_push_store_addr(addr, e_comp_space);
     _mem_write_tab_nowatch[addr >> 8](addr, value);
@@ -286,12 +286,12 @@ static void store_watch(uint16_t addr, uint8_t value)
 /* ------------------------------------------------------------------------- */
 /* Generic memory access.  */
 
-void mem_store(uint16_t addr, uint8_t value)
+void mem_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     _mem_write_tab_ptr[addr >> 8](addr, value);
 }
 
-uint8_t mem_read(uint16_t addr)
+uint8_t mem_read(uint16_t addr PARAMREG(d0))
 {
     return _mem_read_tab_ptr[addr >> 8](addr);
 }

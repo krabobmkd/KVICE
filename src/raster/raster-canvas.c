@@ -113,6 +113,7 @@ void raster_canvas_handle_end_of_frame(raster_t *raster)
 #ifdef KVICE_FRAME_CHECKSUM
     /* test build: hash of every frame, before any skipping */
     kvice_frame_checksum(raster->canvas->draw_buffer);
+    kvice_frame_canvas(raster->canvas);
 #endif
 
     if (video_disabled_mode) {

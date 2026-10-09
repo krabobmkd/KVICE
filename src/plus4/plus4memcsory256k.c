@@ -162,7 +162,7 @@ static void cs256k_reg_store(uint16_t addr, uint8_t value)
     cs256k_segment = (value & 0xc0) >> 6;
 }
 
-void cs256k_store(uint16_t addr, uint8_t value)
+void cs256k_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     if (addr >= (cs256k_segment * 0x4000) && addr < ((cs256k_segment + 1) * 0x4000)) {
         cs256k_ram[(cs256k_block * 0x4000) + (addr & 0x3fff)] = value;
@@ -171,7 +171,7 @@ void cs256k_store(uint16_t addr, uint8_t value)
     }
 }
 
-uint8_t cs256k_read(uint16_t addr)
+uint8_t cs256k_read(uint16_t addr PARAMREG(d0))
 {
     if (addr >= (cs256k_segment * 0x4000) && addr < ((cs256k_segment + 1) * 0x4000)) {
         return cs256k_ram[(cs256k_block * 0x4000) + (addr & 0x3fff)];

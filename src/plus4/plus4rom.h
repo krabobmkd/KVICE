@@ -29,6 +29,8 @@
 
 int plus4rom_load_kernal(const char *rom_name);
 int plus4rom_load_basic(const char *rom_name);
+int plus4rom_all_loaded(void);
+void plus4rom_get_loaded(int *kernal, int *basic);
 
 #define PLUS4_BASIC_NAME            "basic-318006-01.bin"
 

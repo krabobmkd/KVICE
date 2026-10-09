@@ -489,7 +489,7 @@ void cartio_set_highest_order(unsigned int nr)
 
 /* ---------------------------------------------------------------------------------------------------------- */
 
-uint8_t vic20io0_read(uint16_t addr)
+uint8_t vic20io0_read(uint16_t addr PARAMREG(d0))
 {
     DBGRW(("IO: io0 r %04x\n", addr));
     return io_read(&vic20io0_head, addr);
@@ -501,13 +501,13 @@ uint8_t vic20io0_peek(uint16_t addr)
     return io_peek(&vic20io0_head, addr);
 }
 
-void vic20io0_store(uint16_t addr, uint8_t value)
+void vic20io0_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     DBGRW(("IO: io0 w %04x %02x\n", addr, value));
     io_store(&vic20io0_head, addr, value);
 }
 
-uint8_t vic20io2_read(uint16_t addr)
+uint8_t vic20io2_read(uint16_t addr PARAMREG(d0))
 {
     DBGRW(("IO: io2 r %04x\n", addr));
     return io_read(&vic20io2_head, addr);
@@ -519,13 +519,13 @@ uint8_t vic20io2_peek(uint16_t addr)
     return io_peek(&vic20io2_head, addr);
 }
 
-void vic20io2_store(uint16_t addr, uint8_t value)
+void vic20io2_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     DBGRW(("IO: io2 w %04x %02x\n", addr, value));
     io_store(&vic20io2_head, addr, value);
 }
 
-uint8_t vic20io3_read(uint16_t addr)
+uint8_t vic20io3_read(uint16_t addr PARAMREG(d0))
 {
     DBGRW(("IO: io3 r %04x\n", addr));
     return io_read(&vic20io3_head, addr);
@@ -537,7 +537,7 @@ uint8_t vic20io3_peek(uint16_t addr)
     return io_peek(&vic20io3_head, addr);
 }
 
-void vic20io3_store(uint16_t addr, uint8_t value)
+void vic20io3_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     DBGRW(("IO: io3 w %04x %02x\n", addr, value));
     io_store(&vic20io3_head, addr, value);

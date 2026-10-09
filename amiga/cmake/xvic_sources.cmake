@@ -4,6 +4,8 @@
 # VICE_SRC must point to vice-3.10/src.
 # Sources only used by the VIC-20 (xvic) emulator, on top of VICE_COMMON_SRC.
 set(VICE_XVIC_SRC
+	# arch/amiga: the machine UI
+	${VICE_SRC}/arch/amiga/vic20ui.c
 	# c64/cart
 	${VICE_SRC}/c64/cart/c64acia1.c
 	${VICE_SRC}/c64/cart/cs8900io.c

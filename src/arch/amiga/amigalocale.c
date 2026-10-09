@@ -309,7 +309,21 @@ static const char *default_strings[] = {
     /* MSG_C64_FROM_MOUSE_PORT */
     "Amiga mouse port",
     /* MSG_C64_FROM_JOYSTICK_PORT */
-    "Amiga joystick port"
+    "Amiga joystick port",
+
+    /* MSG_MODEL */
+    "Model:",
+    /* MSG_MODEL_INFO_RAM: video standard, RAM size in KB */
+    "Video: %s, RAM: %d KB",
+    /* MSG_RAM_EXPANSION */
+    "RAM expansion:",
+
+    /* MSG_SAVE_SCREENSHOT */
+    "Save screenshot...",
+    /* MSG_REQ_SAVE_SCREENSHOT */
+    "Save screenshot (IFF ILBM picture)",
+    /* MSG_ERROR_SAVE_SCREENSHOT: %s is the file */
+    "Cannot save the screenshot\n%s"
 };
 
 /* compile-time check: one default string per MSG_* id */

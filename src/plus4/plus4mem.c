@@ -1531,7 +1531,8 @@ static mem_config_t mem_config_table[] = {
     { "CART-2", "CART-2" }  /* 0xfddf */
 };
 
-static void mem_config_rom_set_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
+/* an io_source_t store: plain C parameters, not a CPU table handler */
+static void mem_config_rom_set_store(uint16_t addr, uint8_t value)
 {
     mem_config_rom_set((addr & 0xf) << 1);
 }

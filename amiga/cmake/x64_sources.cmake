@@ -4,6 +4,8 @@
 # VICE_SRC must point to vice-3.10/src.
 # Sources only used by the C64 (x64) emulator, on top of VICE_COMMON_SRC.
 set(VICE_X64_SRC
+	# arch/amiga: the machine description of the Amiga UI (amigamachine.h)
+	${VICE_SRC}/arch/amiga/c64ui.c
 	# c64
 	${VICE_SRC}/c64/c64-cmdline-options.c
 	${VICE_SRC}/c64/c64-memory-hacks.c

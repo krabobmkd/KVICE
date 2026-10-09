@@ -185,17 +185,17 @@ inline static void ted_local_store_vbank_16k(uint16_t addr, uint8_t value)
 }
 
 /* Encapsulate inlined function for other modules */
-void ted_mem_vbank_store(uint16_t addr, uint8_t value)
+void ted_mem_vbank_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     ted_local_store_vbank(addr, value);
 }
 
-void ted_mem_vbank_store_32k(uint16_t addr, uint8_t value)
+void ted_mem_vbank_store_32k(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     ted_local_store_vbank_32k(addr, value);
 }
 
-void ted_mem_vbank_store_16k(uint16_t addr, uint8_t value)
+void ted_mem_vbank_store_16k(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     ted_local_store_vbank_16k(addr, value);
 }

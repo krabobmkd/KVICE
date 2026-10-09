@@ -4,6 +4,8 @@
 # VICE_SRC must point to vice-3.10/src.
 # Sources only used by the Plus/4, C16, C116 (xplus4) emulator, on top of VICE_COMMON_SRC.
 set(VICE_XPLUS4_SRC
+	# arch/amiga: the machine description of the Amiga UI (amigamachine.h)
+	${VICE_SRC}/arch/amiga/plus4ui.c
 	# drive/iec/plus4exp
 	${VICE_SRC}/drive/iec/plus4exp/iec-plus4exp.c
 	${VICE_SRC}/drive/iec/plus4exp/plus4exp-cmdline-options.c

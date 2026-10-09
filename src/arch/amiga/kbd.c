@@ -45,6 +45,7 @@
 #include "keyboard.h"
 #include "keymap.h"
 #include "kbd.h"
+#include "amigamachine.h"
 #include "resources.h"
 
 #include <exec/types.h>
@@ -69,38 +70,6 @@ int kbd_arch_get_host_mapping(void)
 /* keysyms of the characters: above the rawkeys (0-127) of the keymap file */
 #define SYMBOLIC_KEYSYM(c) (0x100 + (signed long)(unsigned char)(c))
 
-typedef struct symbolic_key_s {
-    unsigned char c;        /* Latin-1 character of the Amiga keymap */
-    unsigned char row;      /* C64 keyboard matrix */
-    unsigned char col;
-    unsigned char shifted;  /* with the C64 SHIFT */
-} symbolic_key_t;
-
-/* the C64 keys of each character (C64 matrix as in amiga_positional.vkm) */
-static const symbolic_key_t symbolic_keys[] = {
-    { '1', 7, 0, 0 }, { '2', 7, 3, 0 }, { '3', 1, 0, 0 }, { '4', 1, 3, 0 },
-    { '5', 2, 0, 0 }, { '6', 2, 3, 0 }, { '7', 3, 0, 0 }, { '8', 3, 3, 0 },
-    { '9', 4, 0, 0 }, { '0', 4, 3, 0 },
-    { '!', 7, 0, 1 }, { '"', 7, 3, 1 }, { '#', 1, 0, 1 }, { '$', 1, 3, 1 },
-    { '%', 2, 0, 1 }, { '&', 2, 3, 1 }, { '\'', 3, 0, 1 }, { '(', 3, 3, 1 },
-    { ')', 4, 0, 1 },
-    { '+', 5, 0, 0 }, { '-', 5, 3, 0 }, { 0xa3, 6, 0, 0 },  /* pound */
-    { '@', 5, 6, 0 }, { '*', 6, 1, 0 }, { '^', 6, 6, 0 },   /* up arrow */
-    { ':', 5, 5, 0 }, { ';', 6, 2, 0 }, { '=', 6, 5, 0 },
-    { ',', 5, 7, 0 }, { '.', 5, 4, 0 }, { '/', 6, 7, 0 },
-    { '_', 7, 1, 0 },                                       /* left arrow */
-    { '[', 5, 5, 1 }, { ']', 6, 2, 1 },
-    { '<', 5, 7, 1 }, { '>', 5, 4, 1 }, { '?', 6, 7, 1 }
-};
-
-/* C64 matrix of the letters A to Z */
-static const unsigned char symbolic_letters[26][2] = {
-    { 1, 2 }, { 3, 4 }, { 2, 4 }, { 2, 2 }, { 1, 6 }, { 2, 5 }, { 3, 2 },
-    { 3, 5 }, { 4, 1 }, { 4, 2 }, { 4, 5 }, { 5, 2 }, { 4, 4 }, { 4, 7 },
-    { 4, 6 }, { 5, 1 }, { 7, 6 }, { 2, 1 }, { 1, 5 }, { 2, 6 }, { 3, 6 },
-    { 3, 7 }, { 1, 1 }, { 2, 7 }, { 3, 1 }, { 1, 4 }
-};
-
 static int keyboard_symbolic = 1;
 /* characters the C64 has (entries added to the keymap) */
 static unsigned char symbolic_known[256];
@@ -117,29 +86,29 @@ static void symbolic_add(unsigned char c, int row, int col, int shifted)
     symbolic_known[c] = 1;
 }
 
-/* made by amiga/CMakeLists.txt from data/C64/amiga_positional.vkm */
-#include "amiga_positional_vkm.h"
-
 const char *kbd_arch_builtin_keymap(void)
 {
-    return amiga_positional_vkm;
+    return amiga_machine.builtin_keymap;
 }
 
 void kbd_arch_keymap_loaded(void)
 {
     unsigned int i;
 
+    const unsigned char (*letters)[2] = amiga_machine.letters;
+    const amiga_machine_symkey_t *keys = amiga_machine.symkeys;
+
     memset(symbolic_known, 0, sizeof symbolic_known);
     for (i = 0; i < 26; i++) {
-        symbolic_add((unsigned char)('a' + i), symbolic_letters[i][0], symbolic_letters[i][1], 0);
-        symbolic_add((unsigned char)('A' + i), symbolic_letters[i][0], symbolic_letters[i][1], 1);
+        symbolic_add((unsigned char)('a' + i), letters[i][0], letters[i][1], 0);
+        symbolic_add((unsigned char)('A' + i), letters[i][0], letters[i][1], 1);
     }
-    for (i = 0; i < sizeof symbolic_keys / sizeof symbolic_keys[0]; i++) {
-        symbolic_add(symbolic_keys[i].c, symbolic_keys[i].row, symbolic_keys[i].col,
-                     symbolic_keys[i].shifted);
+    for (i = 0; i < (unsigned int)amiga_machine.symkey_count; i++) {
+        symbolic_add(keys[i].c, keys[i].row, keys[i].col, keys[i].shifted);
     }
     /* keypad Enter: RETURN, with the Amiga shift if held (Shift+RETURN) */
-    keyboard_set_map_any(SYMBOLIC_KEYSYM('\r'), 0, 1, ALLOW_SHIFT);
+    keyboard_set_map_any(SYMBOLIC_KEYSYM('\r'), amiga_machine.return_row,
+                         amiga_machine.return_col, ALLOW_SHIFT);
     symbolic_known['\r'] = 1;
 }
 
@@ -190,6 +159,16 @@ static int rawkey_char(unsigned int key, unsigned int qualifier)
         return -1;
     }
     return (unsigned char)buf[0];
+}
+
+int amiga_kbd_rawkey_shortcut_char(unsigned int code)
+{
+    int c = rawkey_char(code & 0x7f, 0);
+
+    if (c >= 'A' && c <= 'Z') {
+        c += 'a' - 'A';
+    }
+    return c;
 }
 
 void amiga_kbd_rawkey(unsigned int code, unsigned int qualifier, int mods)

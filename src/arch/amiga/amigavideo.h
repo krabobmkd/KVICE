@@ -35,6 +35,9 @@ void amiga_video_close_all(void);
 extern ULONG currentUIWaitBit;
 
 struct Window *amiga_video_window(void);
+struct video_canvas_s;
+/* the emulator canvas (screenshot), NULL before it is created */
+struct video_canvas_s *amiga_video_canvas(void);
 
 /* window scale (1 to 3) from the Display menu */
 void amiga_video_set_scale(int scale);

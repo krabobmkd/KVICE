@@ -28,6 +28,7 @@
 #define VICE_VIC20CARTMEM_H
 
 #include "types.h"
+#include "paramreg.h"
 
 #define CART_READ_VIC20MEM             -1
 #define CART_READ_THROUGH               0
@@ -36,20 +37,20 @@
 extern int mem_cartridge_type;
 extern int mem_cart_blocks;
 
-uint8_t cartridge_read_ram123(uint16_t addr);
-uint8_t cartridge_peek_ram123(uint16_t addr);
-void cartridge_store_ram123(uint16_t addr, uint8_t value);
-uint8_t cartridge_read_blk1(uint16_t addr);
-uint8_t cartridge_peek_blk1(uint16_t addr);
-void cartridge_store_blk1(uint16_t addr, uint8_t value);
-uint8_t cartridge_read_blk2(uint16_t addr);
-uint8_t cartridge_peek_blk2(uint16_t addr);
-void cartridge_store_blk2(uint16_t addr, uint8_t value);
-uint8_t cartridge_read_blk3(uint16_t addr);
-uint8_t cartridge_peek_blk3(uint16_t addr);
-void cartridge_store_blk3(uint16_t addr, uint8_t value);
-uint8_t cartridge_read_blk5(uint16_t addr);
-uint8_t cartridge_peek_blk5(uint16_t addr);
-void cartridge_store_blk5(uint16_t addr, uint8_t value);
+uint8_t cartridge_read_ram123(uint16_t addr PARAMREG(d0));
+uint8_t cartridge_peek_ram123(uint16_t addr PARAMREG(d0));
+void cartridge_store_ram123(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t cartridge_read_blk1(uint16_t addr PARAMREG(d0));
+uint8_t cartridge_peek_blk1(uint16_t addr PARAMREG(d0));
+void cartridge_store_blk1(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t cartridge_read_blk2(uint16_t addr PARAMREG(d0));
+uint8_t cartridge_peek_blk2(uint16_t addr PARAMREG(d0));
+void cartridge_store_blk2(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t cartridge_read_blk3(uint16_t addr PARAMREG(d0));
+uint8_t cartridge_peek_blk3(uint16_t addr PARAMREG(d0));
+void cartridge_store_blk3(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t cartridge_read_blk5(uint16_t addr PARAMREG(d0));
+uint8_t cartridge_peek_blk5(uint16_t addr PARAMREG(d0));
+void cartridge_store_blk5(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
 
 #endif

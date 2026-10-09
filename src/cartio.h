@@ -84,15 +84,15 @@ uint8_t c64io_df00_read(uint16_t addr PARAMREG(d0));
 uint8_t c64io_df00_peek(uint16_t addr);
 void c64io_df00_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
 
-uint8_t vic20io0_read(uint16_t addr);
+uint8_t vic20io0_read(uint16_t addr PARAMREG(d0));
 uint8_t vic20io0_peek(uint16_t addr);
-void vic20io0_store(uint16_t addr, uint8_t value);
-uint8_t vic20io2_read(uint16_t addr);
+void vic20io0_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t vic20io2_read(uint16_t addr PARAMREG(d0));
 uint8_t vic20io2_peek(uint16_t addr);
-void vic20io2_store(uint16_t addr, uint8_t value);
-uint8_t vic20io3_read(uint16_t addr);
+void vic20io2_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t vic20io3_read(uint16_t addr PARAMREG(d0));
 uint8_t vic20io3_peek(uint16_t addr);
-void vic20io3_store(uint16_t addr, uint8_t value);
+void vic20io3_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
 
 uint8_t cbm2io_d800_read(uint16_t addr);
 uint8_t cbm2io_d800_peek(uint16_t addr);
@@ -166,12 +166,12 @@ uint8_t petio_ef00_read(uint16_t addr);
 uint8_t petio_ef00_peek(uint16_t addr);
 void petio_ef00_store(uint16_t addr, uint8_t value);
 
-uint8_t plus4io_fd00_read(uint16_t addr);
+uint8_t plus4io_fd00_read(uint16_t addr PARAMREG(d0));
 uint8_t plus4io_fd00_peek(uint16_t addr);
-void plus4io_fd00_store(uint16_t addr, uint8_t value);
-uint8_t plus4io_fe00_read(uint16_t addr);
+void plus4io_fd00_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
+uint8_t plus4io_fe00_read(uint16_t addr PARAMREG(d0));
 uint8_t plus4io_fe00_peek(uint16_t addr);
-void plus4io_fe00_store(uint16_t addr, uint8_t value);
+void plus4io_fe00_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1));
 
 struct mem_ioreg_list_s;
 

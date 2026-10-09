@@ -46,7 +46,9 @@ set(KVICE_AMIGA "${CMAKE_CURRENT_SOURCE_DIR}/../amiga")
 # with arch/headless replaced by arch/amiga, put back here
 include(${KVICE_AMIGA}/cmake/vice_common_sources.cmake)
 include(${KVICE_AMIGA}/cmake/x64_sources.cmake)
-foreach(list_name VICE_COMMON_SRC VICE_X64_SRC)
+include(${KVICE_AMIGA}/cmake/xplus4_sources.cmake)
+include(${KVICE_AMIGA}/cmake/xvic_sources.cmake)
+foreach(list_name VICE_COMMON_SRC VICE_X64_SRC VICE_XPLUS4_SRC VICE_XVIC_SRC)
 	list(TRANSFORM ${list_name} REPLACE "/arch/amiga/" "/arch/headless/")
 endforeach()
 
@@ -61,6 +63,8 @@ set(KVICE_EXCLUDED_SRC
 )
 list(REMOVE_ITEM VICE_COMMON_SRC ${KVICE_EXCLUDED_SRC})
 list(REMOVE_ITEM VICE_X64_SRC ${KVICE_EXCLUDED_SRC})
+list(REMOVE_ITEM VICE_XPLUS4_SRC ${KVICE_EXCLUDED_SRC})
+list(REMOVE_ITEM VICE_XVIC_SRC ${KVICE_EXCLUDED_SRC})
 list(APPEND VICE_COMMON_SRC
 	${VICE_SRC}/lib/md5/md5.c
 	# plain C, not Amiga specific: empty drive and datasette sound effects
@@ -154,3 +158,37 @@ if(KVICE_LINUX_M32)
 	target_link_options(x64 PRIVATE -m32)
 endif()
 target_link_libraries(x64 PRIVATE z m pthread dl)
+
+# xplus4 and xvic: same settings, to compare them with the Amiga build
+function(kvice_linux_emulator target)
+	add_executable(${target} ${VICE_COMMON_SRC} ${ARGN})
+	set_property(TARGET ${target} PROPERTY C_STANDARD 11)
+	target_include_directories(${target} PRIVATE ${VICE_INCLUDE_DIRS})
+	if(KVICE_FRAME_CHECKSUM)
+		target_compile_definitions(${target} PRIVATE KVICE_FRAME_CHECKSUM=1)
+	endif()
+	target_compile_definitions(${target} PRIVATE KVICE_LINUX=1 HAVE_CONFIG_H=1
+		VICE_DATADIR="${KVICE_DATADIR}"
+		VICE_DOCDIR="${CMAKE_CURRENT_SOURCE_DIR}/../doc")
+	target_compile_options(${target} PRIVATE ${KVICE_OPTIONS})
+	if(KVICE_LINUX_M32)
+		target_link_options(${target} PRIVATE -m32)
+	endif()
+	target_link_libraries(${target} PRIVATE z m pthread dl)
+endfunction()
+
+option(KVICE_LINUX_XPLUS4 "also build xplus4" OFF)
+if(KVICE_LINUX_XPLUS4)
+	kvice_linux_emulator(xplus4 ${VICE_XPLUS4_SRC})
+	target_include_directories(xplus4 PRIVATE
+		${VICE_SRC}/plus4/cart
+		${VICE_SRC}/drive/iec/plus4exp)
+endif()
+
+option(KVICE_LINUX_XVIC "also build xvic" OFF)
+if(KVICE_LINUX_XVIC)
+	kvice_linux_emulator(xvic ${VICE_XVIC_SRC})
+	target_include_directories(xvic PRIVATE
+		${VICE_SRC}/vic20
+		${VICE_SRC}/vic20/cart)
+endif()

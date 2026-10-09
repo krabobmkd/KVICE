@@ -31,6 +31,7 @@
 #include <libraries/gadtools.h>
 
 #include "amigaaction.h"
+#include "amigamachine.h"
 #include "amigalocale.h"
 #include "amigamenu.h"
 #include "amigatrace.h"
@@ -41,7 +42,7 @@
 #define UD_IS_ACTION(ud) ((ULONG)(ud) > 0xFFFF)
 #define UD_ACTION(ud) ((((ULONG)(ud)) >> 16) - 1)
 
-#define MENU_TEMPLATE_MAX 40
+#define MENU_TEMPLATE_MAX 48
 
 /* nm_MutualExclude of 3 sibling radio items: each excludes the 2 others */
 #define MX3(i) (7 & ~(1 << (i)))
@@ -74,7 +75,7 @@ static void buildMenuTemplate(void)
 {
     s_n = 0;
 
-    ADD(NM_TITLE, NULL, 0,   0, 0, MSG_MENU_C64);
+    ADD(NM_TITLE, amiga_machine.menu_title, 0, 0, 0, 0);
     ADD(NM_ITEM,  NULL, "A", 0, 0, ACTION_UD(AMIGA_ACTION_AUTOSTART));
     ADD(NM_ITEM,  NULL, 0,   0, 0, ACTION_UD(AMIGA_ACTION_SAVE_BASIC));
     BAR(NM_ITEM);
@@ -104,6 +105,8 @@ static void buildMenuTemplate(void)
     ADD(NM_SUB,   NULL, 0, CHECKIT, MX3(0), ACTION_UD(AMIGA_ACTION_BORDERS_FULL));
     ADD(NM_SUB,   NULL, 0, CHECKIT, MX3(1), ACTION_UD(AMIGA_ACTION_BORDERS_HALF));
     ADD(NM_SUB,   NULL, 0, CHECKIT, MX3(2), ACTION_UD(AMIGA_ACTION_BORDERS_NONE));
+    BAR(NM_ITEM);
+    ADD(NM_ITEM,  NULL, 0, 0, 0, ACTION_UD(AMIGA_ACTION_SAVE_SCREENSHOT));
 
     ADD(NM_TITLE, NULL, 0, 0, 0, MSG_MENU_SNAPSHOT);
     ADD(NM_ITEM,  NULL, "L", 0, 0, ACTION_UD(AMIGA_ACTION_SNAPSHOT_LOAD));

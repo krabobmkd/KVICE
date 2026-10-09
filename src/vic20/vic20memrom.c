@@ -39,12 +39,12 @@ uint8_t vic20memrom_kernal_trap_rom[VIC20_KERNAL_ROM_SIZE];
 uint8_t vic20memrom_chargen_rom[VIC20_CHARGEN_ROM_SIZE];
 
 
-uint8_t vic20memrom_kernal_read(uint16_t addr)
+uint8_t vic20memrom_kernal_read(uint16_t addr PARAMREG(d0))
 {
     return vic20memrom_kernal_rom[addr & 0x1fff];
 }
 
-uint8_t vic20memrom_basic_read(uint16_t addr)
+uint8_t vic20memrom_basic_read(uint16_t addr PARAMREG(d0))
 {
     return vic20memrom_basic_rom[addr & 0x1fff];
 }
@@ -54,7 +54,7 @@ uint8_t vic20memrom_chargen_read(uint16_t addr)
     return vic20memrom_chargen_rom[addr & 0xfff];
 }
 
-uint8_t vic20memrom_trap_read(uint16_t addr)
+uint8_t vic20memrom_trap_read(uint16_t addr PARAMREG(d0))
 {
     switch (addr & 0xf000) {
         case 0xe000:
@@ -65,7 +65,7 @@ uint8_t vic20memrom_trap_read(uint16_t addr)
     return 0;
 }
 
-void vic20memrom_trap_store(uint16_t addr, uint8_t value)
+void vic20memrom_trap_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     switch (addr & 0xf000) {
         case 0xe000:
@@ -75,7 +75,7 @@ void vic20memrom_trap_store(uint16_t addr, uint8_t value)
     }
 }
 
-uint8_t rom_read(uint16_t addr)
+uint8_t rom_read(uint16_t addr PARAMREG(d0))
 {
     switch (addr & 0xf000) {
         case 0x8000:
@@ -91,7 +91,7 @@ uint8_t rom_read(uint16_t addr)
     return 0;
 }
 
-void rom_store(uint16_t addr, uint8_t value)
+void rom_store(uint16_t addr PARAMREG(d0), uint8_t value PARAMREG(d1))
 {
     switch (addr & 0xf000) {
         case 0x8000:

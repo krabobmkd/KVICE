@@ -279,8 +279,8 @@ void cgxscale_draw(struct RastPort *rp, const UBYTE *src, ULONG src_pitch,
     p.dst_x = dst_x;
     p.dst_y = dst_y;
     /* the only divisions: one per axis */
-    p.step_x = ((ULONG)src_w << 16) / (ULONG)dst_w;
-    p.step_y = ((ULONG)src_h << 16) / (ULONG)dst_h;
+    p.step_x = SCALEROW_STEP(src_w, dst_w);
+    p.step_y = SCALEROW_STEP(src_h, dst_h);
 
     memset(&hook, 0, sizeof hook);
     hook.h_Entry = (ULONG (*)())cliprect_hook;

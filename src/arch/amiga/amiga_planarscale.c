@@ -160,8 +160,8 @@ void planarscale_draw(struct RastPort *rp, const UBYTE *src, ULONG src_pitch,
     }
 
     /* the only divisions: one per axis */
-    step_x = ((ULONG)src_w << 16) / (ULONG)dst_w;
-    step_y = ((ULONG)src_h << 16) / (ULONG)dst_h;
+    step_x = SCALEROW_STEP(src_w, dst_w);
+    step_y = SCALEROW_STEP(src_h, dst_h);
     src_area = src + (ULONG)src_y * src_pitch + (ULONG)src_x;
 
     ax0 = (ULONG)(upd_x0 - dst_x) * step_x;
