@@ -119,6 +119,7 @@ list(APPEND VICE_COMMON_SRC
 	${VICE_SRC}/arch/amiga/amigawait.c
 	${VICE_SRC}/arch/amiga/amigalocale.c
 	${VICE_SRC}/arch/amiga/amigaaction.c
+	${VICE_SRC}/arch/amiga/amigabasic.c
 	${VICE_SRC}/arch/amiga/amigamenu.c
 	${VICE_SRC}/arch/amiga/amigamui.c
 	${VICE_SRC}/arch/amiga/amigakeys.c

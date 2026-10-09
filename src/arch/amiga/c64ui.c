@@ -36,6 +36,7 @@
 #include "ui.h"
 #include "c64ui.h"
 #include "amigalocale.h"
+#include "amigabasic.h"
 #include "amigamachine.h"
 #include "c64mem.h"
 #include "c64model.h"
@@ -215,9 +216,11 @@ static const unsigned char c64_letters[26][2] = {
 #include "amiga_positional_vkm_c64.h"
 
 const amiga_machine_t amiga_machine = {
-    "VICE x64",
+    "KVICE x64",
+    "x64",
     "C64",
     "C64",
+    1,          /* pixel width */
     c64_roms, sizeof c64_roms / sizeof c64_roms[0],
     c64_roms_loaded,
     MSG_C64_MODEL,
@@ -228,6 +231,7 @@ const amiga_machine_t amiga_machine = {
     c64_model_rom_names,
     &c64_reu,
     0xa000,     /* BASIC RAM end */
+    AMIGA_BASIC_V2,
     c64_symkeys, sizeof c64_symkeys / sizeof c64_symkeys[0],
     c64_letters,
     0, 1,       /* RETURN */

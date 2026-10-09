@@ -33,6 +33,7 @@
 
 #include "plus4ui.h"
 #include "amigalocale.h"
+#include "amigabasic.h"
 #include "amigamachine.h"
 #include "machine.h"
 #include "plus4mem.h"
@@ -183,9 +184,11 @@ static const unsigned char plus4_letters[26][2] = {
 #include "amiga_positional_vkm_plus4.h"
 
 const amiga_machine_t amiga_machine = {
-    "VICE xplus4",
+    "KVICE xplus4",
+    "xplus4",
     "Plus/4",
     "PLUS4",
+    1,          /* pixel width */
     plus4_roms, sizeof plus4_roms / sizeof plus4_roms[0],
     plus4_roms_loaded,
     MSG_MODEL,
@@ -196,6 +199,7 @@ const amiga_machine_t amiga_machine = {
     plus4_model_rom_names,
     NULL,       /* no memory cycle */
     0xfd00,     /* BASIC RAM end (64 KB) */
+    AMIGA_BASIC_V35,
     plus4_symkeys, sizeof plus4_symkeys / sizeof plus4_symkeys[0],
     plus4_letters,
     0, 1,       /* RETURN */

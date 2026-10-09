@@ -159,9 +159,13 @@ static unsigned int palette_entries = 0;
 /* Shown part of the emulated screen: the whole canvas (full borders), or
  * less border. Source pixels and draw buffer pitch never change, only the
  * starting point (crop_x, crop_y, draw buffer coordinates) and the size
- * (base_width, base_height: the 1x window size). */
+ * (src_width, src_height: draw buffer pixels). base_width, base_height: the
+ * 1x window size, src_width x amiga_machine.pixel_width (VIC-20 pixels are
+ * drawn once by VICE, the scalers make them wider). */
 static unsigned int base_width = 0;
 static unsigned int base_height = 0;
+static unsigned int src_width = 0;
+static unsigned int src_height = 0;
 static int crop_x = 0;
 static int crop_y = 0;
 
@@ -511,8 +515,15 @@ void amiga_video_set_borders(int mode)
         return;
     }
     amiga_compute_crop(amiga_canvas, &width, &height);
-    /* new 1x size: the window follows (scale kept) */
-    amiga_open_window(width, height);
+    if (!fullscreen && amiga_window != NULL && width != 0 && height != 0) {
+        /* the window keeps its position and size: only the shown part
+         * changes, scaled to the same inner area */
+        base_width = width;
+        base_height = height;
+        amiga_set_window_limits();
+    } else {
+        amiga_open_window(width, height);
+    }
     amiga_redraw_all();
 }
 
@@ -575,10 +586,13 @@ static void amiga_compute_crop(video_canvas_t *canvas,
     canvas_y0 = cy;
     crop_x = cx + left;
     crop_y = cy + top;
-    *width = (unsigned int)(cw - left - right);
-    *height = (unsigned int)(ch - top - bottom);
-    AMIGA_TRACE(("borders %d: shown area %d,%d %ux%u", border_mode, crop_x, crop_y,
-                 *width, *height));
+    src_width = (unsigned int)(cw - left - right);
+    src_height = (unsigned int)(ch - top - bottom);
+    /* the 1x size on the Amiga screen */
+    *width = src_width * (unsigned int)amiga_machine.pixel_width;
+    *height = src_height;
+    AMIGA_TRACE(("borders %d: shown area %d,%d %ux%u, shown %ux%u", border_mode,
+                 crop_x, crop_y, src_width, src_height, *width, *height));
 }
 
 /* Drawing route from the target bitmap, window or fullscreen alike */
@@ -638,7 +652,7 @@ static void amiga_open_window(unsigned int width, unsigned int height)
                 amiga_apply_scale();
             } else {
                 ChangeWindowBox(amiga_window, amiga_window->LeftEdge, amiga_window->TopEdge,
-                                (WORD)(width + amiga_window->BorderLeft + amiga_window->BorderRight),
+                                (WORD)(src_width + amiga_window->BorderLeft + amiga_window->BorderRight),
                                 (WORD)(height + amiga_window->BorderTop + amiga_window->BorderBottom));
             }
         }
@@ -652,7 +666,7 @@ static void amiga_open_window(unsigned int width, unsigned int height)
     AMIGA_TRACE(("open window %ux%u at %d,%d", known_size ? (unsigned)window_inner_w : width,
                  known_size ? (unsigned)window_inner_h : height, window_left, window_top));
     amiga_window = OpenWindowTags(NULL,
-            WA_Title, (ULONG)amiga_machine.title,
+            WA_Title, (ULONG)amiga_machine.window_title,
             (window_left >= 0 ? WA_Left : TAG_IGNORE), window_left,
             (window_top >= 0 ? WA_Top : TAG_IGNORE), window_top,
             /* inner size: independent of the border sizes */
@@ -694,9 +708,9 @@ static void amiga_open_window(unsigned int width, unsigned int height)
             amiga_apply_scale();
         }
     } else if (known_size) {
-        /* not scaled: the window is the emulated screen size */
+        /* not scaled: the window is the draw buffer size */
         ChangeWindowBox(amiga_window, amiga_window->LeftEdge, amiga_window->TopEdge,
-                        (WORD)(width + amiga_window->BorderLeft + amiga_window->BorderRight),
+                        (WORD)(src_width + amiga_window->BorderLeft + amiga_window->BorderRight),
                         (WORD)(height + amiga_window->BorderTop + amiga_window->BorderBottom));
     }
 }
@@ -804,8 +818,9 @@ static void amiga_update_fs_border(const draw_buffer_t *db)
     SetRGB32(&fs_screen->ViewPort, 0, rgb[0], rgb[1], rgb[2]);
 }
 
-/* fullscreen drawing area: biggest integer scale that fits, else scaled down
- * keeping the aspect, centered. Not scaled on the WriteLUTPixelArray() route. */
+/* fullscreen drawing area: 1:1 centered, each direction scaled down only
+ * when it does not fit (no line lost to a width that does not fit). Not
+ * scaled on the WriteLUTPixelArray() route. */
 static void amiga_fullscreen_layout(void)
 {
     /* with the menus: the backdrop window below the title bar, its layer
@@ -815,27 +830,17 @@ static void amiga_fullscreen_layout(void)
     int sh = fs_menu_active ? amiga_window->Height : fs_screen->Height;
     int bw = (int)base_width;
     int bh = (int)base_height;
-    int w, h, scale;
+    int w, h;
 
     if (bw <= 0 || bh <= 0) {
         return;
     }
     if (use_rtg) {
-        w = (bw < sw) ? bw : sw;
-        h = (bh < sh) ? bh : sh;
-    } else {
-        scale = (sw / bw < sh / bh) ? sw / bw : sh / bh;
-        if (scale >= 1) {
-            w = bw * scale;
-            h = bh * scale;
-        } else if (sw * bh <= sh * bw) {
-            w = sw;
-            h = bh * sw / bw;
-        } else {
-            h = sh;
-            w = bw * sh / bh;
-        }
+        /* not scaled: the draw buffer pixels */
+        bw = (int)src_width;
     }
+    w = (bw < sw) ? bw : sw;
+    h = (bh < sh) ? bh : sh;
     draw_x = (sw - w) / 2;
     draw_y = (sh - h) / 2;
     draw_width = (unsigned int)w;
@@ -867,8 +872,9 @@ static void amiga_fullscreen_layout(void)
     AMIGA_TRACE(("fullscreen %dx%d, drawing %dx%d at %d,%d", sw, sh, w, h, draw_x, draw_y));
 }
 
-/* fullscreen with menus: DrawInfo pens, in the emulator palette (C64 color
- * numbers: 0 black, 1 white, 12 grey, 15 light grey) */
+/* fullscreen with menus: DrawInfo pens, the emulator palette is the screen
+ * palette (pen i = emulator color i). Filled by amiga_fs_menu_pens() with
+ * the nearest emulator colors, so it fits the C64, VIC-20 and TED palettes. */
 static UWORD fs_menu_pens[] = {
     0,      /* DETAILPEN */
     1,      /* BLOCKPEN */
@@ -884,6 +890,65 @@ static UWORD fs_menu_pens[] = {
     0,      /* BARTRIMPEN */
     (UWORD)~0
 };
+
+/* wanted 0xRRGGBB of each pen above: black on light grey */
+static const ULONG fs_menu_rgb[] = {
+    0x000000,   /* DETAILPEN */
+    0xffffff,   /* BLOCKPEN */
+    0x000000,   /* TEXTPEN */
+    0xffffff,   /* SHINEPEN */
+    0x000000,   /* SHADOWPEN */
+    0x707070,   /* FILLPEN */
+    0x000000,   /* FILLTEXTPEN */
+    0x000000,   /* BACKGROUNDPEN */
+    0xffffff,   /* HIGHLIGHTTEXTPEN */
+    0x000000,   /* BARDETAILPEN */
+    0xb0b0b0,   /* BARBLOCKPEN */
+    0x000000    /* BARTRIMPEN */
+};
+
+/* the emulator color nearest to rgb among the first pens ones, like
+ * FindColor() does, but before the screen (and its ColorMap) exists:
+ * the pens are given to OpenScreen() */
+static UWORD amiga_nearest_pen(ULONG rgb, ULONG pens)
+{
+    LONG r = (LONG)((rgb >> 16) & 0xff);
+    LONG g = (LONG)((rgb >> 8) & 0xff);
+    LONG b = (LONG)(rgb & 0xff);
+    ULONG best = 0, best_d = 0xffffffffUL;
+    ULONG i;
+
+    for (i = 0; i < pens; i++) {
+        ULONG c = amiga_ctab[i];
+        LONG dr = (LONG)((c >> 16) & 0xff) - r;
+        LONG dg = (LONG)((c >> 8) & 0xff) - g;
+        LONG db = (LONG)(c & 0xff) - b;
+        /* green weighs more for the eye */
+        ULONG d = (ULONG)(2 * dr * dr + 4 * dg * dg + 3 * db * db);
+
+        if (d < best_d) {
+            best_d = d;
+            best = i;
+        }
+    }
+    return (UWORD)best;
+}
+
+/* the screen will show the first pens emulator colors */
+static void amiga_fs_menu_pens(ULONG pens)
+{
+    ULONG i;
+
+    if (pens > palette_entries) {
+        pens = palette_entries;
+    }
+    if (pens == 0) {
+        return;
+    }
+    for (i = 0; i < sizeof fs_menu_rgb / sizeof fs_menu_rgb[0]; i++) {
+        fs_menu_pens[i] = amiga_nearest_pen(fs_menu_rgb[i], pens);
+    }
+}
 
 /* open the screen and its input window, 0 on success */
 static int amiga_open_fullscreen(void)
@@ -930,6 +995,9 @@ static int amiga_open_fullscreen(void)
     fs_border_index = -1;
     amiga_screenmode_name(mode_id, name, sizeof name);
     colors32 = amiga_build_fs_palette(1 << (depth > 8 ? 8 : depth));
+    if (fs_menu) {
+        amiga_fs_menu_pens(1UL << (depth > 8 ? 8 : depth));
+    }
 
     fs_screen = OpenScreenTags(NULL,
             SA_DisplayID, mode_id,
@@ -938,7 +1006,7 @@ static int amiga_open_fullscreen(void)
             SA_Depth, depth,
             /* palette from the start, no flash */
             (colors32 != NULL ? SA_Colors32 : TAG_IGNORE), (ULONG)colors32,
-            SA_Title, (ULONG)amiga_machine.title,
+            SA_Title, (ULONG)amiga_machine.window_title,
             /* the menus need the title bar */
             SA_ShowTitle, fs_menu ? TRUE : FALSE,
             SA_Quiet, fs_menu ? FALSE : TRUE,
@@ -969,6 +1037,9 @@ static int amiga_open_fullscreen(void)
             WA_Backdrop, TRUE,
             /* no menus: they would be drawn over */
             WA_RMBTrap, fs_menu ? FALSE : TRUE,
+            /* menus in the screen bar pens (BARBLOCKPEN, BARDETAILPEN),
+             * not in the window pens 0 and 1 (dark grey on the TED) */
+            WA_NewLookMenus, TRUE,
             WA_Activate, TRUE,
             WA_SimpleRefresh, TRUE,
             WA_NoCareRefresh, TRUE,
@@ -1464,8 +1535,8 @@ static void amiga_draw_rect(const draw_buffer_t *db, unsigned int xs, unsigned i
     int sy0 = (int)ys;
     int sx1 = (int)(xs + w);
     int sy1 = (int)(ys + h);
-    int bw = (int)base_width;
-    int bh = (int)base_height;
+    int bw = (int)src_width;
+    int bh = (int)src_height;
     int bl = draw_x;
     int bt = draw_y;
     int rx0, ry0, rx1, ry1;
@@ -1573,8 +1644,8 @@ static int amiga_line_changed(UBYTE *prev, const UBYTE *cur, unsigned int n)
 static void amiga_draw_changed(const draw_buffer_t *db, unsigned int xs, unsigned int ys,
                                unsigned int w, unsigned int h)
 {
-    unsigned int bw = base_width;
-    unsigned int bh = base_height;
+    unsigned int bw = src_width;
+    unsigned int bh = src_height;
     int y, y0, y1;
     int run = -1;
     int last = -1;

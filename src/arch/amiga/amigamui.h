@@ -34,6 +34,8 @@ void amiga_settings_open(void);
 //ULONG amiga_mui_signal_mask(void);
 /* process MUI input, when one of amiga_mui_signal_mask() is set */
 void amiga_mui_handle_events(void);
+/* open the about window (non-modal) */
+void amiga_about_open(void);
 /* free MUI resources, safe to call more than once */
 void amiga_mui_close_all(void);
 /* "no rom" state: when ROMs are missing, show "(no rom)", open the settings

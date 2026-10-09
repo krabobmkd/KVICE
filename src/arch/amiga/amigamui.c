@@ -80,6 +80,7 @@
 #include "sound.h"
 #include "sysfile.h"
 #include "util.h"
+#include "version.h"
 
 /* opened when the settings window is first used: MUI is optional */
 struct Library *MUIMasterBase = NULL;
@@ -112,6 +113,10 @@ MUI_NewObjectB(const char *cl, Tag tags, ...)
 #define RID_DRIVE_ROM_EDIT 22 /* the read-only ROM file string was edited */
 #define RID_BROWSE_ROM  10  /* + 0..2: "..." of a ROM file row */
 #define RID_BROWSE_FILE 6   /* "..." of the file row (custom keymap) */
+#define RID_ABOUT_CLOSE 23  /* OK or close gadget of the about window */
+
+/* fork release, after the VICE version it is based on */
+#define KVICE_RELEASE "r1"
 
 /* ------------------------------------------------------------------------- */
 /* setting bindings */
@@ -933,6 +938,9 @@ static Object *mui_category_list = NULL;
 /* signals MUI wants to be woken up for, 0 when nothing to do */
 ULONG mui_sigs = 0;
 static int mui_win_open = 0;
+/* about window, in the same application */
+static Object *mui_about_win = NULL;
+static int mui_about_open = 0;
 
 /* 1 when the machine's ROMs are all loaded */
 static int roms_all_loaded(void)
@@ -1092,11 +1100,64 @@ static void settings_to_ui(void)
     }
 }
 
+/* about text: MUI text engine codes, \33c centered, \33b bold, \33n normal */
+static const char about_text[] =
+    "\33c\33b" "KVICE " VERSION " " KVICE_RELEASE "\33n\n"
+    "\33c" "Fork of VICE " VERSION " by krb\n"
+    "\n"
+    "\33c" "License for the emulators and vkm is GPL-2\n"
+    "\33c" "Sources are at:\n"
+    "\33c" "https://github.com/krabobmkd/KVICE\n"
+    "\33c" "Report bugs and ask for features at:\n"
+    "\33c" "https://github.com/krabobmkd/KVICE/issues\n"
+    "\n"
+    "\33c" "Original VICE project by the VICE team.\n"
+    "\33c" "Original Amiga port by AmiDog.\n"
+    "\33c" "Uses MUI, AHI, zlib.\n"
+    "\n"
+    "\33c" "This emulator needs ROM binaries.\n"
+    "\33c" "ROM files are not part of the project\n"
+    "\33c" "and have their own licence terms,\n"
+    "\33c" "according to each ROM.";
+
+/* the about window: the machine, the text in a frame, OK */
+static Object *make_about_window(Object *bt_ok)
+{
+    return MUI_NewObjectB(MUIC_Window,
+            MUIA_Window_Title, (ULONG)LOC(MSG_ABOUT_TITLE),
+            MUIA_Window_ID, MAKE_ID('V', 'A', 'B', 'O'),
+            MUIA_Window_RootObject, (ULONG)MUI_NewObjectB(MUIC_Group,
+                MUIA_Group_Child, (ULONG)MUI_NewObjectB(MUIC_Text,
+                    MUIA_Text_Contents, (ULONG)amiga_machine.title,
+                    MUIA_Text_PreParse, (ULONG)"\33c\33b",
+                    MUIA_Frame, MUIV_Frame_Text,
+                    MUIA_Background, MUII_TextBack,
+                    TAG_DONE),
+                MUIA_Group_Child, (ULONG)MUI_NewObjectB(MUIC_Text,
+                    MUIA_Text_Contents, (ULONG)about_text,
+                    MUIA_Frame, MUIV_Frame_Text,
+                    MUIA_Background, MUII_TextBack,
+                    MUIA_InnerLeft, 12,
+                    MUIA_InnerRight, 12,
+                    MUIA_InnerTop, 8,
+                    MUIA_InnerBottom, 8,
+                    TAG_DONE),
+                MUIA_Group_Child, (ULONG)MUI_NewObjectB(MUIC_Group,
+                    MUIA_Group_Horiz, TRUE,
+                    MUIA_Group_Child, (ULONG)make_space(),
+                    MUIA_Group_Child, (ULONG)bt_ok,
+                    MUIA_Group_Child, (ULONG)make_space(),
+                    TAG_DONE),
+                TAG_DONE),
+            MUIA_Window_DefaultObject, (ULONG)bt_ok,
+            TAG_DONE);
+}
+
 /* build the application and its (closed) settings window */
 static int create_app(void)
 {
     Object *list, *pages;
-    Object *bt_save, *bt_use, *bt_cancel;
+    Object *bt_save, *bt_use, *bt_cancel, *bt_about_ok;
     Object *page_objs[PAGE_COUNT];
     Object *list_obj = NULL;
     int page;
@@ -1162,8 +1223,11 @@ static int create_app(void)
                 TAG_DONE),
             TAG_DONE);
 
+    bt_about_ok = make_button(LOC(MSG_ERROR_OK));
+    mui_about_win = make_about_window(bt_about_ok);
+
     mui_app = MUI_NewObjectB(MUIC_Application,
-            MUIA_Application_Title, (ULONG)"VICE x64",
+            MUIA_Application_Title, (ULONG)amiga_machine.title,
             MUIA_Application_Base, (ULONG)"VICEX64",
             MUIA_Application_Description, (ULONG)"Commodore 64 emulator",
             /* no Commodities broker nor ARexx port: nothing must need
@@ -1171,9 +1235,11 @@ static int create_app(void)
             MUIA_Application_UseCommodities, FALSE,
             MUIA_Application_UseRexx, FALSE,
             MUIA_Application_Window, (ULONG)mui_win,
+            (mui_about_win != NULL ? MUIA_Application_Window : TAG_IGNORE), (ULONG)mui_about_win,
             TAG_DONE);
     if (mui_app == NULL) {
         mui_win = NULL;
+        mui_about_win = NULL;
         log_error(LOG_DEFAULT, "%s", LOC(MSG_ERROR_SETTINGS_WINDOW));
         return -1;
     }
@@ -1192,6 +1258,12 @@ static int create_app(void)
              (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_CANCEL);
     DoMethod(mui_win, MUIM_Notify, MUIA_Window_CloseRequest, TRUE,
              (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_CANCEL);
+    if (mui_about_win != NULL) {
+        DoMethod(bt_about_ok, MUIM_Notify, MUIA_Pressed, FALSE,
+                 (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_ABOUT_CLOSE);
+        DoMethod(mui_about_win, MUIM_Notify, MUIA_Window_CloseRequest, TRUE,
+                 (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_ABOUT_CLOSE);
+    }
     /* automatic screen mode: no mode to choose */
     if (fs_auto_setting != NULL && fs_mode_setting != NULL
             && fs_auto_setting->obj != NULL && fs_mode_setting->obj != NULL) {
@@ -1245,11 +1317,23 @@ static void close_window(void)
 {
     set(mui_win, MUIA_Window_Open, FALSE);
     mui_win_open = 0;
-    /* opened from the fullscreen: back to it */
-    amiga_video_requester_end();
-    /* closed window: MUI must not be polled nor waited for anymore */
-    mui_sigs = 0;
+    if (!mui_about_open) {
+        /* opened from the fullscreen: back to it */
+        amiga_video_requester_end();
+        /* closed windows: MUI must not be polled nor waited for anymore */
+        mui_sigs = 0;
+    }
     AMIGA_TRACE(("settings window closed"));
+}
+
+static void close_about(void)
+{
+    set(mui_about_win, MUIA_Window_Open, FALSE);
+    mui_about_open = 0;
+    if (!mui_win_open) {
+        amiga_video_requester_end();
+        mui_sigs = 0;
+    }
 }
 
 /* "..." of the drawer row: ASL drawer requester on the settings window */
@@ -1511,6 +1595,28 @@ void amiga_settings_open(void)
     amiga_mui_handle_events();
 }
 
+/** \brief  Open the about window (non-modal, the emulation goes on)
+ */
+void amiga_about_open(void)
+{
+    if (mui_app == NULL && create_app() != 0) {
+        return;
+    }
+    if (mui_about_win == NULL) {
+        return;
+    }
+    if (mui_about_open) {
+        DoMethod(mui_about_win, MUIM_Window_ToFront);
+        return;
+    }
+    amiga_video_requester_begin();
+    set(mui_about_win, MUIA_Window_Open, TRUE);
+    mui_about_open = 1;
+
+    /* first input round: gives the signals MUI waits for */
+    amiga_mui_handle_events();
+}
+
 /** \brief  Process MUI input: call when one of amiga_mui_signal_mask() is set
  *
  * Runs in the emulator task between frames, so settings can be applied here.
@@ -1519,7 +1625,7 @@ void amiga_mui_handle_events(void)
 {
     LONG rid;
 
-    if (mui_app == NULL || !mui_win_open) {
+    if (mui_app == NULL || (!mui_win_open && !mui_about_open)) {
         return;
     }
     do {
@@ -1542,9 +1648,25 @@ void amiga_mui_handle_events(void)
                 close_window();
                 return;
             case RID_CANCEL:
-            case MUIV_Application_ReturnID_Quit:
                 close_window();
+                if (!mui_about_open) {
+                    return;
+                }
+                break;
+            case MUIV_Application_ReturnID_Quit:
+                if (mui_win_open) {
+                    close_window();
+                }
+                if (mui_about_open) {
+                    close_about();
+                }
                 return;
+            case RID_ABOUT_CLOSE:
+                close_about();
+                if (!mui_win_open) {
+                    return;
+                }
+                break;
             case RID_BROWSE:
                 browse_drawer();
                 break;
@@ -1597,10 +1719,15 @@ void amiga_mui_close_all(void)
             set(mui_win, MUIA_Window_Open, FALSE);
             mui_win_open = 0;
         }
+        if (mui_about_open) {
+            set(mui_about_win, MUIA_Window_Open, FALSE);
+            mui_about_open = 0;
+        }
         /* disposes the window and all gadgets too */
         MUI_DisposeObject(mui_app);
         mui_app = NULL;
         mui_win = NULL;
+        mui_about_win = NULL;
         mui_sigs = 0;
     }
     if (MUIMasterBase != NULL) {

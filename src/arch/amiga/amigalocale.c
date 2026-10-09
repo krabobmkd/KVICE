@@ -34,7 +34,7 @@
 /* Default English strings - MUST stay in the same order as the MSG_* enum */
 static const char *default_strings[] = {
     /* MSG_WINDOW_TITLE */
-    "VICE x64",
+    "KVICE x64",
 
     /* MSG_MENU_C64 */
     "C64",
@@ -90,7 +90,7 @@ static const char *default_strings[] = {
     "Save snapshot...",
 
     /* MSG_SETTINGS_TITLE */
-    "VICE Settings",
+    "KVICE Settings",
     /* MSG_SETTINGS_SAVE */
     "Save",
     /* MSG_SETTINGS_USE */
@@ -298,7 +298,7 @@ static const char *default_strings[] = {
     "%ld file(s) extracted, %ld error(s), to\n%s",
 
     /* MSG_SAVE_BASIC */
-    "Save BASIC program as .prg...",
+    "Save program as .prg...",
     /* MSG_REQ_SAVE_BASIC */
     "Save the BASIC program (.prg)",
     /* MSG_ERROR_NO_BASIC: %s is empty */
@@ -323,7 +323,60 @@ static const char *default_strings[] = {
     /* MSG_REQ_SAVE_SCREENSHOT */
     "Save screenshot (IFF ILBM picture)",
     /* MSG_ERROR_SAVE_SCREENSHOT: %s is the file */
-    "Cannot save the screenshot\n%s"
+    "Cannot save the screenshot\n%s",
+
+    /* MSG_MENU_BASIC */
+    "BASIC",
+    /* MSG_MENU_DRIVE8 */
+    "Drive 8",
+    /* MSG_SAVE_BAS */
+    "Save program as .bas...",
+    /* MSG_LOAD_BAS */
+    "Load program as .bas...",
+    /* MSG_ABOUT */
+    "About...",
+    /* MSG_ABOUT_TITLE */
+    "About KVICE",
+    /* MSG_REQ_SAVE_BAS */
+    "Save the BASIC program as text (.bas, UTF-8)",
+    /* MSG_REQ_LOAD_BAS */
+    "Load a BASIC program from text (.bas, UTF-8)",
+    /* MSG_ERROR_READ_BAS */
+    "Cannot read the file\n%s",
+    /* MSG_ERROR_BASIC_MEMORY */
+    "The BASIC memory pointers are not usable.%s\nReset the machine first.",
+    /* MSG_BAS_NOT_LOADED */
+    "The program was not loaded, %ld error(s):",
+    /* MSG_BAS_WARNINGS */
+    "%ld lines loaded, with %ld warning(s):",
+    /* MSG_BAS_MORE */
+    "... and %ld more, see the log.",
+    /* MSG_BAS_LOADED */
+    "%ld BASIC lines loaded.",
+    /* MSG_BAS_AT_LINE */
+    "Line %ld (BASIC %ld): ",
+    /* MSG_BAS_AT_FILE_LINE */
+    "Line %ld: ",
+    /* MSG_BAS_ERR_UTF8 */
+    "invalid UTF-8 text",
+    /* MSG_BAS_ERR_CHAR */
+    "character U+%04lX has no PETSCII equivalent",
+    /* MSG_BAS_ERR_CONTROL */
+    "unknown control code {%s}",
+    /* MSG_BAS_ERR_BRACE */
+    "{ without }",
+    /* MSG_BAS_ERR_NUMBER */
+    "line number %lu is above 63999",
+    /* MSG_BAS_ERR_TOO_LONG */
+    "line too long once tokenized (%lu bytes, 250 max)",
+    /* MSG_BAS_ERR_MEMORY */
+    "program too big: %lu bytes, %lu free",
+    /* MSG_BAS_ERR_NO_LINES */
+    "no numbered BASIC line in the file",
+    /* MSG_BAS_WARN_DUPLICATE */
+    "line %lu given again, the last one is kept",
+    /* MSG_BAS_WARN_EMPTY */
+    "line %lu has no text, ignored"
 };
 
 /* compile-time check: one default string per MSG_* id */
