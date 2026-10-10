@@ -1,0 +1,567 @@
+@DATABASE BASICv2Quick.guide
+@$VER: BASICv2Quick.guide 1.0 (09.10.2026)
+@AUTHOR krabobmkd
+@(C) 2026 krabobmkd
+@NODE MAIN "Commodore BASIC V2 - Quick Guide"
+
+@{b}Commodore BASIC V2 - Quick Guide@{ub}
+For the C64 (x64) and the VIC-20 (xvic): the same BASIC, but other chips
+at other addresses. The memory maps are the C64's, the VIC-20 has its
+own page.
+
+------------------------------------------------------------------------------
+
+  @{" Presentation      " LINK PRESENTATION}  BASIC V2 in a few words
+  @{" Instructions      " LINK INSTRUCTIONS}  Every keyword, with examples
+  @{" Video memory map  " LINK VIDEO}  Screen, colors, VIC-II registers
+  @{" SID memory map    " LINK SID}  Sound registers
+  @{" VIC-20 hardware   " LINK VIC20}  Screen, colors, sound, joystick
+  @{" Examples          " LINK EXAMPLES}  Six short programs to type
+
+------------------------------------------------------------------------------
+@ENDNODE
+
+@NODE PRESENTATION "Presentation"
+@{b}Presentation@{ub}
+
+BASIC V2 is the language the C64 starts in: the READY. prompt. A line
+typed with a number in front is stored in the program; a line typed
+without a number runs at once (direct mode).
+
+  10 PRINT "HELLO"       stores line 10
+  RUN                    runs the program
+  LIST                   shows it
+
+@{b}Lines@{ub}: numbered 0 to 63999, run in order. Several instructions can
+share a line, separated by ":". A line is at most 80 characters on the
+screen editor.
+
+@{b}Variables@{ub}: only the first 2 characters of a name count (SCORE and
+SC are the same variable). Name endings give the type:
+  A      floating point number
+  A%     integer, -32768 to 32767
+  A$     string, up to 255 characters
+Arrays with DIM: DIM A(10), DIM N$(5,5). An array not dimensioned has
+11 elements (0 to 10).
+
+@{b}Special variables@{ub}:
+  TI     the clock, in 1/60 seconds since power on
+  TI$    the clock as "HHMMSS", can be set: TI$="000000"
+  ST     the status of the last input/output
+  pi     the pi key (shift + up arrow): 3.14159265
+
+@{b}Operators@{ub}: + - * / and ^ (power, the up arrow key), comparisons
+= < > <> <= >=, logic AND OR NOT (on 16 bit integers: they are also
+bit masks, PEEK(56320) AND 16).
+
+@{b}Keys@{ub}: RUN/STOP stops a program, RUN/STOP + RESTORE resets the
+screen. Keywords can be abbreviated: the first letter, then the second
+with SHIFT (P shift-O for POKE). ? is PRINT.
+
+There is no instruction for graphics or sound: they are done by
+writing to the chip registers with POKE. See the memory maps.
+@ENDNODE
+
+@NODE INSTRUCTIONS "Instructions"
+@{b}Instructions@{ub}
+
+@{b}ABS(X)@{ub}
+  Absolute value of X.  PRINT ABS(-5)  gives 5.
+
+@{b}AND@{ub}
+  Logical and, also bit by bit on 16 bit integers.
+  IF A>0 AND B>0 THEN ...      X=PEEK(56320) AND 15
+
+@{b}ASC(X$)@{ub}
+  PETSCII code of the first character of X$.  PRINT ASC("A")  gives 65.
+
+@{b}ATN(X)@{ub}
+  Arc tangent of X, in radians.
+
+@{b}CHR$(X)@{ub}
+  The character of PETSCII code X (0-255).  PRINT CHR$(147)  clears the
+  screen, CHR$(14) lower case, CHR$(142) upper case.
+
+@{b}CLOSE N@{ub}
+  Closes the file opened as N.  CLOSE 1
+
+@{b}CLR@{ub}
+  Clears all variables, arrays and the GOSUB/FOR stack. The program
+  stays.
+
+@{b}CMD N@{ub}
+  Sends the output of PRINT to the open file N instead of the screen
+  (a printer...). PRINT#N then CLOSE N ends it.
+
+@{b}CONT@{ub}
+  Continues a program stopped by STOP, END or RUN/STOP, if it was not
+  changed in between.
+
+@{b}COS(X)@{ub}
+  Cosine of X, X in radians.
+
+@{b}DATA@{ub}
+  Values read by READ, numbers or strings, separated by commas.
+  100 DATA 10,20,"HELLO",3.5
+
+@{b}DEF FN@{ub}
+  Defines a function of one numeric variable, used with FN.
+  10 DEF FN SQ(X)=X*X   20 PRINT FN SQ(4)    gives 16.
+
+@{b}DIM@{ub}
+  Dimensions arrays, numbered from 0.  DIM A(100),B$(10,10)
+
+@{b}END@{ub}
+  Ends the program. READY. comes back.
+
+@{b}EXP(X)@{ub}
+  e (2.71828...) to the power X.
+
+@{b}FN@{ub}
+  Calls a function defined by DEF FN.
+
+@{b}FOR ... TO ... STEP ... / NEXT@{ub}
+  Loop. STEP is optional (1), can be negative or decimal.
+  FOR I=10 TO 0 STEP -2 : PRINT I : NEXT I
+  The loop runs at least once.
+
+@{b}FRE(0)@{ub}
+  Free BASIC memory in bytes (negative above 32767: add 65536).
+
+@{b}GET A$@{ub}
+  Reads one key without waiting, "" if none.  Wait for a key:
+  10 GET K$ : IF K$="" THEN 10
+
+@{b}GET# N, A$@{ub}
+  Reads one character from the open file N.
+
+@{b}GOSUB N / RETURN@{ub}
+  Calls the subroutine at line N, RETURN goes back after the GOSUB.
+
+@{b}GOTO N@{ub}
+  Jumps to line N.  GO TO also works.
+
+@{b}IF ... THEN@{ub}
+  Runs the rest of the line only when the condition is true (not 0).
+  IF X>10 THEN PRINT "BIG" : X=0      IF A=1 THEN 200  (jumps to 200)
+  There is no ELSE: the next line runs either way.
+
+@{b}INPUT@{ub}
+  Asks values with a ? prompt, an optional text first.
+  INPUT "YOUR NAME";N$      INPUT A,B
+
+@{b}INPUT# N@{ub}
+  Reads values from the open file N, as INPUT does.
+
+@{b}INT(X)@{ub}
+  Integer part, rounded down.  INT(3.7)=3, INT(-3.7)=-4.
+
+@{b}LEFT$(X$,N)@{ub}
+  The N first characters of X$.  LEFT$("COMMODORE",4)  gives "COMM".
+
+@{b}LEN(X$)@{ub}
+  Length of X$ in characters.
+
+@{b}LET@{ub}
+  Assignment, optional: LET A=5 is the same as A=5.
+
+@{b}LIST@{ub}
+  Shows the program. LIST 100-200, LIST -50, LIST 300-.
+
+@{b}LOAD "NAME",8@{ub}
+  Loads a BASIC program from disk drive 8. LOAD "NAME",8,1 loads at the
+  address saved in the file (machine code). LOAD "*",8 the first one.
+  LOAD alone: from tape.
+
+@{b}LOG(X)@{ub}
+  Natural logarithm of X.  LOG(X)/LOG(10) is the base 10 one.
+
+@{b}MID$(X$,S,N)@{ub}
+  N characters of X$ from position S (from 1). N optional: to the end.
+  MID$("COMMODORE",5,3)  gives "ODO".
+
+@{b}NEW@{ub}
+  Erases the program and the variables.
+
+@{b}NOT@{ub}
+  Logical not: NOT 0 is -1 (true), NOT -1 is 0. Bit by bit: NOT X is
+  -(X+1).
+
+@{b}ON X GOTO / ON X GOSUB@{ub}
+  Jumps to the Xth line number of the list, goes on if X is out of range.
+  ON C GOTO 100,200,300
+
+@{b}OPEN N,D,S,"NAME"@{ub}
+  Opens file number N on device D (8 disk, 4 printer, 1 tape), secondary
+  address S.  OPEN 1,8,2,"DATA,S,W"  writes a sequential file.
+  OPEN 15,8,15,"I" sends a command to the disk drive.
+
+@{b}OR@{ub}
+  Logical or, also bit by bit.  POKE 53265,PEEK(53265) OR 32
+
+@{b}PEEK(A)@{ub}
+  The byte (0-255) at memory address A (0-65535).
+
+@{b}POKE A,V@{ub}
+  Writes the byte V (0-255) at address A. Graphics and sound are done
+  this way: POKE 53280,0 makes the border black.
+
+@{b}POS(0)@{ub}
+  The column of the cursor (0-79 on a logical line).
+
+@{b}PRINT@{ub}
+  Prints values. ; prints next to it, , goes to the next 10 column zone,
+  nothing at the end goes to the next line. ? is a short PRINT.
+  PRINT "SCORE:";S;     PRINT A,B
+
+@{b}PRINT# N@{ub}
+  Prints to the open file N, as PRINT does.
+
+@{b}READ@{ub}
+  Reads the next values of the DATA lines into variables.  READ A,B$
+
+@{b}REM@{ub}
+  A comment, the rest of the line is ignored.
+
+@{b}RESTORE@{ub}
+  The next READ starts again at the first DATA.
+
+@{b}RETURN@{ub}
+  Ends a GOSUB subroutine.
+
+@{b}RIGHT$(X$,N)@{ub}
+  The N last characters of X$.
+
+@{b}RND(X)@{ub}
+  A random number from 0 to under 1. RND(1) the next one, RND(-X) sets
+  the sequence (RND(-TI) at the start: different each run).
+  A dice: INT(RND(1)*6)+1
+
+@{b}RUN@{ub}
+  Clears the variables and runs the program. RUN 100 from line 100.
+
+@{b}SAVE "NAME",8@{ub}
+  Saves the program on disk drive 8. SAVE "@0:NAME",8 replaces it.
+
+@{b}SGN(X)@{ub}
+  Sign of X: -1, 0 or 1.
+
+@{b}SIN(X)@{ub}
+  Sine of X, X in radians.
+
+@{b}SPC(N)@{ub}
+  In PRINT: N spaces (moves the cursor right).
+
+@{b}SQR(X)@{ub}
+  Square root of X.
+
+@{b}STOP@{ub}
+  Stops the program with BREAK IN line. CONT goes on.
+
+@{b}STR$(X)@{ub}
+  The number X as a string, with a leading space if positive.
+
+@{b}SYS A@{ub}
+  Runs machine code at address A.  SYS 64738 resets the C64.
+
+@{b}TAB(N)@{ub}
+  In PRINT: moves the cursor to column N.
+
+@{b}TAN(X)@{ub}
+  Tangent of X, X in radians.
+
+@{b}USR(X)@{ub}
+  Calls machine code at the address in 785/786, with X, returns a value.
+
+@{b}VAL(X$)@{ub}
+  The number written in X$, 0 if none.  VAL("12.5")  gives 12.5.
+
+@{b}VERIFY "NAME",8@{ub}
+  Compares the program in memory with the file: ?VERIFY ERROR if
+  different.
+
+@{b}WAIT A,M,X@{ub}
+  Waits until (PEEK(A) XOR X) AND M is not 0.
+  WAIT 198,1  waits for a key in the keyboard buffer.
+@ENDNODE
+
+@NODE VIDEO "Video memory map"
+@{b}Video memory map (C64)@{ub}
+
+@{b}Screen and colors@{ub}
+  Address        Hex          Use
+  1024 - 2023    $0400-$07E7  screen: 40x25 screen codes
+                              (row Y, column X: 1024+40*Y+X)
+  55296 - 56295  $D800-$DBE7  color RAM, one color per character
+                              (55296+40*Y+X, 0-15)
+  2040 - 2047    $07F8-$07FF  sprite pointers 0-7: data block number,
+                              the data is at block*64
+  646            $0286        color of the text printed next
+
+  Screen codes (POKE) are not PETSCII codes (PRINT): A=1, B=2... @=0,
+  space=32, 81=ball, 160=reversed space (full block).
+
+@{b}VIC-II registers@{ub} (53248 = $D000)
+  Address  Hex    Use
+  53248    $D000  sprite 0 X  (sprite N: 53248+2*N)
+  53249    $D001  sprite 0 Y  (sprite N: 53249+2*N)
+  ...      ...    sprites 1-7 X and Y up to 53263 ($D00F)
+  53264    $D010  bit N: X of sprite N above 255
+  53265    $D011  control 1: bit 4 screen on, bit 5 bitmap mode,
+                  bit 3 25 rows, bits 0-2 vertical scroll,
+                  bit 7 raster line bit 8
+  53266    $D012  raster line (read), raster interrupt line (write)
+  53267    $D013  light pen X
+  53268    $D014  light pen Y
+  53269    $D015  bit N: sprite N on
+  53270    $D016  control 2: bit 4 multicolor, bit 3 40 columns,
+                  bits 0-2 horizontal scroll
+  53271    $D017  bit N: sprite N double height
+  53272    $D018  memory: bits 4-7 screen at 1024*n, bits 1-3 charset at
+                  2048*n. 21 upper case/graphics, 23 lower/upper case
+  53273    $D019  interrupt flags
+  53274    $D01A  interrupt enable
+  53275    $D01B  bit N: sprite N behind the background
+  53276    $D01C  bit N: sprite N multicolor
+  53277    $D01D  bit N: sprite N double width
+  53278    $D01E  sprite to sprite collisions (read clears)
+  53279    $D01F  sprite to background collisions (read clears)
+  53280    $D020  border color
+  53281    $D021  background color
+  53282    $D022  background color 1 (multicolor, extended color)
+  53283    $D023  background color 2
+  53284    $D024  background color 3
+  53285    $D025  sprite multicolor 0
+  53286    $D026  sprite multicolor 1
+  53287    $D027  sprite 0 color  (sprite N: 53287+N)
+  ...      ...    sprites 1-7 colors up to 53294 ($D02E)
+
+@{b}Colors@{ub}
+  0 black       4 purple      8 orange      12 grey
+  1 white       5 green       9 brown       13 light green
+  2 red         6 blue       10 light red   14 light blue
+  3 cyan        7 yellow     11 dark grey   15 light grey
+
+@{b}Also useful@{ub}
+  56320    $DC00  joystick port 2: bits 0 up, 1 down, 2 left, 3 right,
+                  4 fire, 0 when pressed
+  56321    $DC01  joystick port 1, same bits
+  56576    $DD00  bits 0-1: VIC-II 16 KB bank (3 = 0-16383, default)
+  198      $00C6  number of keys in the keyboard buffer
+  197      $00C5  key pressed now (64: none)
+  650      $028A  key repeat: 128 all keys
+@ENDNODE
+
+@NODE SID "SID memory map"
+@{b}SID memory map (C64)@{ub} (54272 = $D400)
+
+@{b}Voices@{ub}: 3 voices, voice 1 at 54272, voice 2 at 54279 (+7),
+voice 3 at 54286 (+14). Offsets in a voice:
+
+  Voice 1  Offset  Use
+  54272    +0      frequency, low byte
+  54273    +1      frequency, high byte
+  54274    +2      pulse width, low byte
+  54275    +3      pulse width, high 4 bits (pulse width 0-4095)
+  54276    +4      control: bit 0 gate (1 starts the note, 0 releases
+                   it), bit 1 sync, bit 2 ring modulation, bit 3 test,
+                   16 triangle, 32 sawtooth, 64 pulse, 128 noise
+  54277    +5      attack (high 4 bits) and decay (low 4 bits)
+  54278    +6      sustain level (high 4 bits) and release (low 4 bits)
+
+  Voice 2: 54279 - 54285       Voice 3: 54286 - 54292
+
+@{b}Filter and volume@{ub}
+  Address  Hex    Use
+  54293    $D415  cutoff frequency, low 3 bits
+  54294    $D416  cutoff frequency, high 8 bits
+  54295    $D417  resonance (high 4 bits), filtered voices: bit 0 voice 1,
+                  bit 1 voice 2, bit 2 voice 3, bit 3 external input
+  54296    $D418  volume (low 4 bits, 0-15), bit 4 low pass, bit 5 band
+                  pass, bit 6 high pass, bit 7 voice 3 off
+
+@{b}Read only@{ub}
+  54297    $D419  paddle X
+  54298    $D41A  paddle Y
+  54299    $D41B  voice 3 waveform output: random numbers with noise
+  54300    $D41C  voice 3 envelope output
+
+@{b}Frequency@{ub}: value = Hz / 0.0587 on a PAL C64 (Hz / 0.0610 NTSC).
+  POKE high byte INT(V/256), low byte V-256*INT(V/256).
+  PAL octave 4:  C 4455  D 5001  E 5613  F 5947  G 6675  A 7493
+                 B 8410  C5 8910
+
+@{b}Envelope times@{ub} (attack / decay and release), value 0-15:
+  0  2 / 6 ms       4  38 / 114 ms     8 100 ms / 300 ms   12 1 / 3 s
+  1  8 / 24 ms      5  56 / 168 ms     9 250 / 750 ms      13 3 / 9 s
+  2 16 / 48 ms      6  68 / 204 ms    10 500 ms / 1.5 s    14 5 / 15 s
+  3 24 / 72 ms      7  80 / 240 ms    11 800 ms / 2.4 s    15 8 / 24 s
+
+A note: set the volume (54296), the envelope (+5, +6), the frequency
+(+0, +1), then the waveform with the gate bit (+4: 17 triangle), and
+later the waveform without it (16) to release the note.
+@ENDNODE
+
+@NODE VIC20 "VIC-20 hardware"
+@{b}VIC-20 hardware addresses@{ub}
+
+The VIC-20 has a 22 columns by 23 rows screen, and one chip, the VIC
+(6560 NTSC, 6561 PAL), for the video and the sound.
+
+@{b}Memory, by RAM expansion@{ub}
+                    Unexpanded     +3K            +8K or more
+  BASIC start       4097  $1001    1025  $0401    4609  $1201
+  Screen            7680  $1E00    7680  $1E00    4096  $1000
+  Color RAM         38400 $9600    38400 $9600    37888 $9400
+
+  Screen: 22x23 = 506 screen codes, row Y column X at screen+22*Y+X.
+  Color RAM: one color per character, at color+22*Y+X.
+  648 ($0288) holds the screen address / 256 (30 unexpanded).
+
+@{b}VIC registers@{ub} (36864 = $9000)
+  Address  Hex    Use
+  36864    $9000  bits 0-6 left edge of the screen (moves it sideways),
+                  bit 7 interlace
+  36865    $9001  top edge of the screen (moves it up and down)
+  36866    $9002  bits 0-6 number of columns (22), bit 7 screen
+                  address bit 9
+  36867    $9003  bits 1-6 number of rows times 2 (46 for 23), bit 0
+                  8x16 characters, bit 7 raster line bit 0
+  36868    $9004  raster line, bits 8-1
+  36869    $9005  bits 4-7 screen address, bits 0-3 character set
+                  address: 240 upper case/graphics, 242 lower/upper case
+                  (unexpanded)
+  36870    $9006  light pen X
+  36871    $9007  light pen Y
+  36872    $9008  paddle X
+  36873    $9009  paddle Y
+  36874    $900A  voice 1 (low): bit 7 on, bits 0-6 pitch
+  36875    $900B  voice 2 (middle), one octave higher
+  36876    $900C  voice 3 (high), one more octave higher
+  36877    $900D  noise: bit 7 on, bits 0-6 pitch
+  36878    $900E  bits 0-3 volume (0-15), bits 4-7 auxiliary color
+                  (multicolor characters)
+  36879    $900F  bits 0-2 border color (0-7), bit 3 normal (1) or
+                  reversed (0) screen, bits 4-7 background color (0-15):
+                  POKE 36879, background*16 + 8 + border  (27 at power
+                  on: white background, cyan border)
+
+@{b}Colors@{ub}
+  0 black      4 purple      8 orange          12 light purple
+  1 white      5 green       9 light orange    13 light green
+  2 red        6 blue       10 pink            14 light blue
+  3 cyan       7 yellow     11 light cyan      15 light yellow
+  Characters and the border use 0-7 only. In color RAM, adding 8 makes
+  the character multicolor (pairs of pixels: background, border, the
+  character color, the auxiliary color).
+
+@{b}Sound@{ub}: a voice is on with values 128 to 255, higher values give
+higher notes; 0 turns it off. Set the volume first:
+  POKE 36878,15 : POKE 36875,200      a note on voice 2
+  POKE 36875,0                        silence
+
+@{b}Joystick@{ub}: on the VIA chips, 0 when pressed.
+  37137    $9111  bit 2 up, bit 3 down, bit 4 left, bit 5 fire
+  37152    $9120  bit 7 right, read only after POKE 37154,127, then
+                  POKE 37154,255 again (the keyboard needs it)
+
+  10 P=PEEK(37137) : POKE 37154,127 : R=PEEK(37152) : POKE 37154,255
+  20 IF (P AND 4)=0 THEN PRINT "UP"
+  30 IF (P AND 8)=0 THEN PRINT "DOWN"
+  40 IF (P AND 16)=0 THEN PRINT "LEFT"
+  50 IF (R AND 128)=0 THEN PRINT "RIGHT"
+  60 IF (P AND 32)=0 THEN PRINT "FIRE"
+  70 GOTO 10
+
+@{b}Also the same as on the C64@{ub}
+  198      $00C6  number of keys in the keyboard buffer
+  197      $00C5  key pressed now (64: none)
+  646      $0286  color of the text printed next (0-7)
+  650      $028A  key repeat: 128 all keys
+  SYS 64802 resets the VIC-20 (SYS 64738 on the C64).
+@ENDNODE
+
+@NODE EXAMPLES "Examples"
+@{b}Examples@{ub}
+
+Type them after NEW, or load them as .bas texts (BASIC menu, "Load
+program as .bas"), then RUN. RUN/STOP stops them.
+
+@{b}1. Rainbow border@{ub}: the 16 colors in the border and background.
+
+  10 FOR C=0 TO 15
+  20 POKE 53280,C : POKE 53281,C
+  30 FOR D=1 TO 300 : NEXT D
+  40 NEXT C
+  50 POKE 53280,14 : POKE 53281,6
+  60 PRINT "BACK TO THE USUAL COLORS"
+
+@{b}2. Guess the number@{ub}: INPUT, IF, random numbers.
+
+  10 X=RND(-TI)
+  20 N=INT(RND(1)*100)+1 : T=0
+  30 PRINT CHR$(147);"I THINK OF A NUMBER, 1 TO 100"
+  40 INPUT "YOUR GUESS";G
+  50 T=T+1
+  60 IF G<N THEN PRINT "TOO LOW" : GOTO 40
+  70 IF G>N THEN PRINT "TOO HIGH" : GOTO 40
+  80 PRINT "FOUND IN";T;"TRIES"
+
+@{b}3. Screen memory@{ub}: a line of colored balls written with POKE.
+
+  10 PRINT CHR$(147)
+  20 FOR X=0 TO 39
+  30 POKE 1024+12*40+X,81
+  40 POKE 55296+12*40+X,X AND 15
+  50 NEXT X
+  60 GET K$ : IF K$="" THEN 60
+
+@{b}4. A sprite@{ub}: a square sprite moving across the screen.
+
+  10 PRINT CHR$(147)
+  20 FOR I=0 TO 62 : POKE 832+I,255 : NEXT I
+  30 POKE 2040,13 : REM DATA AT 13*64=832
+  40 POKE 53287,7 : REM YELLOW
+  50 POKE 53249,140 : REM Y
+  60 POKE 53269,1 : REM SPRITE 0 ON
+  70 FOR X=24 TO 255
+  80 POKE 53248,X
+  90 NEXT X
+  100 GOTO 70
+
+@{b}5. A scale with the SID@{ub}: voice 1, triangle, PAL frequencies.
+
+  10 S=54272
+  20 FOR I=0 TO 24 : POKE S+I,0 : NEXT I
+  30 POKE S+24,15 : REM VOLUME
+  40 POKE S+5,9 : POKE S+6,0 : REM ENVELOPE
+  50 FOR N=1 TO 8
+  60 READ H,L
+  70 POKE S+1,H : POKE S,L
+  80 POKE S+4,17 : REM TRIANGLE, GATE ON
+  90 FOR D=1 TO 200 : NEXT D
+  100 POKE S+4,16 : REM GATE OFF
+  110 NEXT N
+  120 DATA 17,103,19,137,21,237,23,59
+  130 DATA 26,19,29,69,32,218,34,206
+
+@{b}6. Joystick@{ub}: a ball moved with the joystick in port 2, fire
+changes the border color.
+
+  10 PRINT CHR$(147) : X=20 : Y=12
+  20 P=1024+40*Y+X : POKE P,81 : POKE P+54272,1
+  30 J=PEEK(56320) AND 31
+  40 IF J=31 THEN 30
+  50 POKE P,32
+  60 IF (J AND 1)=0 AND Y>0 THEN Y=Y-1
+  70 IF (J AND 2)=0 AND Y<24 THEN Y=Y+1
+  80 IF (J AND 4)=0 AND X>0 THEN X=X-1
+  90 IF (J AND 8)=0 AND X<39 THEN X=X+1
+  100 IF (J AND 16)=0 THEN POKE 53280,(PEEK(53280)+1) AND 15
+  110 FOR D=1 TO 30 : NEXT D
+  120 GOTO 20
+
+And the famous one line maze:
+
+  10 PRINT CHR$(205.5+RND(1)); : GOTO 10
+@ENDNODE

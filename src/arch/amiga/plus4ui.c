@@ -35,6 +35,7 @@
 #include "amigalocale.h"
 #include "amigabasic.h"
 #include "amigamachine.h"
+#include "version.h"
 #include "machine.h"
 #include "plus4mem.h"
 #include "plus4model.h"
@@ -183,6 +184,9 @@ static const unsigned char plus4_letters[26][2] = {
 /* made by amiga/CMakeLists.txt from data/PLUS4/amiga_positional.vkm */
 #include "amiga_positional_vkm_plus4.h"
 
+/* for the AmigaOS Version command (kept by "used": nothing reads it) */
+static const char kvice_verstag[] __attribute__((used)) = KVICE_VERSTAG("xplus4");
+
 const amiga_machine_t amiga_machine = {
     "KVICE xplus4",
     "xplus4",
@@ -203,7 +207,8 @@ const amiga_machine_t amiga_machine = {
     plus4_symkeys, sizeof plus4_symkeys / sizeof plus4_symkeys[0],
     plus4_letters,
     0, 1,       /* RETURN */
-    amiga_positional_vkm
+    amiga_positional_vkm,
+    1           /* Tape menu */
 };
 
 /* ------------------------------------------------------------------------- */

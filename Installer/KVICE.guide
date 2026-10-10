@@ -1,0 +1,333 @@
+@DATABASE KVICE.guide
+@$VER: KVICE.guide 3.10.1 (09.10.2026)
+@AUTHOR krabobmkd
+@(C) 2026 krabobmkd, the VICE team
+@WORDWRAP
+@NODE MAIN "KVICE - Commodore 8-bit machines for AmigaOS 3"
+
+@{b}KVICE 3.10 r1@{ub}
+Commodore 64, Plus/4 and VIC-20 emulators for AmigaOS 3.x
+
+------------------------------------------------------------------------------
+
+  @{" What is KVICE         " LINK WHAT}      The package
+  @{" Installation          " LINK INSTALL}   Install and the resource files
+  @{" Requirements          " LINK REQUIREMENTS}  What it needs to run
+  @{" File formats          " LINK FORMATS}   .d64, .prg, .crt, .t64/.tap, .vsf
+  @{" Menus                 " LINK MENUS}     What the menus do
+  @{" BASIC programs        " LINK BASIC}     .prg and .bas, EmojiGear, quick guides
+  @{" Fork Effort           " LINK FORK}      What KVICE adds to VICE 3.10
+  @{" Developer Effort      " LINK DEVEL}     Speed work, for developers who help
+  @{" PetMate               " LINK PETMATE}   Draw PETSCII art, export it as .prg
+  @{" License and credits   " LINK LICENSE}   GPL 2
+
+------------------------------------------------------------------------------
+
+Source code:
+  https://github.com/krabobmkd/KVICE
+
+Bug reports and feature requests:
+  https://github.com/krabobmkd/KVICE/issues
+@ENDNODE
+
+@NODE WHAT "What is KVICE"
+@{b}What is KVICE@{ub}
+
+KVICE is a Commodore 8-bit machine package:
+
+  @{b}x64@{ub}      Commodore 64
+  @{b}xplus4@{ub}   Commodore Plus/4, C16, C116
+  @{b}xvic@{ub}     Commodore VIC-20
+  @{b}PetMate@{ub}  PETSCII art draw tool
+
+It is a fork of VICE 3.10, the Versatile Commodore Emulator, made fast for the classic Amiga.
+@ENDNODE
+
+@NODE INSTALL "Installation"
+@{b}Installation@{ub}
+
+Double-click @{b}Install@{ub} and choose a drawer: a KVICE drawer is created inside it, with the emulators you chose and their drawers C64, PLUS4, VIC20 and DRIVES.
+
+The resource files (kernal, BASIC, characters, drive DOS) are not part of the archive. Run @{b}KVICE Resource Installer@{ub}: it downloads them into these drawers and checks them.
+
+This online resource installer needs an online Amiga and AmiSSLv5. If your Amiga does not match this, you may retrieve the missing files you need from:
+@{lindent 2}
+- The "C64 Forever" CD by Cloanto.
+
+- The original VICE source repository:
+  https://github.com/VICE-Team/svn-mirror/tree/main/vice/data
+@{lindent 0}
+This applies to the drawers C64, PLUS4, VIC20 and DRIVES of your installation. Do not remove the resource files already installed in those drawers: they just have to be completed.
+
+If the KVICE Resource Installer works, you are just one click away from a complete working installation.
+@ENDNODE
+
+@NODE REQUIREMENTS "Requirements"
+@{b}Requirements@{ub}
+@{lindent 2}
+- AmigaOS 3.1 or later
+- a fast Amiga for full speed:
+   68060 50 MHz reaches 40% of the speed,
+   Vampire, PiStorm and UAE reach 100%
+- MUI 3.8 or later, for the settings window
+- (optional) AHI, for the sound, else no sound
+- (optional) AmiSSLv5 and a TCP/IP stack, for online resource installation (KVICE Resource Installer)
+- (optional) RTG graphics
+@{lindent 0}
+If you have no RTG extension and use Amiga native display modes, you are encouraged to install the patch @{b}BlazeWCP@{ub} from Aminet: it accelerates the drawing function WriteChunkyPixels() by a large factor.
+@ENDNODE
+
+@NODE FORMATS "File formats"
+@{b}File formats@{ub}
+
+The Commodore machines loaded their programs from cartridges, tapes or 5"1/4 floppy disks read by one of the drive models. You could also type a program in the BASIC available at boot, and RUN it.
+
+Because of this, the Commodore emulators work with these file types:
+
+@{b}.d64@{ub}  disk image@{lindent 2}
+The image of one side of a floppy disk (170 KB). You need a drive 8 enabled in the settings, with its ROM available in DRIVES/. The 1541-II has the better emulation, so it is the default drive.
+For the C64 DOS, a .d64 contains a list of .prg program files and .seq data files.
+
+Drives are connected in a chain on the "IEC serial bus", the first device being number 8: with 2 floppy drives, they would be 8 and 9.
+
+From the C64 BASIC, to list the files of the current disk:
+  LOAD "$",8
+  LIST
+To load the first program, the usual way to start a disk based application:
+  LOAD "*",8,1
+  RUN               (if needed)
+Autostarting a .d64 does this for you.
+A disk can also hold a collection of many .prg files, then you start one with:
+  LOAD "THATGAME",8,1
+
+The bad news: Commodore floppies were very slow and sometimes unreliable; some alternative ROMs make them faster. All emulators have endless compatibility issues with demos that use the floppy drive in a tricky way.
+We recommend to boot once, then save a snapshot once the game, tool or application is loaded: loading the snapshot then brings you instantly to the loaded state.
+Disk images can be detached and attached at any moment while a program runs.
+@{lindent 0}
+@{b}.prg@{ub}  program@{lindent 2}
+The executable format of the Commodore machines, the files found on floppies and tapes. Half of the games do not use the disk once loaded: you may just keep the .prg on your Amiga hard disk, then loading it with Autostart is immediate.
+Note: a single .prg can contain BASIC, machine code, or both.
+@{lindent 0}
+@{b}.crt@{ub}  cartridge@{lindent 2}
+Games and programs in this format start very fast. When a cartridge is plugged in, a reset boots it. Some cartridges have a menu to start the BASIC without removing them; else detach the cartridge and reset to get the BASIC back.
+
+For the story, there were 2 waves of C64 games released on cartridges: simple games from 1982 to 1984, then producing cartridges was judged too costly. Around 1990, the C64GS console came out and only used cartridges, so many excellent later games were re-issued as cartridges at that time.
+Many .d64 programs were also converted to the .crt format, for which no hardware was ever produced.
+Note: if you own a real machine, some modern cartridges like "Kung Fu Flash" can flash .crt images from a collection on an SD card, and the machine sees them as a classic cartridge: this is why the format became more popular in recent years.
+@{lindent 0}
+@{b}.t64 / .tap@{ub}  tape@{lindent 2}
+The tape formats. On a real machine, a game of a few kilobytes could take up to 25 minutes to load.
+In BASIC you just type LOAD, and it loads the next program found on the tape as it runs.
+A .t64 is a plain archive of the files of a tape, loaded at once by LOAD. A .tap is the recording of a real tape: use the Tape menu buttons (Play, Rewind...) as on a datasette, and Record to save on a new .tap.
+@{lindent 0}
+@{b}.vsf@{ub}  snapshot@{lindent 2}
+The emulator format for the whole machine state: you can save and load as many as you like.
+Note that loading a snapshot does not attach a disk or a cartridge: you may need to attach the .d64 first, then load the snapshot.
+@ENDNODE
+
+@NODE MENUS "Menus"
+@{b}Menus@{ub}
+
+@{b}First menu (C64, Plus/4, VIC-20)@{ub}@{lindent 2}
+@{b}Autostart...@{ub}@{lindent 4}
+start a program, disk, tape or cartridge@{lindent 2}
+@{b}BASIC@{ub}@{lindent 4}
+save the program in memory as .prg, save or load it as UTF-8 text (.bas)@{lindent 2}
+@{b}Attach / Detach@{ub}@{lindent 4}
+a disk image in drive 8. You need that to run multiple disk demos: disks can be changed on the fly while an app runs.@{lindent 2}
+@{b}Drive 8@{ub}@{lindent 4}
+create an empty disk, extract all the files of the .d64 disk to an Amiga drawer, use an Amiga drawer as drive 8@{lindent 2}
+@{b}Tape@{ub}@{lindent 4}
+attach, detach or create a tape image (.t64, .tap), and the datasette buttons: Play, Stop, Rewind, Fast forward, Record, Reset@{lindent 2}
+@{b}Cartridge@{ub}@{lindent 4}
+attach, detach@{lindent 2}
+@{b}Reset, Hard reset@{ub}
+@{b}About..., Settings..., Pause, Quit@{ub}
+@{lindent 0}
+@{b}Display@{ub}@{lindent 2}
+Window / fullscreen, window size, borders, screenshot (IFF)
+@{lindent 0}
+@{b}Snapshot@{ub}@{lindent 2}
+Load and save the whole machine state
+@{lindent 0}
+@{b}Keyboard@{ub}
+Two ways to map the keys, which can be switched on the fly:@{lindent 2}
+- Symbolic: uses the keymap of your Amiga locale configuration to map the keys: useful for the BASIC.
+
+- Positional: for games and emulated tools that are very keyboard based: the C64 key positions are closer to your Amiga keyboard positions. The key correspondences are shown in the Keyboard settings panel.
+@ENDNODE
+
+@NODE BASIC "BASIC programs"
+@{b}BASIC programs@{ub}
+
+The three emulators start in the BASIC of their machine, at the READY. prompt: BASIC V2 for the C64 (x64) and the VIC-20 (xvic), BASIC 3.5 for the Plus/4, C16 and C116 (xplus4). Type a program, RUN it, and keep it on the Amiga side with the BASIC menu:
+@{lindent 2}
+@{b}Save program as .prg...@{ub}@{lindent 4}
+the binary form the machines save it in (SAVE"NAME",8). Load it back with Autostart, or LOAD it from a disk.@{lindent 2}
+@{b}Save program as .bas...@{ub}@{lindent 4}
+the program as a text file, to read and edit it on the Amiga.@{lindent 2}
+@{b}Load program as .bas...@{ub}@{lindent 4}
+a text file typed back into the machine, then just RUN it.
+@{lindent 0}
+@{b}The .bas text: UTF-8 with all the PETSCII characters@{ub}
+
+The Commodore character set, PETSCII, has many graphic characters that no Amiga character set has: lines, blocks, card suits, checkerboards... The .bas files are written in UTF-8 Unicode, with each PETSCII graphic character as its official Unicode counterpart, mostly from the "Symbols for Legacy Computing" block that Unicode added for the 8-bit computers. Nothing is lost: loading the .bas back gives the very same program, byte for byte.
+
+The control codes in strings (colors, cursor moves, clear screen...) are written between braces, as the VICE petcat tool does: {clr}, {home}, {red}, {down}... Lines that do not start with a number are comments, ignored when loading. A text with errors is not loaded, and a report gives the line of each error.
+
+Most Amiga text editors only know Latin-1: they show a .bas text with the graphic characters garbled, and may break them when saving.
+
+@{b}Editing with EmojiGear and the PetMe fonts@{ub}
+
+We advise the Amiga UTF-8 text editor @{b}EmojiGear@{ub}, with one of the @{b}PetMe@{ub} TrueType fonts: they contain the whole Commodore character set at the Unicode places the .bas files use. The installer can copy them to FONTS: (option "PetMe fonts for EmojiGear BASIC").
+@{lindent 2}
+- PetMe64.ttf: the C64 characters, also fine for the VIC-20 and the Plus/4
+- PetMe.ttf, PetMe128.ttf: the PET and C128 shapes
+- the 2X and 2Y variants: double width or double height
+@{lindent 0}
+Choose a PetMe font in the EmojiGear settings: you then see and type the exact same characters as on the Commodore screen, in a BASIC source you can load back into the emulators with "Load program as .bas...".
+
+@{b}BASIC quick guides and examples@{ub}
+
+The installer can also install two quick guides, to learn BASIC and to keep open as a reference while coding:
+@{lindent 2}
+@{b}BASICv2Quick.guide@{ub}@{lindent 4}
+BASIC V2 of the C64 and the VIC-20: presentation of the language (lines, variables, direct mode), every instruction with examples, the C64 video memory map (screen, colors, VIC-II registers), the SID sound registers, the VIC-20 hardware (screen, colors, sound, joystick), and short example programs.@{lindent 2}
+@{b}BASICv3Quick.guide@{ub}@{lindent 4}
+BASIC 3.5 of the Plus/4, C16 and C116: presentation of the language and of its about 50 new keywords (graphics, sound...), every instruction with examples, the video memory map (screen, colors, TED registers), the TED sound registers, and short example programs.
+@{lindent 0}
+Example programs are also installed as .bas files, in the drawers BasicExample/C64, BasicExample/PLUS4 and BasicExample/VIC20: load one with "Load program as .bas...", then RUN.
+@ENDNODE
+
+@NODE FORK "Fork Effort"
+@{b}Fork Effort@{ub}
+
+What KVICE adds to the original VICE 3.10.
+
+@{b}BASIC programs as .prg and as .bas text@{ub}
+
+x64, xplus4 and xvic save the BASIC program in memory as .prg, the original binary form the machines save it in, but also as a plain UTF-8 Unicode text, .bas, the common extension for BASIC sources (BASIC menu, "Save program as .bas" and "Load program as .bas").
+
+The PETSCII graphic characters are exported as their official Unicode counterparts: the box drawing, block and card suit characters, and the "Symbols for Legacy Computing" Unicode added for the 8-bit computers. They are translated back to PETSCII when a .bas text is loaded. The control codes in strings (colors, cursor moves, clear screen...) are written between braces, {clr}, {red}, as the VICE petcat tool does.
+
+So nothing of the meaning of the code and of its PETSCII strings is lost, and the text version shows the very same characters as the machine. With a "PetMe64.ttf" font, the Amiga app @{b}EmojiGear@{ub} shows all of them: a complete BASIC V2 program (C64, VIC-20) or BASIC 3.5 program (Plus/4) can be edited in EmojiGear and loaded back.
+
+Loading a .bas text types its lines as the machine would: the keywords are tokenized as by the BASIC ROM itself. Lines that do not start with a number are comments. A text with errors (a character without PETSCII, a wrong line number...) is not loaded, and a report gives the line of each error.
+
+The .bas form also makes it easy to move a BASIC program between these computers, which the .prg form does not allow: the .prg is tied to the memory address and the keyword codes of one machine. Keywords only one BASIC knows, and POKE/PEEK addresses, still have to be adapted.
+
+@{b}Scalable window@{ub}
+
+A new fast drawing routine scales the emulated screen to any window size, and adapts itself to every target pixel format: native screens of all depths, and RTG screens (8, 15, 16, 24 and 32 bits).
+
+@{b}Fullscreen switch@{ub}
+
+Amiga+F switches between the window and a fullscreen at any time. The fullscreen keeps the screen title bar and the menus, or not, as chosen in the settings.
+
+@{b}Realtime settings@{ub}
+
+The settings window can be opened and used while the emulator runs: the emulation goes on behind it.
+@ENDNODE
+
+@NODE DEVEL "Developer Effort from original VICE"
+@{b}Developer Effort from original VICE@{ub}
+
+For developers who wish to help. Sources:
+  https://github.com/krabobmkd/KVICE
+
+@{b}Why speed work was needed@{ub}
+
+VICE is a long-lived project, written to be exact, portable and readable on modern computers. Built as it is for the 68k, x64 runs far below the real C64 speed on a 68060: each emulated 6510 instruction pays for many generic tests, 64-bit clocks, and memory accesses through function tables with arguments on the stack. True drive emulation makes it worse: a 1541 is a second 6502 computer with its own chips, emulated cycle by cycle, so it doubles the job.
+
+So we searched optimization strategies, measured each one, and kept what gives speed without losing exactness:
+
+@{b}Build@{ub}@{lindent 2}
+- Cross compiled on Linux with GCC 6.5 (bebbo's m68k-amigaos), libnix, CMake (amiga/CMakeLists.txt). Fixed point arithmetic: no float in the emulation.
+@{lindent 0}
+@{b}CPU core (6510core.c, maincpu.c, c64cpu.c)@{ub}@{lindent 2}
+- Fewer tests per emulated instruction: the rare cases (profiling, autostart, Z80 cartridge, cycle limit) are gathered in one "attention" word tested once (maincpuattention.h).
+- Parameters by register: the memory read/write handlers of the C64, Plus/4, VIC-20 and drives, and the CIA functions, take their arguments in 68k registers, with a special syntax, PARAMREG(d0), that is __asm("d0") on the AmigaOS gcc (paramreg.h). A check build (-DPARAMREG_CHECK) finds any handler left without it.
+- Direct RAM path: reads of RAM, BASIC, KERNAL, character ROM and writes to RAM go straight to memory, no function call (c64mem.c).
+- Merged N and Z flags (CPU_FLAG_NZ_MERGED).
+@{lindent 0}
+@{b}Sound (vsync.c, sound.c, sid/fastsid.c)@{ub}@{lindent 2}
+- The sound mixing flush and the host sync run every 16 raster lines (about 1 ms) instead of every line.
+- FastSID only, integer only. Its filter was broken in fixed point builds (the cutoff had no effect): rewritten with integer tables.
+@{lindent 0}
+@{b}Video (vicii-draw.c, arch/amiga)@{ub}@{lindent 2}
+- Multicolor text: a color table rebuilt only when the colors change, a multicolor character costs as much as a hires one.
+- Only the screen lines that changed are sent to the screen, the output being bound by the Zorro/chip bus. The old VICE video cache can be turned on again (-vcache).
+- Own scalers: chunky for native screens (WriteChunkyPixels), direct drawing for each RTG pixel format.
+@{lindent 0}
+@{b}Drives@{ub}@{lindent 2}
+- Autostart loads disks without true drive emulation by default: no second 6502 to run while loading.
+@{lindent 0}
+@{b}Tools to measure@{ub}@{lindent 2}
+- linux/: a headless Linux build of the same sources, to profile with valgrind callgrind. linux/kvice_bench.sh runs the test programs and prints a hash of the frames: an optimization must not change it.
+- CMake options for the Amiga build: VICE_AMIGA_TIME_STATS (time spent in CPU, VIC-II, screen, SID, sound, waiting), VICE_AMIGA_DIV64_STATS, VICE_AMIGA_STACK_WATCH, VICE_AMIGA_SAVE_ASM (keeps the generated 68k assembler next to the objects, to read what gcc did).
+@{lindent 0}
+@{b}Where help is welcome@{ub}@{lindent 2}
+- The 6510 core still spends most of the time: opcode fetch and the fixed cost of each instruction.
+- The VIC-II drawing modes after multicolor text, and the TED (Plus/4) and VIC (VIC-20) drawing.
+@{lindent 0}
+Measure first (callgrind, time stats), keep the frames hash, then send your changes as a pull request or open an issue:
+  https://github.com/krabobmkd/KVICE/issues
+@ENDNODE
+
+@NODE PETMATE "PetMate"
+@{b}PetMate@{ub}
+
+The package also embeds @{b}PetMate@{ub}, a PETSCII art draw tool for AmigaOS 3.x, ported from the original Petmate editor. The installer copies it next to the emulators (option "PetMate PETSCII Draw tool"), with its own guide, PetMate.guide.
+
+PETSCII art is drawn with the characters of the standard Commodore 64 text mode: a screen of 40 x 25 characters, each with one of the 16 C64 colors over a common background color, using the whole PETSCII character set with its lines, blocks and graphic symbols. This is the very screen the C64 shows at boot: no bitmap mode needed, and it is how most C64 BBS screens, game title screens and demo pictures were made.
+
+@{b}A trend again@{ub}
+
+PETSCII was first a necessity: in the 1980s, BBS screens, game intros and disk menus were drawn in text mode because it was small, fast and could be sent over a modem. In the 2010s it came back as an art form of its own, for reasons that have little to do with the old constraints:
+@{lindent 2}
+- Cross-platform editors made drawing easy: the PETSCII editor by Marq, then Petmate, which this PetMate is ported from, run on modern computers, with undo, brushes and image export.
+
+- The demoscene opened graphics competitions to PETSCII at its parties, and the C64 scene databases now list thousands of PETSCII pictures, animations and whole text mode demos.
+
+- The limits became the attraction: 40 x 25 cells, 256 fixed characters and 16 colors give a style recognizable at first sight, and a picture holds in 2 KB.
+
+- Artists brought it to galleries, posters, music videos and social networks, where the blocky look stands out among photos.
+
+- Unicode 13.0 (2020) added the "Symbols for Legacy Computing" block, so PETSCII characters can now be written in plain text, outside any emulator: the same characters KVICE uses in its .bas files.
+@{lindent 0}
+Drawing in PETSCII is also a gentle way to learn the C64 itself: the drawing you see is the screen memory and color memory, byte for byte.
+
+@{b}Examples@{ub}
+
+Example drawings are installed in the drawer @{b}PetmateExample@{ub}, as .petmate project files: open one in PetMate with Project > Open... (Ctrl+O).
+
+@{b}From PetMate to x64@{ub}
+
+PetMate exports the current screen with Project > Export As. Two of the formats are Commodore 64 programs, ready to run in x64:
+@{lindent 2}
+@{b}PRG BASIC (.prg)@{ub}@{lindent 4}
+a C64 BASIC program that displays the screen.@{lindent 2}
+@{b}PRG ASM (.prg)@{ub}@{lindent 4}
+a short machine code program, started by a one line BASIC SYS stub, that copies the screen and colors to the C64 display memory.
+@{lindent 0}
+Both load at the BASIC start: open the .prg in x64 with @{b}Autostart...@{ub}, it is loaded and RUN at once. You may also put it on a .d64 disk, or in an Amiga drawer used as drive 8, then LOAD "NAME",8 and RUN.
+
+PetMate also exports the screen as IFF ILBM and GIF images, and as BASIC DATA or ACME assembler sources (.bas, .asm), to include the picture in your own C64 programs.
+
+PetMate is free software under the MIT license, PetMate.LICENSE.
+@ENDNODE
+
+@NODE LICENSE "License and credits"
+@{b}License and credits@{ub}
+
+KVICE is free software under the GNU General Public License, version 2 or later, like VICE.
+
+Original VICE project by the VICE team.
+Original Amiga port by AmiDog.
+KVICE by krabobmkd.
+PetMate for AmigaOS by krabobmkd, from the original Petmate, under the MIT license.
+Uses MUI, AHI, zlib.
+PetMe fonts by Kreative Software (Kreative Korporation), under their own free use license, PetMe-FreeLicense.txt.
+
+The resource files are not part of KVICE and have their own license terms.
+@ENDNODE

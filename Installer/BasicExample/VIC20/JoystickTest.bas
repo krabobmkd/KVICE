@@ -1,0 +1,10 @@
+Joystick test: prints the directions and fire of the joystick.
+VIC-20 BASIC V2, from the VIC-20 page of BASICv2Quick.guide.
+
+10 P=PEEK(37137) : POKE 37154,127 : R=PEEK(37152) : POKE 37154,255
+20 IF (P AND 4)=0 THEN PRINT "UP"
+30 IF (P AND 8)=0 THEN PRINT "DOWN"
+40 IF (P AND 16)=0 THEN PRINT "LEFT"
+50 IF (R AND 128)=0 THEN PRINT "RIGHT"
+60 IF (P AND 32)=0 THEN PRINT "FIRE"
+70 GOTO 10

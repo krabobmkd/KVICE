@@ -1,0 +1,418 @@
+; KVICE Installer Script
+; For use with the standard Amiga 'Installer' tool (v43+).
+;
+; Installs into <parent>/KVICE (user selects, all on by default):
+;   - x64     + icon, the files of data/C64   -> C64/
+;   - xplus4  + icon, the files of data/PLUS4 -> PLUS4/
+;   - xvic    + icon, the files of data/VIC20 -> VIC20/
+;   - asked: BASICv2Quick.guide (x64, xvic), BASICv3Quick.guide (xplus4),
+;     and the .bas examples of the chosen emulators -> <dest>/BasicExample/
+;   - PetMate PETSCII draw tool, its guide and license -> <dest>
+;     and its .petmate example drawings -> <dest>/PetmateExample/
+;   - PetMe TrueType fonts      -> FONTS:  (for EmojiGear, BASIC .bas texts),
+;     from fonts/PetMe (the collection unmodified), its license -> <dest>
+; Always:
+;   - the C64/, PLUS4/, VIC20/ and DRIVES/ drawers (the resource drawers,
+;     filled by KVICE Resource Installer), documentation
+;   - the KVICE drawer icon, bin/KVICEdir.info -> <parent>/KVICE.info
+;
+; The resource files (kernal, basic, character, drive DOS) are not
+; part of this package: "KVICE Resource Installer" downloads and checks
+; them into C64/, PLUS4/, VIC20/ and DRIVES/.
+;
+; All strings are plain ASCII.
+;
+
+(set #app-name    "KVICE")
+(set #app-version "3.10 r1")
+(set #app-default "Work:")
+
+; ---------------------------------------------------------------------------
+; Welcome
+; ---------------------------------------------------------------------------
+(message
+    (cat
+        "Welcome to the " #app-name " " #app-version " installer!\n\n"
+        "KVICE is a Commodore 8-bit machine package:\n"
+        "  C64, Plus/4 and VIC-20 emulators,\n"
+        "  and the PetMate drawing tool (PETSCII art).\n\n"
+        "Open source (GPL), made for fast Amigas.\n\n"
+        "Needs MUI. AHI is optional, for the sound.\n"
+        "AmiSSLv5 is needed for online resource installation."
+    )
+    (all)
+)
+
+; MUI: needed, told, not required to install
+(if (NOT (exists "LIBS:muimaster.library"))
+    (message
+        (cat
+            "Note: MUI not found on this system.\n\n"
+            "KVICE needs it: the settings use MUI.\n"
+            "Install it from Aminet.\n\n"
+            "You can still install KVICE now."
+        )
+    )
+)
+
+; AHI: optional, the emulators run without sound
+(if (NOT (exists "DEVS:ahi.device"))
+    (message
+        (cat
+            "Note: AHI not found on this system.\n\n"
+            "AHI is optional: without it, the emulators\n"
+            "run with no sound. Install it from Aminet\n"
+            "to get the sound."
+        )
+    )
+)
+
+; AmiSSL v5: only for KVICE Resource Installer's downloads
+(if (NOT (exists "LIBS:amisslmaster.library"))
+    (message
+        (cat
+            "Note: AmiSSLv5 not found on this system.\n\n"
+            "AmiSSLv5 is needed for online resource installation\n"
+            "(KVICE Resource Installer). Install it from Aminet,\n"
+            "with a running TCP/IP stack.\n\n"
+            "You can still install KVICE now."
+        )
+    )
+)
+
+; ---------------------------------------------------------------------------
+; Choose installation directory
+; ---------------------------------------------------------------------------
+(set #parent
+    (askdir
+        (prompt
+            (cat "Where would you like to install " #app-name "?")
+        )
+        (help
+            (cat
+                "Choose a drawer for the installation.\n"
+                "A '" #app-name "' drawer will be created inside it.\n\n"
+                "Default: " #app-default #app-name
+            )
+        )
+        (default #app-default)
+    )
+)
+
+(set #dest (tackon #parent #app-name))
+
+; ---------------------------------------------------------------------------
+; Choose what to install
+; (askoptions bitmask: 1 x64, 2 xplus4, 4 xvic, 8 PetMate, 16 PetMe fonts)
+; ---------------------------------------------------------------------------
+(set #install-apps
+    (askoptions
+        (prompt
+            (cat
+                "What would you like to install?\n\n"
+                "Floppy drives are always installed."
+            )
+        )
+        (help
+            (cat
+                "x64:     Commodore 64 emulator.\n"
+                "xplus4:  Commodore Plus/4, C16 and C116 emulator.\n"
+                "xvic:    Commodore VIC-20 emulator.\n\n"
+                "PetMate: PETSCII art draw tool, with its guide.\n\n"
+                "PetMe fonts: TrueType fonts with the Commodore\n"
+                "characters, copied to FONTS:. With EmojiGear they\n"
+                "show the BASIC .bas texts the emulators save."
+            )
+        )
+        (choices
+            "x64  (C64)"
+            "xplus4  (Plus/4, C16)"
+            "xvic  (VIC-20)"
+            "PetMate PETSCII Draw tool"
+            "PetMe fonts for EmojiGear BASIC"
+        )
+        (default 31)
+    )
+)
+
+(complete 10)
+
+; ---------------------------------------------------------------------------
+; Destination drawer, drives, documentation
+; ---------------------------------------------------------------------------
+(working (cat "Creating " #dest " ..."))
+(makedir #dest (infos))
+; the drawer icon, "show only icons" with its own images: in bin/ of the
+; package, not to be seen when the archive is extracted
+(copyfiles
+    (source "bin/KVICEdir.info")
+    (dest #parent)
+    (newname (cat #app-name ".info"))
+)
+; the resource drawers, all of them: KVICE Resource Installer fills them
+(makedir (tackon #dest "C64"))
+(makedir (tackon #dest "PLUS4"))
+(makedir (tackon #dest "VIC20"))
+(makedir (tackon #dest "DRIVES"))
+
+(working "Copying documentation ...")
+(copyfiles
+    (source "KVICE.guide")
+    (dest #dest)
+    (infos)
+)
+(copyfiles
+    (source "KVICE.readme")
+    (dest #dest)
+    (infos)
+)
+(copyfiles
+    (source "LICENSE")
+    (dest #dest)
+)
+
+(complete 20)
+
+; ---------------------------------------------------------------------------
+; One emulator: the program, its icon (kept if there is one: it may have
+; been moved or edited), the files of its resource drawer (keymap...).
+; ---------------------------------------------------------------------------
+(procedure P_INSTALL_EMU #emu-name #emu-drawer
+    (
+        (working (cat "Copying " #emu-name " ..."))
+        (copyfiles
+            (source (tackon "bin" #emu-name))
+            (dest #dest)
+        )
+        (if (NOT (exists (tackon #dest (cat #emu-name ".info"))))
+            (copyfiles
+                (source (tackon "bin" (cat #emu-name ".info")))
+                (dest #dest)
+            )
+        )
+        (copyfiles
+            (source (tackon "data" #emu-drawer))
+            (dest (tackon #dest #emu-drawer))
+            (all)
+        )
+    )
+)
+
+(if (BITAND #install-apps 1) (P_INSTALL_EMU "x64" "C64"))
+(complete 35)
+(if (BITAND #install-apps 2) (P_INSTALL_EMU "xplus4" "PLUS4"))
+(complete 50)
+(if (BITAND #install-apps 4) (P_INSTALL_EMU "xvic" "VIC20"))
+(complete 65)
+
+; ---------------------------------------------------------------------------
+; PetMate
+; ---------------------------------------------------------------------------
+; in the drawer of the emulators; its icon is kept if there is one
+(if (BITAND #install-apps 8)
+    (
+        (working "Copying PetMate ...")
+        (copyfiles
+            (source "PetMate/PetMate")
+            (dest #dest)
+        )
+        (if (NOT (exists (tackon #dest "PetMate.info")))
+            (copyfiles
+                (source "PetMate/PetMate.info")
+                (dest #dest)
+            )
+        )
+        (copyfiles
+            (source "PetMate/PetMate.guide")
+            (dest #dest)
+            (infos)
+        )
+        (copyfiles
+            (source "PetMate/PetMate.LICENSE")
+            (dest #dest)
+        )
+        (makedir (tackon #dest "PetmateExample") (infos))
+        (copyfiles
+            (source "PetMate/PetmateExample")
+            (dest (tackon #dest "PetmateExample"))
+            (all)
+        )
+    )
+)
+
+(complete 80)
+
+; ---------------------------------------------------------------------------
+; PetMe fonts
+; ---------------------------------------------------------------------------
+(if (BITAND #install-apps 16)
+    (
+        (working "Installing PetMe fonts to FONTS: ...")
+        (copyfiles
+            (source "fonts/PetMe")
+            (dest "FONTS:")
+            (pattern "#?.ttf")
+        )
+        (copyfiles
+            (source "fonts/PetMe/PetMe-FreeLicense.txt")
+            (dest #dest)
+        )
+    )
+)
+
+; ---------------------------------------------------------------------------
+; BASIC quick guides and .bas examples, for the chosen emulators: V2 for
+; the C64 and the VIC-20, 3.5 for the Plus/4
+; ---------------------------------------------------------------------------
+(set #install-basic 0)
+(if (BITAND #install-apps 7)
+    (set #install-basic
+        (askbool
+            (prompt
+                (cat
+                    "Install BASIC v2/v3 Quick guides and .bas source\n"
+                    "Examples you can directly load?"
+                )
+            )
+            (help
+                (cat
+                    "BASICv2Quick.guide: the BASIC of the C64 and the\n"
+                    "VIC-20, BASICv3Quick.guide: BASIC 3.5 of the\n"
+                    "Plus/4. Every instruction, the memory maps, and\n"
+                    "examples.\n\n"
+                    "The examples are .bas texts, in the BasicExample\n"
+                    "drawer: load them with the BASIC menu of the\n"
+                    "emulators, \"Load program as .bas\", then RUN."
+                )
+            )
+            (choices "Yes" "No")
+            (default 1)
+        )
+    )
+)
+
+(procedure P_INSTALL_EXAMPLES #ex-drawer
+    (
+        (makedir (tackon (tackon #dest "BasicExample") #ex-drawer) (infos))
+        (copyfiles
+            (source (tackon "BasicExample" #ex-drawer))
+            (dest (tackon (tackon #dest "BasicExample") #ex-drawer))
+            (all)
+        )
+    )
+)
+
+(if (= #install-basic 1)
+    (
+        (working "Copying the BASIC guides and examples ...")
+        (makedir (tackon #dest "BasicExample") (infos))
+        (if (BITAND #install-apps 5)
+            (copyfiles
+                (source "BASICv2Quick.guide")
+                (dest #dest)
+                (infos)
+            )
+        )
+        (if (BITAND #install-apps 2)
+            (copyfiles
+                (source "BASICv3Quick.guide")
+                (dest #dest)
+                (infos)
+            )
+        )
+        (if (BITAND #install-apps 1) (P_INSTALL_EXAMPLES "C64"))
+        (if (BITAND #install-apps 2) (P_INSTALL_EXAMPLES "PLUS4"))
+        (if (BITAND #install-apps 4) (P_INSTALL_EXAMPLES "VIC20"))
+    )
+)
+
+; ---------------------------------------------------------------------------
+; KVICE Resource Installer, when the package has it
+; ---------------------------------------------------------------------------
+(if (exists "bin/KVICEResourceInstaller")
+    (
+        (working "Copying KVICE Resource Installer ...")
+        (copyfiles
+            (source "bin/KVICEResourceInstaller")
+            (dest #dest)
+            (infos)
+        )
+        (copyfiles
+            (source "resourcelist.txt")
+            (dest #dest)
+        )
+    )
+)
+
+(complete 100)
+
+; ---------------------------------------------------------------------------
+; Run KVICE Resource Installer now (it finds its files in PROGDIR:, so the
+; current drawer does not matter). The Installer waits until it is quit.
+; ---------------------------------------------------------------------------
+(set #run-resinst 0)
+(if (exists (tackon #dest "KVICEResourceInstaller"))
+    (
+        (set #run-resinst
+            (askbool
+                (prompt
+                    (cat
+                        "Run KVICE Resource Installer now?\n\n"
+                        "It checks the resource files (kernal, basic,\n"
+                        "character, drive DOS) and downloads the missing\n"
+                        "ones. Quit it to end the installation."
+                    )
+                )
+                (help
+                    (cat
+                        "The emulators need the resource files, which are\n"
+                        "not in this package. KVICE Resource Installer\n"
+                        "downloads them (AmiSSLv5 and a running TCP/IP\n"
+                        "stack needed). You can also run it later, from\n"
+                        "the " #app-name " drawer."
+                    )
+                )
+                (choices "Yes" "No")
+                (default 1)
+            )
+        )
+        ; MUI needs a bigger stack than the one 'run' gives, and a command
+        ; line cannot chain "Stack" and the program: a small AmigaDOS
+        ; script does, the program gets the stack of the script
+        (if (= #run-resinst 1)
+            (
+                (set #resinst-script "T:kvrilaunch")
+                (textfile
+                    (dest #resinst-script)
+                    (append "Stack 32768\n")
+                    (append (cat "\"" (tackon #dest "KVICEResourceInstaller") "\"\n"))
+                )
+                (working "KVICE Resource Installer is running ...")
+                (execute #resinst-script)
+                (delete #resinst-script)
+            )
+        )
+    )
+)
+
+; ---------------------------------------------------------------------------
+; Done
+; ---------------------------------------------------------------------------
+(exit
+    (cat
+        "  * * *  Installation complete!  * * *\n\n"
+        "Installed in:  " #dest "\n\n"
+        (if (BITAND #install-apps 1) "  x64\n" "")
+        (if (BITAND #install-apps 2) "  xplus4\n" "")
+        (if (BITAND #install-apps 4) "  xvic\n" "")
+        (if (BITAND #install-apps 8) "  PetMate drawing tool\n" "")
+        (if (BITAND #install-apps 16) "  PetMe fonts in FONTS:\n" "")
+        (if (= #install-basic 1) "  BASIC guides and examples\n" "")
+        "\n"
+        (if (= #run-resinst 1)
+            "Run KVICE Resource Installer again\nany time to check missing files."
+            "Now run KVICE Resource Installer\nto check missing files."
+        )
+    )
+    (quiet)
+)

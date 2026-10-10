@@ -1,0 +1,11 @@
+Circles: high resolution graphics.
+Plus/4 BASIC 3.5, from BASICv3Quick.guide, example 3.
+
+10 COLOR 0,2,7 : COLOR 1,7,3
+20 GRAPHIC 1,1
+30 FOR R=10 TO 90 STEP 10
+40 CIRCLE 1,160,100,R*1.5,R
+50 NEXT R
+60 BOX 1,0,0,319,199
+70 CHAR 1,1,1,"PRESS A KEY"
+80 GETKEY K$ : GRAPHIC 0

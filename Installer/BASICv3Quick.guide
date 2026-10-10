@@ -1,0 +1,584 @@
+@DATABASE BASICv3Quick.guide
+@$VER: BASICv3Quick.guide 1.0 (09.10.2026)
+@AUTHOR krabobmkd
+@(C) 2026 krabobmkd
+@NODE MAIN "Commodore BASIC 3.5 - Quick Guide"
+
+@{b}Commodore BASIC 3.5 - Quick Guide@{ub}
+For the Plus/4, C16 and C116 (xplus4).
+
+------------------------------------------------------------------------------
+
+  @{" Presentation      " LINK PRESENTATION}  BASIC 3.5 in a few words
+  @{" Instructions      " LINK INSTRUCTIONS}  Every keyword, with examples
+  @{" Video memory map  " LINK VIDEO}  Screen, colors, TED registers
+  @{" Sound memory map  " LINK SOUND}  TED sound registers
+  @{" Examples          " LINK EXAMPLES}  Six short programs to type
+
+------------------------------------------------------------------------------
+@ENDNODE
+
+@NODE PRESENTATION "Presentation"
+@{b}Presentation@{ub}
+
+BASIC 3.5 is the BASIC of the Plus/4, C16 and C116. It is the C64's
+BASIC V2 plus about 50 keywords: graphics (GRAPHIC, DRAW, CIRCLE, BOX,
+PAINT), sound (SOUND, VOL), structured loops (DO ... LOOP, WHILE,
+UNTIL, EXIT), IF ... THEN ... ELSE, error trapping (TRAP, RESUME),
+disk commands (DIRECTORY, DLOAD, DSAVE...) and editing tools (AUTO,
+RENUMBER, DELETE, HELP, TRON). A V2 program usually runs, except its
+POKEs: the chips and addresses are not the C64's.
+
+A line typed with a number in front is stored in the program; a line
+typed without a number runs at once (direct mode).
+
+  10 PRINT "HELLO"       stores line 10
+  RUN                    runs the program
+  LIST                   shows it
+
+@{b}Lines@{ub}: numbered 0 to 63999, several instructions separated by ":".
+
+@{b}Variables@{ub}: only the first 2 characters of a name count. A is a
+number, A% an integer (-32768 to 32767), A$ a string (255 characters).
+Arrays with DIM. Reserved variables:
+  TI, TI$   the clock (1/60 s, "HHMMSS")
+  ST        status of the last input/output
+  ER, EL    number and line of the last error (see TRAP)
+  DS, DS$   disk status: number and message
+  pi        the pi key: 3.14159265
+
+@{b}Colors@{ub}: 16 colors, 1 to 16 in BASIC (see the video page), each
+with 8 luminances, 0 (dark) to 7 (bright): 121 different colors.
+
+@{b}Function keys@{ub}: F1-F7 and HELP type texts set by KEY. HELP shows
+the line of the last error. RUN/STOP stops a program.
+
+@{b}TEDMON@{ub}: MONITOR starts the machine code monitor (X to leave).
+@ENDNODE
+
+@NODE INSTRUCTIONS "Instructions"
+@{b}Instructions@{ub}
+
+The keywords new in BASIC 3.5 are marked (3.5).
+
+@{b}ABS(X)@{ub}
+  Absolute value of X.
+
+@{b}AND@{ub}
+  Logical and, also bit by bit on 16 bit integers.
+
+@{b}ASC(X$)@{ub}
+  PETSCII code of the first character of X$.
+
+@{b}ATN(X)@{ub}
+  Arc tangent of X, in radians.
+
+@{b}AUTO N@{ub}  (3.5)
+  Line numbers typed for you, step N. AUTO alone stops it.
+
+@{b}BACKUP D0 TO D1@{ub}  (3.5)
+  Copies a whole disk on a dual disk drive.
+
+@{b}BOX C,X1,Y1,X2,Y2,A,P@{ub}  (3.5)
+  Rectangle from X1,Y1 to X2,Y2 in color source C (0-3), turned by A
+  degrees (optional), filled if P is 1 (optional).
+  BOX 1,10,10,100,60,,1
+
+@{b}CHAR C,X,Y,"TEXT",R@{ub}  (3.5)
+  Prints TEXT at column X, row Y, also on a graphics screen. R=1 in
+  reverse.  CHAR 1,10,5,"HELLO"
+
+@{b}CHR$(X)@{ub}
+  The character of PETSCII code X.  CHR$(147) clears the screen.
+
+@{b}CIRCLE C,X,Y,XR,YR,SA,EA,A,I@{ub}  (3.5)
+  Circle or ellipse at X,Y, radii XR and YR. Optional: start and end
+  angles SA, EA, rotation A, degrees between segments I (I=120 makes a
+  triangle).  CIRCLE 1,160,100,50,30
+
+@{b}CLOSE N@{ub}
+  Closes the file opened as N.
+
+@{b}CLR@{ub}
+  Clears all variables.
+
+@{b}CMD N@{ub}
+  Sends the output of PRINT to the open file N.
+
+@{b}COLLECT D0@{ub}  (3.5)
+  Validates a disk: frees the blocks of files not closed.
+
+@{b}COLOR S,C,L@{ub}  (3.5)
+  Sets the color of source S: 0 background, 1 foreground (drawing and
+  text), 2 multicolor 1, 3 multicolor 2, 4 border. C color 1-16, L
+  luminance 0-7.  COLOR 4,3,5  makes the border red.
+
+@{b}CONT@{ub}
+  Continues a stopped program.
+
+@{b}COPY "OLD" TO "NEW"@{ub}  (3.5)
+  Copies a file on the disk.
+
+@{b}COS(X)@{ub}
+  Cosine of X, in radians.
+
+@{b}DATA@{ub}
+  Values read by READ.
+
+@{b}DEC("HEX")@{ub}  (3.5)
+  The value of a hexadecimal number.  DEC("FF3E")  gives 65342.
+
+@{b}DEF FN@{ub}
+  Defines a function of one variable.  DEF FN SQ(X)=X*X
+
+@{b}DELETE N-M@{ub}  (3.5)
+  Deletes program lines N to M.  DELETE 100-200
+
+@{b}DIM@{ub}
+  Dimensions arrays.  DIM A(100),B$(10,10)
+
+@{b}DIRECTORY@{ub}  (3.5)
+  Lists the disk directory without losing the program in memory.
+  DIRECTORY "A*" lists the files starting with A.
+
+@{b}DLOAD "NAME"@{ub}  (3.5)
+  Loads a BASIC program from disk drive 8.
+
+@{b}DO / LOOP / WHILE / UNTIL / EXIT@{ub}  (3.5)
+  Loop between DO and LOOP. DO WHILE C or LOOP UNTIL C ends it on a
+  condition, EXIT leaves it at once.
+  DO : GET K$ : LOOP UNTIL K$<>""
+
+@{b}DRAW C,X1,Y1 TO X2,Y2 TO ...@{ub}  (3.5)
+  Dot or lines in color source C.  DRAW 1,0,0 TO 319,199
+  DRAW 1 TO X,Y continues from the last point.
+
+@{b}DSAVE "NAME"@{ub}  (3.5)
+  Saves the program on disk drive 8.
+
+@{b}ELSE@{ub}  (3.5)
+  What runs when the IF condition is false, after a ":".
+  IF A>5 THEN PRINT "BIG" : ELSE PRINT "SMALL"
+
+@{b}END@{ub}
+  Ends the program.
+
+@{b}ERR$(N)@{ub}  (3.5)
+  The message of error number N.  PRINT ERR$(ER)
+
+@{b}EXIT@{ub}  (3.5)
+  Leaves a DO ... LOOP.
+
+@{b}EXP(X)@{ub}
+  e to the power X.
+
+@{b}FN@{ub}
+  Calls a function defined by DEF FN.
+
+@{b}FOR ... TO ... STEP ... / NEXT@{ub}
+  Counted loop.  FOR I=1 TO 10 STEP 2 : PRINT I : NEXT
+
+@{b}FRE(0)@{ub}
+  Free BASIC memory in bytes.
+
+@{b}GET A$ / GETKEY A$@{ub}  (GETKEY 3.5)
+  GET reads a key without waiting ("" if none), GETKEY waits for one.
+
+@{b}GET# N, A$@{ub}
+  Reads one character from the open file N.
+
+@{b}GOSUB N / RETURN@{ub}
+  Calls the subroutine at line N.
+
+@{b}GOTO N@{ub}
+  Jumps to line N.
+
+@{b}GRAPHIC M,C@{ub}  (3.5)
+  Screen mode M: 0 text, 1 high resolution 320x200, 2 high resolution
+  with 5 text lines, 3 multicolor 160x200, 4 multicolor with 5 text
+  lines. C=1 clears the bitmap. GRAPHIC CLR frees its memory.
+
+@{b}GSHAPE A$,X,Y,M@{ub}  (3.5)
+  Draws at X,Y a shape saved in A$ by SSHAPE. M: 0 as is, 1 inverted,
+  2 OR, 3 AND, 4 XOR.
+
+@{b}HEADER "NAME,ID",D0@{ub}  (3.5)
+  Formats a disk (all its files are lost).
+
+@{b}HELP@{ub}  (3.5)
+  Lists the line where the last error happened, the error highlighted.
+
+@{b}HEX$(N)@{ub}  (3.5)
+  N (0-65535) as 4 hexadecimal digits.  HEX$(255)  gives "00FF".
+
+@{b}IF ... THEN ... : ELSE ...@{ub}
+  Runs the rest of the line when the condition is true, the ELSE part
+  when it is false.
+
+@{b}INPUT@{ub}
+  Asks values.  INPUT "YOUR NAME";N$
+
+@{b}INPUT# N@{ub}
+  Reads values from the open file N.
+
+@{b}INSTR(A$,B$,S)@{ub}  (3.5)
+  Position of B$ in A$ (0 if absent), searched from S (optional).
+  INSTR("COMMODORE","DO")  gives 6.
+
+@{b}INT(X)@{ub}
+  Integer part, rounded down.
+
+@{b}JOY(N)@{ub}  (3.5)
+  Joystick N (1 or 2): 0 centered, 1 up, 2 up right, 3 right, 4 down
+  right, 5 down, 6 down left, 7 left, 8 up left, plus 128 with fire.
+
+@{b}KEY N,"TEXT"@{ub}  (3.5)
+  Sets function key N (1-8). CHR$(13) in TEXT types RETURN.
+  KEY alone lists them.
+
+@{b}LEFT$(X$,N)@{ub}
+  The N first characters of X$.
+
+@{b}LEN(X$)@{ub}
+  Length of X$.
+
+@{b}LET@{ub}
+  Assignment, optional.
+
+@{b}LIST@{ub}
+  Shows the program. LIST 100-200.
+
+@{b}LOAD "NAME",8@{ub}
+  Loads a program from drive 8 (DLOAD is shorter).
+
+@{b}LOCATE X,Y@{ub}  (3.5)
+  Moves the graphics pixel cursor, where DRAW TO goes on.
+
+@{b}LOG(X)@{ub}
+  Natural logarithm of X.
+
+@{b}MID$(X$,S,N)@{ub}
+  N characters of X$ from position S.
+
+@{b}MONITOR@{ub}  (3.5)
+  Starts TEDMON, the machine code monitor. X goes back to BASIC.
+
+@{b}NEW@{ub}
+  Erases the program.
+
+@{b}NOT@{ub}
+  Logical not.
+
+@{b}ON X GOTO / ON X GOSUB@{ub}
+  Jumps to the Xth line number of the list.
+
+@{b}OPEN N,D,S,"NAME"@{ub}
+  Opens file N on device D.  OPEN 1,8,2,"DATA,S,W"
+
+@{b}OR@{ub}
+  Logical or, also bit by bit.
+
+@{b}PAINT C,X,Y,M@{ub}  (3.5)
+  Fills the area around X,Y with color source C. M=0: up to the color
+  of C, M=1: up to any color but the background.
+
+@{b}PEEK(A)@{ub}
+  The byte at memory address A.
+
+@{b}POKE A,V@{ub}
+  Writes the byte V at address A.
+
+@{b}POS(0)@{ub}
+  The column of the cursor.
+
+@{b}PRINT@{ub}
+  Prints values. ? is a short PRINT.
+
+@{b}PRINT USING "FORMAT";X@{ub}  (3.5)
+  Formatted print: # a digit, . the decimal point, + - the sign, $ ...
+  PRINT USING "####.##";3.14159   prints    3.14
+
+@{b}PRINT# N@{ub}
+  Prints to the open file N.
+
+@{b}PUDEF " ,.$"@{ub}  (3.5)
+  Changes the filler, comma, point and dollar characters of PRINT
+  USING (European format: PUDEF " .,$").
+
+@{b}RCLR(S)@{ub}  (3.5)
+  The color of source S (see COLOR).
+
+@{b}RDOT(N)@{ub}  (3.5)
+  The pixel cursor: N=0 its X, 1 its Y, 2 the color source under it.
+
+@{b}READ@{ub}
+  Reads the next DATA values.
+
+@{b}REM@{ub}
+  A comment.
+
+@{b}RENAME "OLD" TO "NEW"@{ub}  (3.5)
+  Renames a file on the disk.
+
+@{b}RENUMBER N,S,O@{ub}  (3.5)
+  Renumbers the program from line O: new first line N, step S
+  (default 10, 10, first line). GOTOs follow.
+
+@{b}RESTORE@{ub}
+  The next READ starts again at the first DATA.
+
+@{b}RESUME@{ub}  (3.5)
+  After a TRAP: RESUME runs the failing instruction again, RESUME NEXT
+  the following one, RESUME N goes to line N.
+
+@{b}RETURN@{ub}
+  Ends a GOSUB subroutine.
+
+@{b}RGR(0)@{ub}  (3.5)
+  The current GRAPHIC mode.
+
+@{b}RIGHT$(X$,N)@{ub}
+  The N last characters of X$.
+
+@{b}RLUM(S)@{ub}  (3.5)
+  The luminance of color source S.
+
+@{b}RND(X)@{ub}
+  A random number from 0 to under 1. RND(-TI) once: different runs.
+
+@{b}RUN@{ub}
+  Runs the program.
+
+@{b}SAVE "NAME",8@{ub}
+  Saves the program (DSAVE is shorter).
+
+@{b}SCALE N@{ub}  (3.5)
+  SCALE 1: graphics coordinates 0-1023 on both axes, whatever the
+  mode. SCALE 0: real pixels again.
+
+@{b}SCNCLR@{ub}  (3.5)
+  Clears the screen, text or graphics.
+
+@{b}SCRATCH "NAME"@{ub}  (3.5)
+  Deletes a file on the disk (asks ARE YOU SURE? in direct mode).
+
+@{b}SGN(X)@{ub}
+  Sign of X.
+
+@{b}SIN(X)@{ub}
+  Sine of X, in radians.
+
+@{b}SOUND V,F,D@{ub}  (3.5)
+  Plays on voice V (1, 2, or 3 for noise on voice 2) the frequency
+  value F (0-1023, see the sound page) for D 60ths of a second. A new
+  SOUND on a busy voice waits for the end of the previous one.
+
+@{b}SPC(N)@{ub}
+  In PRINT: N spaces.
+
+@{b}SQR(X)@{ub}
+  Square root of X.
+
+@{b}SSHAPE A$,X1,Y1,X2,Y2@{ub}  (3.5)
+  Saves the rectangle X1,Y1 - X2,Y2 of the graphics screen in A$, for
+  GSHAPE.
+
+@{b}STOP@{ub}
+  Stops the program.
+
+@{b}STR$(X)@{ub}
+  The number X as a string.
+
+@{b}SYS A@{ub}
+  Runs machine code at address A.
+
+@{b}TAB(N)@{ub}
+  In PRINT: to column N.
+
+@{b}TAN(X)@{ub}
+  Tangent of X, in radians.
+
+@{b}TRAP N@{ub}  (3.5)
+  On an error, goes to line N instead of stopping: ER and EL tell
+  which error and where, RESUME goes back. TRAP alone turns it off.
+
+@{b}TRON / TROFF@{ub}  (3.5)
+  Trace on: the number of each line run is printed. TROFF stops it.
+
+@{b}USR(X)@{ub}
+  Calls machine code, returns a value.
+
+@{b}VAL(X$)@{ub}
+  The number written in X$.
+
+@{b}VERIFY "NAME",8@{ub}
+  Compares the program in memory with the file.
+
+@{b}VOL N@{ub}  (3.5)
+  Sound volume, 0 to 8.
+
+@{b}WAIT A,M,X@{ub}
+  Waits until (PEEK(A) XOR X) AND M is not 0.
+@ENDNODE
+
+@NODE VIDEO "Video memory map"
+@{b}Video memory map (Plus/4, C16)@{ub}
+
+@{b}Screen and colors@{ub}
+  Address        Hex          Use
+  3072 - 4071    $0C00-$0FE7  screen: 40x25 screen codes
+                              (row Y, column X: 3072+40*Y+X)
+  2048 - 3047    $0800-$0BE7  attributes, one per character
+                              (2048+40*Y+X): bits 0-3 color 0-15,
+                              bits 4-6 luminance 0-7, bit 7 flashing
+  4097           $1001        start of the BASIC program
+  8192 - 16383   $2000-$3FFF  bitmap of GRAPHIC 1-4 (BASIC then
+                              starts at 16385, $4001)
+
+  An attribute value is color + 16 * luminance (+ 128 to flash), with
+  the color 0-15: the BASIC color number minus 1.
+
+@{b}TED registers@{ub} (65280 = $FF00)
+  Address  Hex    Use
+  65280    $FF00  timer 1, low and high byte (65280, 65281)
+  65282    $FF02  timer 2 (65282, 65283)
+  65284    $FF04  timer 3 (65284, 65285)
+  65286    $FF06  control 1: bit 4 screen on, bit 5 bitmap mode,
+                  bit 6 extended color, bit 3 25 rows,
+                  bits 0-2 vertical scroll
+  65287    $FF07  control 2: bit 4 multicolor, bit 3 40 columns,
+                  bits 0-2 horizontal scroll, bit 6 NTSC
+  65288    $FF08  keyboard latch
+  65289    $FF09  interrupt flags
+  65290    $FF0A  interrupt enable, bit 0 raster line bit 8
+  65291    $FF0B  raster interrupt line
+  65292    $FF0C  cursor position, high 2 bits
+  65293    $FF0D  cursor position, low byte
+  65298    $FF12  bits 3-5 bitmap address (8192 * n), bit 2 characters
+                  from ROM (1) or RAM, bits 0-1 sound voice 1 high bits
+  65299    $FF13  bits 2-7 character set address (1024 * n)
+  65300    $FF14  bits 3-7 screen address (2048 * n): attributes there,
+                  screen codes 1024 bytes after
+  65301    $FF15  background color (color + 16 * luminance)
+  65302    $FF16  background color 1 (multicolor, extended color)
+  65303    $FF17  background color 2
+  65304    $FF18  background color 3
+  65305    $FF19  border color (color + 16 * luminance)
+  65308    $FF1C  raster line, high bit
+  65309    $FF1D  raster line, low byte
+  65342    $FF3E  writing any value: ROM visible from 32768 up
+  65343    $FF3F  writing any value: RAM visible from 32768 up
+
+@{b}Colors@{ub} (BASIC numbers, COLOR; registers: number - 1)
+  1 black       5 purple      9 orange      13 blue-green
+  2 white       6 green      10 brown       14 light blue
+  3 red         7 blue       11 yellow-green 15 dark blue
+  4 cyan        8 yellow     12 pink        16 light green
+  Luminance 0 (dark) to 7 (bright); color 1 (black) has none.
+@ENDNODE
+
+@NODE SOUND "Sound memory map"
+@{b}Sound memory map (Plus/4, C16)@{ub}
+
+The TED itself makes the sound: 2 square wave voices, voice 2 can make
+noise instead. No envelope: a voice sounds while it is on.
+
+  Address  Hex    Use
+  65294    $FF0E  voice 1 frequency, low 8 bits
+  65298    $FF12  bits 0-1: voice 1 frequency, high 2 bits (keep the
+                  other bits: POKE 65298,(PEEK(65298) AND 252) OR H)
+  65295    $FF0F  voice 2 frequency, low 8 bits
+  65296    $FF10  bits 0-1: voice 2 frequency, high 2 bits
+  65297    $FF11  bits 0-3 volume (0-8), bit 4 voice 1 on, bit 5 voice 2
+                  on, bit 6 voice 2 noise, bit 7 D/A mode (sample play)
+
+@{b}Frequency@{ub}: the same 10 bit value as BASIC's SOUND, 0-1023.
+  value = 1024 - 110840 / Hz on a PAL machine
+  value = 1024 - 111861 / Hz on an NTSC machine
+  PAL octave 4:  C 600  D 647  E 688  F 707  G 741  A 772  B 800
+                 C5 812
+
+With BASIC, VOL and SOUND do all this:
+  VOL 8 : SOUND 1,772,60    plays A (440 Hz) for one second.
+  SOUND 3,900,30            half a second of noise.
+@ENDNODE
+
+@NODE EXAMPLES "Examples"
+@{b}Examples@{ub}
+
+Type them after NEW, or load them as .bas texts (BASIC menu, "Load
+program as .bas"), then RUN. RUN/STOP stops them.
+
+@{b}1. 121 colors@{ub}: every color and luminance in the border.
+
+  10 FOR L=0 TO 7
+  20 FOR C=1 TO 16
+  30 COLOR 4,C,L
+  40 FOR D=1 TO 100 : NEXT D
+  50 NEXT C
+  60 NEXT L
+  70 PRINT "COLOR";RCLR(4);"LUMINANCE";RLUM(4)
+
+@{b}2. Guess the number@{ub}: DO ... LOOP, IF ... ELSE.
+
+  10 X=RND(-TI) : N=INT(RND(1)*100)+1 : T=0
+  20 SCNCLR : PRINT "I THINK OF A NUMBER, 1 TO 100"
+  30 DO
+  40 INPUT "YOUR GUESS";G : T=T+1
+  50 IF G<N THEN PRINT "TOO LOW" : ELSE IF G>N THEN PRINT "TOO HIGH"
+  60 LOOP UNTIL G=N
+  70 PRINT "FOUND IN";T;"TRIES"
+
+@{b}3. Circles@{ub}: high resolution graphics.
+
+  10 COLOR 0,2,7 : COLOR 1,7,3
+  20 GRAPHIC 1,1
+  30 FOR R=10 TO 90 STEP 10
+  40 CIRCLE 1,160,100,R*1.5,R
+  50 NEXT R
+  60 BOX 1,0,0,319,199
+  70 CHAR 1,1,1,"PRESS A KEY"
+  80 GETKEY K$ : GRAPHIC 0
+
+@{b}4. A house@{ub}: DRAW, BOX and PAINT.
+
+  10 COLOR 0,2,7 : COLOR 1,3,4
+  20 GRAPHIC 1,1
+  30 BOX 1,100,100,220,180
+  40 DRAW 1,100,100 TO 160,50 TO 220,100
+  50 PAINT 1,160,80
+  60 BOX 1,145,140,175,180,,1
+  70 CIRCLE 1,270,40,20 : PAINT 1,270,40
+  80 GETKEY K$ : GRAPHIC 0
+
+@{b}5. A scale@{ub}: SOUND, PAL frequency values.
+
+  10 VOL 8
+  20 FOR N=1 TO 8
+  30 READ F
+  40 SOUND 1,F,20
+  50 NEXT N
+  60 SOUND 3,900,30
+  70 DATA 600,647,688,707,741,772,800,812
+
+@{b}6. Joystick and errors@{ub}: a ball moved with the joystick in port 2,
+fire changes the border; TRAP catches the errors.
+
+  10 TRAP 200 : SCNCLR : X=20 : Y=12
+  20 DO
+  30 CHAR 1,X,Y,"O"
+  40 DO : J=JOY(2) : LOOP WHILE J=0
+  50 CHAR 1,X,Y," "
+  60 IF J AND 128 THEN COLOR 4,INT(RND(1)*16)+1,5 : J=J AND 127
+  70 IF J=1 OR J=2 OR J=8 THEN Y=Y-1
+  80 IF J>=4 AND J<=6 THEN Y=Y+1
+  90 IF J>=2 AND J<=4 THEN X=X+1
+  100 IF J>=6 AND J<=8 THEN X=X-1
+  110 X=X-(X<0)+(X>39) : Y=Y-(Y<0)+(Y>24)
+  120 FOR D=1 TO 30 : NEXT D
+  130 LOOP
+  200 PRINT ERR$(ER);" IN";EL : END
+
+  Line 110: a true comparison is -1 in BASIC, so X=X-(X<0) adds 1
+  when X is below 0, and +(X>39) takes 1 when X is above 39.
+@ENDNODE

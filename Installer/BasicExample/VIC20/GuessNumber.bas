@@ -1,0 +1,11 @@
+Guess the number: INPUT, IF, random numbers.
+VIC-20 BASIC V2, example 2 of BASICv2Quick.guide (texts for 22 columns).
+
+10 X=RND(-TI)
+20 N=INT(RND(1)*100)+1 : T=0
+30 PRINT CHR$(147);"A NUMBER, 1 TO 100"
+40 INPUT "GUESS";G
+50 T=T+1
+60 IF G<N THEN PRINT "TOO LOW" : GOTO 40
+70 IF G>N THEN PRINT "TOO HIGH" : GOTO 40
+80 PRINT "FOUND IN";T;"TRIES"

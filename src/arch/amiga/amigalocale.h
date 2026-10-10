@@ -241,6 +241,22 @@ enum {
     MSG_BAS_WARN_DUPLICATE,
     MSG_BAS_WARN_EMPTY,
 
+    /* machine menu: Tape (datasette) */
+    MSG_MENU_TAPE,
+    MSG_ATTACH_TAPE,
+    MSG_DETACH_TAPE,
+    MSG_CREATE_TAPE,
+    MSG_TAPE_PLAY,
+    MSG_TAPE_STOP,
+    MSG_TAPE_REWIND,
+    MSG_TAPE_FORWARD,
+    MSG_TAPE_RECORD,
+    MSG_TAPE_RESET,
+    MSG_REQ_ATTACH_TAPE,
+    MSG_REQ_CREATE_TAPE,
+    MSG_ERROR_ATTACH_TAPE,
+    MSG_ERROR_CREATE_TAPE,
+
     /* Must be last */
     MSG_COUNT
 };

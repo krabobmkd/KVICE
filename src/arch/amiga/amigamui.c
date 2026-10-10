@@ -115,8 +115,6 @@ MUI_NewObjectB(const char *cl, Tag tags, ...)
 #define RID_BROWSE_FILE 6   /* "..." of the file row (custom keymap) */
 #define RID_ABOUT_CLOSE 23  /* OK or close gadget of the about window */
 
-/* fork release, after the VICE version it is based on */
-#define KVICE_RELEASE "r1"
 
 /* ------------------------------------------------------------------------- */
 /* setting bindings */
@@ -1102,7 +1100,7 @@ static void settings_to_ui(void)
 
 /* about text: MUI text engine codes, \33c centered, \33b bold, \33n normal */
 static const char about_text[] =
-    "\33c\33b" "KVICE " VERSION " " KVICE_RELEASE "\33n\n"
+    "\33c\33b" "KVICE " KVICE_VERSION "\33n\n"
     "\33c" "Fork of VICE " VERSION " by krb\n"
     "\n"
     "\33c" "License for the emulators and vkm is GPL-2\n"
