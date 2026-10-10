@@ -39,7 +39,16 @@
 #include "video.h"
 
 #include <proto/exec.h>
+#include <proto/intuition.h>
 #include <exec/tasks.h>
+#include <intuition/intuition.h>
+#include <workbench/startup.h>
+
+#include "amigafile.h"
+#include "amigamachine.h"
+
+/* set by the libnix startup code when started from Workbench */
+extern struct WBStartup *_WBenchMsg;
 
 //thank you:
 //thank you #define STACK_WATCH 1
@@ -99,6 +108,51 @@ static void stack_watch_report(void)
  *          on failure. Unfortunately, there are a lot of exit(1)/exit(-1)
  *          calls, so don't expect to get a meaningful exit status.
  */
+/* Started from Workbench, libnix calls main() with argc 0 and argv being
+ * the WBStartup message: VICE needs an argv[0]. The program name, then the
+ * project icons given with it (shift-click, or a project icon whose default
+ * tool is this emulator) as full paths: VICE autostarts a file argument. */
+#define WB_ARGS_MAX 8
+
+static char *wb_argv[WB_ARGS_MAX + 1];
+
+static int workbench_args(char ***argv)
+{
+    struct WBStartup *msg = _WBenchMsg;
+    int argc = 0;
+    LONG i;
+
+    wb_argv[argc++] = (char *)((msg != NULL && msg->sm_NumArgs > 0)
+                               ? msg->sm_ArgList[0].wa_Name : (BYTE *)amiga_machine.window_title);
+    for (i = 1; msg != NULL && i < msg->sm_NumArgs && argc < WB_ARGS_MAX; i++) {
+        char *path = amiga_wbarg_path(&msg->sm_ArgList[i]);
+
+        if (path != NULL) {
+            wb_argv[argc++] = path;
+        }
+    }
+    wb_argv[argc] = NULL;
+    *argv = wb_argv;
+    return argc;
+}
+
+/* an error before VICE runs: a requester under Workbench (no console) */
+static void startup_error(int from_workbench, const char *text)
+{
+    if (from_workbench) {
+        struct EasyStruct es;
+
+        es.es_StructSize = sizeof es;
+        es.es_Flags = 0;
+        es.es_Title = (UBYTE *)amiga_machine.title;
+        es.es_TextFormat = (UBYTE *)"%s";
+        es.es_GadgetFormat = (UBYTE *)"OK";
+        EasyRequest(NULL, &es, NULL, (ULONG)text);
+    } else {
+        printf("%s\n", text);
+    }
+}
+
 #ifdef VICE_AMIGA_TRACE
 static void amiga_trace_atexit_end(void)
 {
@@ -110,15 +164,24 @@ int main(int argc, char **argv)
 {
     struct Task *task = FindTask(NULL);
     int stacksize = (int)task->tc_SPUpper - (int)task->tc_SPLower;
+    int from_workbench = (argc == 0);
 
 #ifdef VICE_AMIGA_TRACE
     /* registered first, so called last: the whole atexit() chain went fine */
     atexit(amiga_trace_atexit_end);
 #endif
     if (stacksize < VICE_AMIGA_MIN_STACK) {
-        printf("x64 needs at least %dk stack (has %d). Use \"stack 32768\" or set it in the icon.\n",
-               VICE_AMIGA_MIN_STACK / 1024, stacksize);
+        char text[160];
+
+        snprintf(text, sizeof text,
+                 "%s needs at least %dK of stack (has %d).\n"
+                 "Use \"stack 32768\", or set it in the icon.",
+                 amiga_machine.window_title, VICE_AMIGA_MIN_STACK / 1024, stacksize);
+        startup_error(from_workbench, text);
         return 1;
+    }
+    if (from_workbench) {
+        argc = workbench_args(&argv);
     }
 #ifdef STACK_WATCH
     /* first atexit() handler of VICE: reports after all the others */

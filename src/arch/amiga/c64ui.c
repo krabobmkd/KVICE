@@ -38,6 +38,7 @@
 #include "amigalocale.h"
 #include "amigabasic.h"
 #include "amigamachine.h"
+#include "version.h"
 #include "c64mem.h"
 #include "c64model.h"
 #include "c64rom.h"
@@ -215,6 +216,9 @@ static const unsigned char c64_letters[26][2] = {
 /* made by amiga/CMakeLists.txt from data/C64/amiga_positional.vkm */
 #include "amiga_positional_vkm_c64.h"
 
+/* for the AmigaOS Version command (kept by "used": nothing reads it) */
+static const char kvice_verstag[] __attribute__((used)) = KVICE_VERSTAG("x64");
+
 const amiga_machine_t amiga_machine = {
     "KVICE x64",
     "x64",
@@ -235,7 +239,8 @@ const amiga_machine_t amiga_machine = {
     c64_symkeys, sizeof c64_symkeys / sizeof c64_symkeys[0],
     c64_letters,
     0, 1,       /* RETURN */
-    amiga_positional_vkm
+    amiga_positional_vkm,
+    1           /* Tape menu */
 };
 
 /* ------------------------------------------------------------------------- */

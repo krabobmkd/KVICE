@@ -1,0 +1,91 @@
+Short:        C64, Plus/4, VIC-20 emulators 
+Author:       krabobmkd
+Uploader:     krabob@free.fr
+Type:         misc/emu
+Version:      3.10 r1
+Architecture: m68k-amigaos >= 3.1
+Requires:     OS3.1, 68060+, fast Amiga, MUI; optional: AHI, AmiSSLv5, RTG
+
+---------------------------------------------------------------------------
+
+KVICE 3.10 r1
+
+---------------------------------------------------------------------------
+
+WHAT IS IT?
+
+KVICE is a Commodore 8-bit machine package for the classic Amiga:
+
+  x64      Commodore 64 emulator
+  xplus4   Commodore Plus/4, C16 and C116 emulator
+  xvic     Commodore VIC-20 emulator
+  PetMate  PETSCII art draw tool
+
+It is a fork of VICE 3.10 (except for PetMate and PetMe), 
+the Versatile Commodore Emulator, made fast for AmigaOS 3.x: 
+Native scalable drawing in a window or fullscreen (RTG or 
+native screens), MUI settings, AHI sound, joysticks and paddles, 
+disk images, an Amiga drawer as drive 8, snapshots, 
+BASIC programs saved/loaded as UTF-8 texts (.bas).
+
+INSTALLATION
+
+Double-click "Install". Then run "KVICE Resource Installer": the
+resource files the emulators need are not in this archive, it
+downloads and checks them.
+
+REQUIREMENTS
+
+  - AmigaOS 3.1 or later, 68060 or better
+  - a fast Amiga for full speed:
+      68060 50 MHz reaches 40% of the speed,
+      Vampire, PiStorm and UAE reach 100% easily
+  - MUI 3.8 or later, for the settings window
+  - (optional) AHI, for the sound, else no sound
+  - (optional) AmiSSLv5 and a TCP/IP stack, for online resource
+    installation (KVICE Resource Installer)
+  - (optional) RTG graphics
+
+If you have no RTG extension and use Amiga native display modes, you are
+encouraged to install the patch BlazeWCP from Aminet: it accelerates
+the drawing function WriteChunkyPixels() by a large factor.
+
+OK BUT THEN WHAT ?
+
+ The first motivation to do another VICE port for Amiga was...
+ I was never ever able to make any of the Official version work,
+ nor find any documentation about why it wouldnt work. Infinite loop stuck issues.
+ 
+ Then Well, I have a piStorm, I wanted my legitimate glorious C64 emulation to work.
+ This version will boot if you have MUI in all case, then if ROMs or anywhat is
+ missing, you'll have a report with clear message. If you have a Drive selected
+ but its Drive ROM is missing, you will be clearly signified. 
+ Yet if any file is missing you will be guided to a solution.
+ 
+ I previously coded a PetMate PETSCII drawing tool for Amiga and needed to verify C64 
+ integration of exports, so this PETSCII drawing tool is also provided here as option.
+
+ Then I couldn't help doing nicer RTG rasterizer with scalable windows, optimize a bit, 
+ and add a text export/import for BASIC as texts. And expose a few more
+  d64 disk cool management functions. And fullscreen switch.
+ 
+ So, as also the Amiga version was removed from official sources,
+ this becomes officially "a fork" , named KVICE.
+ Note it installs only "C64", "VIC-20" and "Plus4" emulators, when the
+ original VICE 3.10 would install 11 emulators.
+
+ You may install ROMs, that are not part of this project, from
+ "C64 Forever" CD from Cloanto, or from anyone who claims to have the 
+ rights to sell you this, at the moment you read this.
+
+LICENSE
+
+GPL 2 or later, like VICE. The PetMe fonts are under their own free
+license (PetMe-FreeLicense.txt). The resource files that are not part of
+KVICE have their own license terms.
+
+Sources, bug reports, feature requests:
+  https://github.com/krabobmkd/KVICE
+  https://github.com/krabobmkd/KVICE/issues
+
+Original VICE project by the VICE team. Original Amiga port by AmiDog.

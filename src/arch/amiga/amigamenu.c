@@ -42,7 +42,7 @@
 #define UD_IS_ACTION(ud) ((ULONG)(ud) > 0xFFFF)
 #define UD_ACTION(ud) ((((ULONG)(ud)) >> 16) - 1)
 
-#define MENU_TEMPLATE_MAX 64
+#define MENU_TEMPLATE_MAX 80
 
 /* nm_MutualExclude of 3 sibling radio items: each excludes the 2 others */
 #define MX3(i) (7 & ~(1 << (i)))
@@ -88,6 +88,20 @@ static void buildMenuTemplate(void)
     ADD(NM_SUB,   NULL, 0,   0, 0, ACTION_UD(AMIGA_ACTION_CREATE_DISK8));
     ADD(NM_SUB,   NULL, 0,   0, 0, ACTION_UD(AMIGA_ACTION_EXTRACT_DISK8));
     ADD(NM_SUB,   NULL, 0,   0, 0, ACTION_UD(AMIGA_ACTION_DRIVE8_DRAWER));
+    if (amiga_machine.has_tape) {
+        ADD(NM_ITEM,  NULL, 0,   0, 0, MSG_MENU_TAPE);  /* branch */
+        ADD(NM_SUB,   NULL, "T", 0, 0, ACTION_UD(AMIGA_ACTION_ATTACH_TAPE));
+        ADD(NM_SUB,   NULL, 0,   0, 0, ACTION_UD(AMIGA_ACTION_DETACH_TAPE));
+        ADD(NM_SUB,   NULL, 0,   0, 0, ACTION_UD(AMIGA_ACTION_CREATE_TAPE));
+        BAR(NM_SUB);
+        ADD(NM_SUB,   NULL, 0,   0, 0, ACTION_UD(AMIGA_ACTION_TAPE_PLAY));
+        ADD(NM_SUB,   NULL, 0,   0, 0, ACTION_UD(AMIGA_ACTION_TAPE_STOP));
+        ADD(NM_SUB,   NULL, 0,   0, 0, ACTION_UD(AMIGA_ACTION_TAPE_REWIND));
+        ADD(NM_SUB,   NULL, 0,   0, 0, ACTION_UD(AMIGA_ACTION_TAPE_FORWARD));
+        ADD(NM_SUB,   NULL, 0,   0, 0, ACTION_UD(AMIGA_ACTION_TAPE_RECORD));
+        BAR(NM_SUB);
+        ADD(NM_SUB,   NULL, 0,   0, 0, ACTION_UD(AMIGA_ACTION_TAPE_RESET));
+    }
     BAR(NM_ITEM);
     ADD(NM_ITEM,  NULL, "C", 0, 0, ACTION_UD(AMIGA_ACTION_ATTACH_CART));
     ADD(NM_ITEM,  NULL, 0,   0, 0, ACTION_UD(AMIGA_ACTION_DETACH_CART));

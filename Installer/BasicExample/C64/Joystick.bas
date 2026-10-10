@@ -1,0 +1,16 @@
+Joystick: a ball moved with the joystick in port 2, fire changes the
+border color.
+C64 BASIC V2, from BASICv2Quick.guide, example 6.
+
+10 PRINT CHR$(147) : X=20 : Y=12
+20 P=1024+40*Y+X : POKE P,81 : POKE P+54272,1
+30 J=PEEK(56320) AND 31
+40 IF J=31 THEN 30
+50 POKE P,32
+60 IF (J AND 1)=0 AND Y>0 THEN Y=Y-1
+70 IF (J AND 2)=0 AND Y<24 THEN Y=Y+1
+80 IF (J AND 4)=0 AND X>0 THEN X=X-1
+90 IF (J AND 8)=0 AND X<39 THEN X=X+1
+100 IF (J AND 16)=0 THEN POKE 53280,(PEEK(53280)+1) AND 15
+110 FOR D=1 TO 30 : NEXT D
+120 GOTO 20

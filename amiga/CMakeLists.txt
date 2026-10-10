@@ -14,6 +14,7 @@
 #   xplus4  Plus/4, C16, C116 (TED machines)      ON  (ported)
 #   xpet    PET / CBM                             OFF (not ported yet)
 #   c1541   disk image tool                       OFF (not ported yet)
+#   KVICEResourceInstaller  ../ResourceInstaller  ON  (system files download)
 #
 # Pure C, FastSID only (reSID is C++ and too slow for a 68030).
 #
@@ -33,13 +34,14 @@ option(VICE_BUILD_XVIC   "build xvic, the VIC-20 emulator (being ported)" ON)
 option(VICE_BUILD_XPLUS4 "build xplus4, the Plus/4 C16 C116 emulator" ON)
 option(VICE_BUILD_XPET   "build xpet, the PET CBM emulator (not ported yet)" OFF)
 option(VICE_BUILD_C1541  "build c1541, the disk image tool (not ported yet)" OFF)
+option(KVICE_BUILD_RESOURCE_INSTALLER "build KVICE Resource Installer (MUI, AmiSSL v5): downloads the system files the emulators need" ON)
 
 option(AMIGA_USE_68020 "compile for 68020" OFF)
 option(AMIGA_USE_68030 "compile for 68030" ON)
 option(AMIGA_USE_68040 "compile for 68040" OFF)
 option(AMIGA_USE_68060 "compile for 68060" OFF)
 option(VICE_USE_HARDFLOAT "use 6888x/040/060 FPU instructions" OFF)
-option(VICE_AMIGA_TRACE "print startup traces to stdout (arch/amiga/amigatrace.h)" ON)
+option(VICE_AMIGA_TRACE "print startup traces to stdout (arch/amiga/amigatrace.h)" OFF)
 option(VICE_AMIGA_SAVE_ASM "keep the generated assembler (.s) and preprocessed (.i) files next to the objects in the build dir" ON)
 option(VICE_AMIGA_TIME_STATS "measure: print the host time spent in CPU, VIC-II, screen output, SID, sound and waiting every 5 s" OFF)
 option(VICE_AMIGA_DIV64_STATS "measure: print 64 bit divisions per second and their callers every 5 s" OFF)
@@ -323,3 +325,12 @@ foreach(prog XPET C1541)
 		                "Its sources are listed in cmake/${prog_name}_sources.cmake.")
 	endif()
 endforeach()
+
+# KVICE Resource Installer: its own project in ../ResourceInstaller, built
+# here with the emulators (in <build>/ResourceInstaller)
+if(KVICE_BUILD_RESOURCE_INSTALLER)
+	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../ResourceInstaller ResourceInstaller)
+	install(TARGETS KVICEResourceInstaller DESTINATION "${VICE_DIST_DIR}")
+	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../ResourceInstaller/resourcelist.txt
+		DESTINATION "${VICE_DIST_DIR}")
+endif()

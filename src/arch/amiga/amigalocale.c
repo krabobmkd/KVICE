@@ -376,7 +376,36 @@ static const char *default_strings[] = {
     /* MSG_BAS_WARN_DUPLICATE */
     "line %lu given again, the last one is kept",
     /* MSG_BAS_WARN_EMPTY */
-    "line %lu has no text, ignored"
+    "line %lu has no text, ignored",
+
+    /* MSG_MENU_TAPE */
+    "Tape",
+    /* MSG_ATTACH_TAPE */
+    "Attach tape image...",
+    /* MSG_DETACH_TAPE */
+    "Detach tape image",
+    /* MSG_CREATE_TAPE */
+    "Create new .tap image...",
+    /* MSG_TAPE_PLAY */
+    "Play",
+    /* MSG_TAPE_STOP */
+    "Stop",
+    /* MSG_TAPE_REWIND */
+    "Rewind",
+    /* MSG_TAPE_FORWARD */
+    "Fast forward",
+    /* MSG_TAPE_RECORD */
+    "Record",
+    /* MSG_TAPE_RESET */
+    "Reset datasette",
+    /* MSG_REQ_ATTACH_TAPE */
+    "Attach a tape image (.t64, .tap)",
+    /* MSG_REQ_CREATE_TAPE */
+    "Create a new tape image (.tap)",
+    /* MSG_ERROR_ATTACH_TAPE: %s is the file */
+    "Cannot attach the tape image\n%s",
+    /* MSG_ERROR_CREATE_TAPE: %s is the file */
+    "Cannot create the tape image\n%s"
 };
 
 /* compile-time check: one default string per MSG_* id */

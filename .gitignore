@@ -61,3 +61,7 @@ amiga/dist/
 CMakeLists.txt.user
 # ROMs and data files come from an official VICE archive, not this repository
 /data/
+KVICE_pkg/
+ResourceInstaller/build/
+vicerc
+vicerc.uaem

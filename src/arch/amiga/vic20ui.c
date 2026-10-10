@@ -35,6 +35,7 @@
 #include "amigalocale.h"
 #include "amigabasic.h"
 #include "amigamachine.h"
+#include "version.h"
 #include "machine.h"
 #include "resources.h"
 #include "vic20model.h"
@@ -206,6 +207,9 @@ static const unsigned char vic20_letters[26][2] = {
 /* made by amiga/CMakeLists.txt from data/VIC20/amiga_positional.vkm */
 #include "amiga_positional_vkm_vic20.h"
 
+/* for the AmigaOS Version command (kept by "used": nothing reads it) */
+static const char kvice_verstag[] __attribute__((used)) = KVICE_VERSTAG("xvic");
+
 const amiga_machine_t amiga_machine = {
     "KVICE xvic",
     "xvic",
@@ -226,7 +230,8 @@ const amiga_machine_t amiga_machine = {
     vic20_symkeys, sizeof vic20_symkeys / sizeof vic20_symkeys[0],
     vic20_letters,
     7, 1,       /* RETURN */
-    amiga_positional_vkm
+    amiga_positional_vkm,
+    1           /* Tape menu */
 };
 
 /* ------------------------------------------------------------------------- */

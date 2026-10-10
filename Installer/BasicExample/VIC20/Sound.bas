@@ -1,0 +1,12 @@
+Sound: rising notes on the 3 voices, then a noise burst.
+VIC-20 BASIC V2, from the VIC-20 page of BASICv2Quick.guide.
+
+10 POKE 36878,15 : REM VOLUME
+20 FOR V=36874 TO 36876
+30 FOR P=200 TO 240 STEP 5
+40 POKE V,P
+50 FOR D=1 TO 60 : NEXT D
+60 NEXT P
+70 POKE V,0
+80 NEXT V
+90 POKE 36877,220 : FOR D=1 TO 300 : NEXT D : POKE 36877,0

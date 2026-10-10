@@ -40,6 +40,9 @@
 #include "attach.h"
 #include "autostart.h"
 #include "cartridge.h"
+#include "datasette.h"
+#include "tape.h"
+#include "tapeport.h"
 #include "lib.h"
 #include "machine.h"
 #include "resources.h"
@@ -78,6 +81,7 @@
 #define PATTERN_AUTOSTART "#?.(prg|p00|d64|d71|d81|g64|g71|x64|t64|tap|crt|zip|gz)"
 #define PATTERN_DISK      "#?.(d64|d71|d81|g64|g71|x64|p64|zip|gz)"
 #define PATTERN_CART      "#?.(crt|bin)"
+#define PATTERN_TAPE      "#?.(t64|tap|zip|gz)"
 
 /* ask a file name: the emulation is frozen meanwhile */
 static char *request_file(ULONG title_msg, const char *pattern)
@@ -606,6 +610,87 @@ static BOOL Action_DetachCart(void)
     return TRUE;
 }
 
+/* ------------------------------------------------------------------------- */
+/* Tape: the datasette of the first tape port (tape unit 1). A .t64 is read
+ * by the kernal traps on LOAD, a .tap by the datasette: PLAY, RECORD... */
+
+static BOOL Action_AttachTape(void)
+{
+    char *path = request_file(MSG_REQ_ATTACH_TAPE, PATTERN_TAPE);
+    BOOL ok = FALSE;
+
+    if (path != NULL) {
+        if (tape_image_attach(1, path) < 0) {
+            log_error(LOG_DEFAULT, "cannot attach the tape image `%s'.", path);
+            path_request(MSG_ERROR_ATTACH_TAPE, MSG_ERROR_OK, path);
+        } else {
+            ok = TRUE;
+        }
+        lib_free(path);
+    }
+    return ok;
+}
+
+static BOOL Action_DetachTape(void)
+{
+    tape_image_detach(1);
+    return TRUE;
+}
+
+/* a new empty .tap, then attached: RECORD writes in it */
+static BOOL Action_CreateTape(void)
+{
+    char *path;
+    size_t len;
+    BOOL ok = FALSE;
+
+    amiga_video_requester_begin();
+    path = amiga_file_save_request(amiga_video_window(), LOC(MSG_REQ_CREATE_TAPE), "#?.tap");
+    amiga_video_requester_end();
+    vsync_suspend_speed_eval();
+    if (path == NULL) {
+        return FALSE;
+    }
+    /* ".tap" or ".TAP" at the end, else added */
+    len = strlen(path);
+    if (len < 4 || util_strcasecmp(path + len - 4, ".tap") != 0) {
+        char *named = util_concat(path, ".tap", NULL);
+
+        lib_free(path);
+        path = named;
+    }
+    if (util_file_exists(path)
+            && path_request(MSG_CONFIRM_REPLACE, MSG_REPLACE_CANCEL, path) != 1) {
+        lib_free(path);
+        return FALSE;
+    }
+    if (tape_image_create(path, DISK_IMAGE_TYPE_TAP) < 0) {
+        log_error(LOG_DEFAULT, "cannot create the tape image `%s'.", path);
+        path_request(MSG_ERROR_CREATE_TAPE, MSG_ERROR_OK, path);
+    } else if (tape_image_attach(1, path) < 0) {
+        log_error(LOG_DEFAULT, "cannot attach the tape image `%s'.", path);
+        path_request(MSG_ERROR_ATTACH_TAPE, MSG_ERROR_OK, path);
+    } else {
+        log_message(LOG_DEFAULT, "new tape `%s' attached.", path);
+        ok = TRUE;
+    }
+    lib_free(path);
+    return ok;
+}
+
+static BOOL tape_control(int command)
+{
+    datasette_control(TAPEPORT_PORT_1, command);
+    return TRUE;
+}
+
+static BOOL Action_TapePlay(void)    { return tape_control(DATASETTE_CONTROL_START); }
+static BOOL Action_TapeStop(void)    { return tape_control(DATASETTE_CONTROL_STOP); }
+static BOOL Action_TapeRewind(void)  { return tape_control(DATASETTE_CONTROL_REWIND); }
+static BOOL Action_TapeForward(void) { return tape_control(DATASETTE_CONTROL_FORWARD); }
+static BOOL Action_TapeRecord(void)  { return tape_control(DATASETTE_CONTROL_RECORD); }
+static BOOL Action_TapeReset(void)   { return tape_control(DATASETTE_CONTROL_RESET); }
+
 static BOOL Action_Reset(void)
 {
     machine_trigger_reset(MACHINE_RESET_MODE_RESET_CPU);
@@ -1020,7 +1105,16 @@ static AmigaAction s_actions[AMIGA_ACTION_COUNT] = {
     /* AMIGA_ACTION_SAVE_SCREENSHOT */ { Action_SaveScreenshot, NULL,                 MSG_SAVE_SCREENSHOT, NULL },
     /* AMIGA_ACTION_SAVE_BAS        */ { Action_SaveBas,       NULL,                  MSG_SAVE_BAS,        NULL },
     /* AMIGA_ACTION_LOAD_BAS        */ { Action_LoadBas,       NULL,                  MSG_LOAD_BAS,        NULL },
-    /* AMIGA_ACTION_ABOUT           */ { Action_About,         NULL,                  MSG_ABOUT,           NULL }
+    /* AMIGA_ACTION_ABOUT           */ { Action_About,         NULL,                  MSG_ABOUT,           NULL },
+    /* AMIGA_ACTION_ATTACH_TAPE     */ { Action_AttachTape,    NULL,                  MSG_ATTACH_TAPE,     NULL },
+    /* AMIGA_ACTION_DETACH_TAPE     */ { Action_DetachTape,    NULL,                  MSG_DETACH_TAPE,     NULL },
+    /* AMIGA_ACTION_CREATE_TAPE     */ { Action_CreateTape,    NULL,                  MSG_CREATE_TAPE,     NULL },
+    /* AMIGA_ACTION_TAPE_PLAY       */ { Action_TapePlay,      NULL,                  MSG_TAPE_PLAY,       NULL },
+    /* AMIGA_ACTION_TAPE_STOP       */ { Action_TapeStop,      NULL,                  MSG_TAPE_STOP,       NULL },
+    /* AMIGA_ACTION_TAPE_REWIND     */ { Action_TapeRewind,    NULL,                  MSG_TAPE_REWIND,     NULL },
+    /* AMIGA_ACTION_TAPE_FORWARD    */ { Action_TapeForward,   NULL,                  MSG_TAPE_FORWARD,    NULL },
+    /* AMIGA_ACTION_TAPE_RECORD     */ { Action_TapeRecord,    NULL,                  MSG_TAPE_RECORD,     NULL },
+    /* AMIGA_ACTION_TAPE_RESET      */ { Action_TapeReset,     NULL,                  MSG_TAPE_RESET,      NULL }
 };
 
 void AmigaAction_Init(void)
