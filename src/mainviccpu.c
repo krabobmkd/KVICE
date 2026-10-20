@@ -339,10 +339,15 @@ const CLOCK maincpu_opcode_write_cycles[] = {
    the values copied into this struct.  */
 mos6510_regs_t maincpu_regs;
 
-static int maincpu_jammed = 0;
-
 /* rare per opcode work (profiler, autostart...), see maincpuattention.h */
 maincpu_attention_t maincpu_attention;
+
+/* the CPU loop does its rare work when maincpu_clk >= maincpu_event_clk,
+   see maincpuattention.h. 0: at the first opcode. */
+CLOCK maincpu_event_clk = 0;
+
+/* one byte of the attention word: tested with the other rare cases */
+#define maincpu_jammed (maincpu_attention.flags.jammed)
 
 /* ------------------------------------------------------------------------- */
 
@@ -558,6 +563,16 @@ void maincpu_resync_limits(void)
     }
 }
 
+/* The rare work done after an opcode (before the next one), when one of
+   the maincpu_attention flags is set. Not inlined: it stays out of the main
+   loop code. */
+static void __attribute__((noinline)) maincpu_attention_epilogue(void)
+{
+    if (maincpu_attention.flags.autostart) {
+        autostart_advance();
+    }
+}
+
 void maincpu_mainloop(void)
 {
 #define ORIGIN_MEMSPACE (e_comp_space)
@@ -581,6 +596,11 @@ void maincpu_mainloop(void)
      * the global.
      */
     bank_base_ready = true;
+
+    /* new interrupts and earlier alarms lower maincpu_event_clk */
+    maincpu_int_status->event_clk = &maincpu_event_clk;
+    maincpu_alarm_context->event_clk = &maincpu_event_clk;
+    maincpu_event_clk = 0;
 
     machine_trigger_reset(MACHINE_RESET_MODE_RESET_CPU);
 
@@ -636,16 +656,18 @@ void maincpu_mainloop(void)
 
 #define GLOBAL_REGS maincpu_regs
 
+/* one test before each opcode, CLK >= maincpu_event_clk, for the alarms,
+   the interrupts and the attention word (profiler, autostart, jammed CPU).
+   The cycle limit is checked once per raster line, in
+   vsync_do_end_of_line(). */
+#define CPU_EVENT_CLK maincpu_event_clk
+#define CPU_EVENT_WAKE() MAINCPU_EVENT_WAKE()
+#define CPU_ATTENTION (maincpu_attention.any != 0)
+#define CPU_ATTENTION_EPILOGUE maincpu_attention_epilogue();
+
 #include "6510dtvcore.c"
 
         maincpu_int_status->num_dma_per_opcode = 0;
-
-        if (maincpu_clk_limit && (maincpu_clk > maincpu_clk_limit)) {
-            log_error(LOG_DEFAULT, "cycle limit reached.");
-            archdep_vice_exit(EXIT_FAILURE);
-        }
-
-        autostart_advance();
 #if 0
         if (CLK > 246171754) {
             debug.maincpu_traceflg = 1;
@@ -761,6 +783,7 @@ int maincpu_snapshot_read_module(snapshot_t *s)
     uint8_t a, x, y, sp, status;
     uint16_t pc;
     uint8_t major, minor;
+    int jammed;
     snapshot_module_t *m;
 
     m = snapshot_module_open(s, snap_module_name, &major, &minor);
@@ -783,9 +806,10 @@ int maincpu_snapshot_read_module(snapshot_t *s)
         || SMR_DW_UINT(m, &last_opcode_info) < 0
         || SMR_DW_INT(m, &ane_log_level) < 0
         || SMR_DW_INT(m, &lxa_log_level) < 0
-        || SMR_DW_INT(m, &maincpu_jammed) < 0) {
+        || SMR_DW_INT(m, &jammed) < 0) {
         goto fail;
     }
+    maincpu_jammed = (jammed != 0);
 
     MOS6510_REGS_SET_A(&maincpu_regs, a);
     MOS6510_REGS_SET_X(&maincpu_regs, x);
@@ -801,6 +825,9 @@ int maincpu_snapshot_read_module(snapshot_t *s)
     if (interrupt_read_new_snapshot(maincpu_int_status, m) < 0) {
         goto fail;
     }
+
+    /* new maincpu_clk: look at the alarms again */
+    MAINCPU_EVENT_WAKE();
 
     return snapshot_module_close(m);
 

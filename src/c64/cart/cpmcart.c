@@ -78,6 +78,7 @@ static void cpmcart_io_store(uint16_t addr, uint8_t byte)
 
     if (!z80_started && !val) {
         z80_started = 1;
+        MAINCPU_EVENT_WAKE();
     } else if (z80_started && val) {
         z80_started = 0;
     }
@@ -430,6 +431,7 @@ int cpmcart_snapshot_read_module(snapshot_t *s)
         || SMR_DW_UINT(m, &z80_last_opcode_addr) < 0) {
         goto fail;
     }
+    MAINCPU_EVENT_WAKE();
 
     set_cpmcart_enabled(1, NULL);
 

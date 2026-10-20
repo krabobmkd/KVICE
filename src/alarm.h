@@ -28,6 +28,8 @@
 #ifndef VICE_ALARM_H
 #define VICE_ALARM_H
 
+#include <stddef.h>
+
 #include "types.h"
 
 #define ALARM_CONTEXT_MAX_PENDING_ALARMS 0x100
@@ -84,6 +86,11 @@ struct alarm_context_s {
 
     /* Pending alarm number.  */
     int next_pending_alarm_idx;
+
+    /* The CPU event clock (maincpu_event_clk, see maincpuattention.h),
+       lowered when the next alarm comes earlier, NULL if the CPU loop does
+       not use one (drive CPUs).  */
+    CLOCK *event_clk;
 };
 typedef struct alarm_context_s alarm_context_t;
 
@@ -107,6 +114,15 @@ inline static CLOCK alarm_context_next_pending_clk(alarm_context_t *context)
     return context->next_pending_alarm_clk;
 }
 
+/* The next pending alarm may now come before the CPU event clock.  */
+inline static void alarm_context_lower_event_clk(alarm_context_t *context)
+{
+    if (context->event_clk != NULL
+        && context->next_pending_alarm_clk < *context->event_clk) {
+        *context->event_clk = context->next_pending_alarm_clk;
+    }
+}
+
 inline static void alarm_context_update_next_pending(alarm_context_t *context)
 {
     CLOCK next_pending_alarm_clk = CLOCK_MAX;
@@ -126,6 +142,7 @@ inline static void alarm_context_update_next_pending(alarm_context_t *context)
 
     context->next_pending_alarm_clk = next_pending_alarm_clk;
     context->next_pending_alarm_idx = next_pending_alarm_idx;
+    alarm_context_lower_event_clk(context);
 }
 
 inline static void alarm_context_dispatch(alarm_context_t *context,
@@ -170,6 +187,7 @@ inline static void alarm_set(alarm_t *alarm, CLOCK cpu_clk)
         if (cpu_clk < context->next_pending_alarm_clk) {
             context->next_pending_alarm_clk = cpu_clk;
             context->next_pending_alarm_idx = new_idx;
+            alarm_context_lower_event_clk(context);
         }
 
         alarm->pending_idx = new_idx;

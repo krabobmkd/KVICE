@@ -136,6 +136,9 @@ CLOCK maincpu_clk_limit = 0L;
 /* rare per opcode work (profiler, autostart...), see maincpuattention.h */
 maincpu_attention_t maincpu_attention;
 
+/* not used by this CPU loop yet, see maincpuattention.h */
+CLOCK maincpu_event_clk = 0;
+
 /* Information about the last executed opcode.  This is used to know the
    number of write cycles in the last executed opcode and to delay interrupts
    by one more cycle if necessary, as happens with conditional branch opcodes

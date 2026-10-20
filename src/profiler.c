@@ -302,6 +302,7 @@ void profile_start(void)
     num_context_ids = 0;
     current_context = root_context;
     maincpu_profiling = true;
+    MAINCPU_EVENT_WAKE();
     entered_context = false;
     exited_context  = false;
     context_dirty   = true;

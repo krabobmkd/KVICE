@@ -35,6 +35,8 @@
 
 #include <stdint.h>
 
+#include "types.h"
+
 typedef union maincpu_attention_u {
     uint32_t any;           /* != 0 when at least one flag is set */
     struct {
@@ -47,5 +49,14 @@ typedef union maincpu_attention_u {
 
 /* defined by each main CPU (maincpu.c, mainc64cpu.c...) */
 extern maincpu_attention_t maincpu_attention;
+
+/* The main CPU loop does its rare work (alarms, interrupts, the attention
+   flags above) only when maincpu_clk >= maincpu_event_clk: one test per
+   opcode. Whatever creates such work lowers it (to 0: "now"), only the CPU
+   loop raises it again, see CPU_EVENT_CLK in 6510core.c. Setting an
+   attention flag must be followed by MAINCPU_EVENT_WAKE(). */
+extern CLOCK maincpu_event_clk;
+
+#define MAINCPU_EVENT_WAKE() (maincpu_event_clk = 0)
 
 #endif

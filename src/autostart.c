@@ -122,6 +122,7 @@ static enum {
     do {                                            \
         autostartmode = (mode);                     \
         maincpu_attention.flags.autostart = 1;      \
+        MAINCPU_EVENT_WAKE();                       \
     } while (0)
 
 #define AUTOSTART_WAIT_BLINK   0

@@ -28,6 +28,7 @@
 
 #include <stdio.h>
 
+#include "maincpuclk.h"
 #include "monitor.h"
 #include "vic-cycle.h"
 
@@ -40,7 +41,8 @@ CLOCK maincpu_clk_limit = 0L;
 
 #define REWIND_FETCH_OPCODE(clock) /*clock-=2*/
 
-#define CLK_INC() maincpu_clk++; vic_cycle()
+/* maincpu_clk++: 68k asm, see maincpuclk.h */
+#define CLK_INC() maincpu_clk_add(1); vic_cycle()
 
 #define CLK_ADD(clock, amount) nosuchfunction(&clock, amount)
 

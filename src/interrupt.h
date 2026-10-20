@@ -125,8 +125,22 @@ struct interrupt_cpu_status_s {
     void (*nmi_trap_func)(void);
 
     void (*reset_trap_func)(void);
+
+    /* The CPU event clock (maincpu_event_clk, see maincpuattention.h) set
+       to 0 when an interrupt becomes pending, NULL if the CPU loop does
+       not use one (drive CPUs).  */
+    CLOCK *event_clk;
 };
 typedef struct interrupt_cpu_status_s interrupt_cpu_status_t;
+
+/* An interrupt condition is now pending: the CPU loop must look at it
+   before its next opcode.  */
+inline static void interrupt_event_wake(interrupt_cpu_status_t *cs)
+{
+    if (cs->event_clk != NULL) {
+        *cs->event_clk = 0;
+    }
+}
 
 /* ------------------------------------------------------------------------- */
 
@@ -156,6 +170,7 @@ inline static void interrupt_set_irq(interrupt_cpu_status_t *cs,
              */
             if (cs->nirq == 0) {
                 cs->global_pending_int |= (unsigned int)(IK_IRQ | IK_IRQPEND);
+                interrupt_event_wake(cs);
 
                 cs->irq_pending_clk = CLOCK_MAX;
 
@@ -187,6 +202,7 @@ inline static void interrupt_set_irq(interrupt_cpu_status_t *cs,
                     cs->global_pending_int =
                         (cs->global_pending_int & (unsigned int)~IK_IRQ);
                     cs->irq_pending_clk = cpu_clk + 3;
+                    interrupt_event_wake(cs);
                 }
             } else {
                 interrupt_log_wrong_nirq();
@@ -208,6 +224,7 @@ inline static void interrupt_set_nmi(interrupt_cpu_status_t *cs,
         if (!(cs->pending_int[int_num] & IK_NMI)) {
             if (cs->nnmi == 0 && !(cs->global_pending_int & IK_NMI)) {
                 cs->global_pending_int = (cs->global_pending_int | IK_NMI);
+                interrupt_event_wake(cs);
 
 #ifdef DEBUG
                 if (debug.maincpu_traceflg) {

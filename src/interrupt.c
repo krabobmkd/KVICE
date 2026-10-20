@@ -284,6 +284,7 @@ void interrupt_fixup_int_clk(interrupt_cpu_status_t *cs, CLOCK cpu_clk,
 void interrupt_trigger_dma(interrupt_cpu_status_t *cs, CLOCK cpu_clk)
 {
     cs->global_pending_int = (enum cpu_int)(cs->global_pending_int | IK_DMA);
+    interrupt_event_wake(cs);
 }
 
 void interrupt_ack_dma(interrupt_cpu_status_t *cs)
@@ -301,6 +302,7 @@ void interrupt_trigger_reset(interrupt_cpu_status_t *cs, CLOCK cpu_clk)
     }
 
     cs->global_pending_int |= IK_RESET;
+    interrupt_event_wake(cs);
 }
 
 /* Acknowledge a RESET condition, by removing it.  */
@@ -341,6 +343,7 @@ void interrupt_maincpu_trigger_trap(void (*trap_func)(uint16_t, void *data),
     }
 
     cs->global_pending_int |= IK_TRAP;
+    interrupt_event_wake(cs);
 
     cs->trap_func[this_trap_index] = trap_func;
     cs->trap_data[this_trap_index] = data;
@@ -373,6 +376,7 @@ void interrupt_do_trap(interrupt_cpu_status_t *cs, uint16_t address)
 void interrupt_monitor_trap_on(interrupt_cpu_status_t *cs)
 {
     cs->global_pending_int |= IK_MONITOR;
+    interrupt_event_wake(cs);
 }
 
 void interrupt_monitor_trap_off(interrupt_cpu_status_t *cs)
@@ -459,6 +463,7 @@ int interrupt_read_new_snapshot(interrupt_cpu_status_t *cs, snapshot_module_t *m
         || SMR_DW_UINT(m, &cs->global_pending_int) < 0) {
         return -1;
     }
+    interrupt_event_wake(cs);
 
     return 0;
 }

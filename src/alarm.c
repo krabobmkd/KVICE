@@ -54,6 +54,7 @@ void alarm_context_init(alarm_context_t *context, const char *name)
 
     context->num_pending_alarms = 0;
     context->next_pending_alarm_clk = CLOCK_MAX;
+    context->event_clk = NULL;
 }
 
 void alarm_context_destroy(alarm_context_t *context)
@@ -97,6 +98,9 @@ void alarm_context_time_warp(alarm_context_t *context, CLOCK warp_amount,
         context->next_pending_alarm_clk += warp_amount;
     } else {
         context->next_pending_alarm_clk -= warp_amount;
+    }
+    if (context->event_clk != NULL) {
+        *context->event_clk = 0;
     }
 }
 

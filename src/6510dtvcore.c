@@ -164,6 +164,13 @@
 #error "please define LAST_OPCODE_ADDR"
 #endif
 
+/* CPU_EVENT_CLK: the one test prologue, see "Here, the CPU is emulated".
+   CPU_EVENT_WAKE() makes the CPU loop look at its rare work before the
+   next opcode. */
+#ifndef CPU_EVENT_WAKE
+#define CPU_EVENT_WAKE()
+#endif
+
 #ifndef C64DTV
 /* Export the local version of the registers.  */
 #define EXPORT_REGISTERS()          \
@@ -190,6 +197,7 @@
         flag_z = GLOBAL_REGS.z;                            \
         bank_start = bank_limit = 0; /* prevent caching */ \
         JUMP(GLOBAL_REGS.pc);                              \
+        CPU_EVENT_WAKE(); /* the I flag may have changed */ \
     } while (0)
 
 #else  /* C64DTV */
@@ -1025,6 +1033,8 @@ FIXME: perhaps we really have to add some randomness to (some) bits
         EXPORT_REGISTERS();                                                           \
         if (!ROM_TRAP_ALLOWED() || (trap_result = ROM_TRAP_HANDLER()) == (uint32_t)-1) { \
             CPU_IS_JAMMED = 1;                                                        \
+            CPU_EVENT_WAKE();                                                         \
+            jam_opcode = p0;                                                          \
             REWIND_FETCH_OPCODE(CLK);                                                 \
             JAM();                                                                    \
         } else {                                                                      \
@@ -1077,6 +1087,7 @@ FIXME: perhaps we really have to add some randomness to (some) bits
             OPCODE_ENABLES_IRQ(); \
         }                         \
         LOCAL_SET_INTERRUPT(0);   \
+        CPU_EVENT_WAKE();         \
     } while (0)
 
 #endif
@@ -1392,6 +1403,9 @@ FIXME: perhaps we really have to add some randomness to (some) bits
             OPCODE_DISABLES_IRQ();                            \
         }                                                     \
         LOCAL_SET_STATUS(s);                                  \
+        if (!(s & P_INTERRUPT)) {                             \
+            CPU_EVENT_WAKE(); /* a masked IRQ may come */     \
+        }                                                     \
         INC_PC(1);                                            \
     } while (0)
 
@@ -1485,6 +1499,9 @@ FIXME: perhaps we really have to add some randomness to (some) bits
         tmp = (uint16_t)PULL();         \
         CLK_INC();                      \
         LOCAL_SET_STATUS((uint8_t)tmp); \
+        if (!(tmp & P_INTERRUPT)) {     \
+            CPU_EVENT_WAKE();           \
+        }                               \
         tmp = (uint16_t)PULL();         \
         CLK_INC();                      \
         tmp |= (uint16_t)PULL() << 8;   \
@@ -1722,14 +1739,116 @@ static const uint8_t fetch_tab[] = {
 #endif
 #endif
 
+    /* the opcode that jammed the CPU (JAM, JAM_02), fetched again while the
+       CPU stays jammed */
+    static uint8_t jam_opcode;
+#ifdef CPU_EVENT_CLK
+    /* static: only set when profiling */
+    static CLOCK profiling_clock_start;
+    /* a profile sample was started before the previous opcode */
+    static int profiling_sample_open = 0;
+    /* declared here: the jammed CPU path jumps to trap_skipped with it */
+    opcode_t opcode;
+#else
 #if !defined(DRIVE_CPU)
     CLOCK profiling_clock_start;
+#endif
 #endif
 
 
 #ifdef CHECK_AND_RUN_ALTERNATE_CPU
     CHECK_AND_RUN_ALTERNATE_CPU
 #endif
+
+#ifdef CPU_EVENT_CLK
+    /* All the rare work between two opcodes, behind one test: alarms,
+       interrupts, jammed CPU, profiler, autostart... CPU_EVENT_CLK is the
+       clock of the next alarm, or 0 when something else is pending. Code
+       that creates work only lowers it (interrupt.h, alarm.h,
+       maincpuattention.h), it is raised again only here. */
+    if (CLK >= CPU_EVENT_CLK) {
+        /* end of the previous opcode */
+        if (CPU_ATTENTION) {
+            if (profiling_sample_open) {
+                profiling_sample_open = 0;
+                if (maincpu_profiling) {
+                    profile_sample_finish(CLK - profiling_clock_start, 0 /* stolen_cycles */);
+                }
+            }
+            CPU_ATTENTION_EPILOGUE
+        }
+
+        while (CLK >= alarm_context_next_pending_clk(ALARM_CONTEXT)) {
+            alarm_context_dispatch(ALARM_CONTEXT, CLK);
+        }
+
+        /* HACK: when the CPU is jammed, no interrupts are served, the only
+           way to recover is reset. so we clear the interrupt flags and force
+           acknowledging them here in this case. */
+        if (CPU_IS_JAMMED) {
+            interrupt_ack_irq(CPU_INT_STATUS);
+            CPU_INT_STATUS->global_pending_int &= ~(IK_IRQ | IK_NMI);
+            if (CPU_INT_STATUS->global_pending_int & IK_RESET) {
+                CPU_IS_JAMMED = 0;
+            }
+        }
+
+        if (CPU_INT_STATUS->global_pending_int != IK_NONE) {
+            enum cpu_int pending_interrupt;
+
+            if (!(CPU_INT_STATUS->global_pending_int & IK_IRQ) &&
+                 (CPU_INT_STATUS->global_pending_int & IK_IRQPEND) &&
+                 (CPU_INT_STATUS->irq_pending_clk <= CLK)) {
+                interrupt_ack_irq(CPU_INT_STATUS);
+            }
+
+            pending_interrupt = CPU_INT_STATUS->global_pending_int;
+            if (pending_interrupt != IK_NONE) {
+                profiling_clock_start = CLK;
+                DO_INTERRUPT(pending_interrupt);
+                if (!(CPU_INT_STATUS->global_pending_int & IK_IRQ) &&
+                      CPU_INT_STATUS->global_pending_int & IK_IRQPEND) {
+                    CPU_INT_STATUS->global_pending_int &= ~IK_IRQPEND;
+                }
+                while (CLK >= alarm_context_next_pending_clk(ALARM_CONTEXT)) {
+                    alarm_context_dispatch(ALARM_CONTEXT, CLK);
+                }
+            }
+        }
+
+        if (maincpu_profiling) {
+            profiling_clock_start = CLK;
+            profile_sample_start(reg_pc);
+            profiling_sample_open = 1;
+        }
+
+        /* back to the fast path until the next alarm, unless something is
+           still pending: an attention flag, an interrupt not served yet.
+           An IRQ masked by the I flag is not looked at again before the I
+           flag is cleared (CLI, PLP, RTI, IMPORT_REGISTERS) or the IRQ line
+           changes (interrupt_set_irq()): they wake the CPU loop. */
+        if (CPU_ATTENTION
+            || ((CPU_INT_STATUS->global_pending_int != IK_NONE)
+                && ((CPU_INT_STATUS->global_pending_int & ~(IK_IRQ | IK_IRQPEND))
+                    || !LOCAL_INTERRUPT()
+                    || OPINFO_DISABLES_IRQ(LAST_OPCODE_INFO)))) {
+            CPU_EVENT_CLK = 0;
+        } else {
+            CPU_EVENT_CLK = alarm_context_next_pending_clk(ALARM_CONTEXT);
+        }
+
+        /* HACK: The real CPU would stop fetching opcodes all together when
+         * "jammed" - however, our code may rely on FETCH_OPCODE being
+         * called here, so we can not simply skip it. The opcode that jammed
+         * the CPU is forced instead. */
+        if (CPU_IS_JAMMED) {
+            SET_LAST_ADDR(reg_pc);
+            FETCH_OPCODE(opcode);
+            SET_OPCODE(jam_opcode);
+            goto trap_skipped;
+        }
+    }
+#else /* !CPU_EVENT_CLK */
 
     while (CLK >= alarm_context_next_pending_clk(ALARM_CONTEXT)) {
         alarm_context_dispatch(ALARM_CONTEXT, CLK);
@@ -1770,9 +1889,12 @@ static const uint8_t fetch_tab[] = {
             }
         }
     }
+#endif /* !CPU_EVENT_CLK */
 
     {
+#ifndef CPU_EVENT_CLK
         opcode_t opcode;
+#endif
 #if defined (DEBUG) || defined (FEATURE_CPUMEMHISTORY)
         debug_clk = maincpu_clk;
 #endif
@@ -1781,7 +1903,7 @@ static const uint8_t fetch_tab[] = {
         memmap_state |= (MEMMAP_STATE_INSTR | MEMMAP_STATE_OPCODE);
 #endif
 
-#if !defined(DRIVE_CPU)
+#if !defined(DRIVE_CPU) && !defined(CPU_EVENT_CLK)
         profiling_clock_start = CLK;
         stolen_cycles = 0;
         if (maincpu_profiling) {
@@ -1799,17 +1921,16 @@ static const uint8_t fetch_tab[] = {
          * the value at the original jam location changed to a non-jam, for
          * whatever reason.
          */
-        {
-            static uint8_t lastop;
-            FETCH_OPCODE(opcode);
-            if (!CPU_IS_JAMMED) {
-                /* remember current opcode */
-                lastop = p0;
-            } else {
-                /* set opcode that made the cpu jam */
-                SET_OPCODE(lastop);
-            }
+#ifdef CPU_EVENT_CLK
+        /* the jammed CPU takes the slow path, see above */
+        FETCH_OPCODE(opcode);
+#else
+        FETCH_OPCODE(opcode);
+        if (CPU_IS_JAMMED) {
+            /* set opcode that made the cpu jam (remembered by JAM) */
+            SET_OPCODE(jam_opcode);
         }
+#endif
 
 #ifdef FEATURE_CPUMEMHISTORY
         /* If reg_pc >= bank_limit  then JSR (0x20) hasn't load p2 yet.
@@ -1870,6 +1991,8 @@ trap_skipped:
             case 0x42:          /* JAM */
 #endif
                 CPU_IS_JAMMED = 1;
+                CPU_EVENT_WAKE();
+                jam_opcode = p0;
                 REWIND_FETCH_OPCODE(CLK);
                 JAM();
                 break;
@@ -2789,7 +2912,7 @@ trap_skipped:
                 break;
         }
 
-#if !defined(DRIVE_CPU)
+#if !defined(DRIVE_CPU) && !defined(CPU_EVENT_CLK)
         if (maincpu_profiling) {
             profile_sample_finish(CLK - profiling_clock_start - stolen_cycles, stolen_cycles);
         }

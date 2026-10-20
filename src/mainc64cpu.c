@@ -517,6 +517,9 @@ static int maincpu_jammed = 0;
 /* rare per opcode work (profiler, autostart...), see maincpuattention.h */
 maincpu_attention_t maincpu_attention;
 
+/* not used by this CPU loop yet, see maincpuattention.h */
+CLOCK maincpu_event_clk = 0;
+
 /* ------------------------------------------------------------------------- */
 
 static int ane_log_level = 0; /* 0: none, 1: unstable only 2: all */

@@ -39,6 +39,7 @@
 #include "log.h"
 #include "machine.h"
 #include "maincpu.h"
+#include "maincpuclk.h"
 #include "mainlock.h"
 #include "mem.h"
 #include "monitor.h"
@@ -78,6 +79,10 @@ log_t maincpu_log = LOG_DEFAULT;
 #define NEED_REG_PC
 
 /* ------------------------------------------------------------------------- */
+
+/* maincpu_clk += amount: 68k asm, see maincpuclk.h. CLK is always
+   maincpu_clk here. */
+#define CLK_ADD(clock, amount) maincpu_clk_add((unsigned int)(amount))
 
 /* Implement the hack to make opcode fetches faster.  */
 #define JUMP(addr)                                                                         \
@@ -248,6 +253,10 @@ CLOCK maincpu_clk_limit = 0L;
 
 /* rare per opcode work (profiler, autostart...), see maincpuattention.h */
 maincpu_attention_t maincpu_attention;
+
+/* the CPU loop does its rare work when maincpu_clk >= maincpu_event_clk,
+   see maincpuattention.h. 0: at the first opcode. */
+CLOCK maincpu_event_clk = 0;
 
 /* This is flag is set to 1 each time a Read-Modify-Write instructions that
    accesses memory is executed.  We can emulate the RMW behaviour of the 6510
@@ -527,8 +536,9 @@ void maincpu_resync_limits(void)
     }
 }
 
-/* The rare work done after an opcode, when one of the maincpu_attention
-   flags is set. Not inlined: it stays out of the main loop code. */
+/* The rare work done after an opcode (before the next one), when one of
+   the maincpu_attention flags is set. Not inlined: it stays out of the main
+   loop code. */
 static void __attribute__((noinline)) maincpu_attention_epilogue(void)
 {
     if (maincpu_attention.flags.autostart) {
@@ -606,6 +616,11 @@ void maincpu_mainloop(void)
      */
     bank_base_ready = true;
 
+    /* new interrupts and earlier alarms lower maincpu_event_clk */
+    maincpu_int_status->event_clk = &maincpu_event_clk;
+    maincpu_alarm_context->event_clk = &maincpu_event_clk;
+    maincpu_event_clk = 0;
+
     machine_trigger_reset(MACHINE_RESET_MODE_RESET_CPU);
 
     while (1) {
@@ -660,9 +675,12 @@ void maincpu_mainloop(void)
 
 #define GLOBAL_REGS maincpu_regs
 
-/* one test of the attention word after each opcode, for the profiler,
-   autostart and the alternate CPU (the cycle limit is checked once per
-   raster line, in vsync_do_end_of_line()) */
+/* one test before each opcode, CLK >= maincpu_event_clk, for the alarms,
+   the interrupts and the attention word (profiler, autostart, alternate
+   CPU, jammed CPU). The cycle limit is checked once per raster line, in
+   vsync_do_end_of_line(). */
+#define CPU_EVENT_CLK maincpu_event_clk
+#define CPU_EVENT_WAKE() MAINCPU_EVENT_WAKE()
 #define CPU_ATTENTION (maincpu_attention.any != 0)
 #define CPU_ATTENTION_EPILOGUE maincpu_attention_epilogue();
 
@@ -955,6 +973,9 @@ int maincpu_snapshot_read_module(snapshot_t *s)
     if (interrupt_read_new_snapshot(maincpu_int_status, m) < 0) {
         goto fail;
     }
+
+    /* new maincpu_clk: look at the alarms again */
+    MAINCPU_EVENT_WAKE();
 
     return snapshot_module_close(m);
 
