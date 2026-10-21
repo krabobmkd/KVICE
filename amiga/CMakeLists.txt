@@ -294,11 +294,22 @@ if(VICE_BUILD_X64 OR VICE_BUILD_XVIC OR VICE_BUILD_XPLUS4 OR VICE_BUILD_XPET)
 	# compiled once, linked in each emulator
 	add_library(vice_common OBJECT ${VICE_COMMON_SRC})
 	vice_amiga_setup_target(vice_common)
+	# same options as x64 (see below): VIC-II, CIA, SID, drives... are
+	# compiled once for all the emulators, so xplus4 and xvic get them too
+	# (their own CPU loops, plus4cpu.c and vic20cpu.c, stay without them)
+	target_compile_options(vice_common PRIVATE
+		-fno-expensive-optimizations -freorder-blocks-algorithm=simple)
 	vice_amiga_data(DRIVES)
 endif()
 
 if(VICE_BUILD_X64)
 	vice_amiga_emulator(x64 ${VICE_X64_SRC})
+	# measured on the 68k asm of the CPU loop (c64cpu.c), 2026-10-20:
+	# flag_nz stays in a register (-3.5% on the frequent opcode paths), main
+	# loop code 17% smaller. Worse for plus4cpu.c and vic20cpu.c, so not in
+	# the other emulators' own sources.
+	target_compile_options(x64 PRIVATE
+		-fno-expensive-optimizations -freorder-blocks-algorithm=simple)
 	vice_amiga_data(C64)
 endif()
 
