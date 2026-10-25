@@ -85,7 +85,7 @@ enum {
     MSG_AMIGA_PORT_NONE,
     MSG_AMIGA_PORT_JOYSTICK,
     MSG_AMIGA_PORT_PADDLES,
-    MSG_INPUT_APPLY,       /* slot of the former "next start" note */
+    MSG_INPUT_APPLY,       /* unused: the Input cycles apply at once */
     MSG_C64_PORT1,
     MSG_C64_PORT2,
     MSG_DEVICE_NONE,
@@ -256,6 +256,25 @@ enum {
     MSG_REQ_CREATE_TAPE,
     MSG_ERROR_ATTACH_TAPE,
     MSG_ERROR_CREATE_TAPE,
+
+    /* Display menu: Palette (x64) */
+    MSG_PALETTE,
+    MSG_PALETTE_VICE,
+    MSG_PALETTE_COLODORE,
+    MSG_PALETTE_PEPTO,
+    MSG_PALETTE_PETMATE,
+
+    /* Settings: Input page sections */
+    MSG_INPUT_AMIGA_PORTS,
+    MSG_INPUT_PORTS_MAPPING,
+    MSG_INPUT_AMIGA_PORTS_NOTE,
+    MSG_AMIGA_PORT_CD32,
+    MSG_AMIGA_PORT_MOUSE,
+    MSG_MENU_INPUT,
+    MSG_SWITCH_PORTS,
+    MSG_PORTS_SWITCHED,
+    MSG_PALETTE_MIKE_PAL,
+    MSG_PALETTE_MIKE_NTSC,
 
     /* Must be last */
     MSG_COUNT

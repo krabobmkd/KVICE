@@ -75,8 +75,10 @@
 #define ALLOW_UNALIGNED_ACCESS
 #endif
 
-/* Allow unaligned access for m68020+ based platforms */
-#if defined(__m68020__) || defined(__m68030__) || defined(__m68040__) || defined(__m68060__)
+/* Allow unaligned access for m68020+ based platforms (gcc defines
+   __mc680x0__, the __m680x0__ names are kept for other compilers) */
+#if defined(__m68020__) || defined(__m68030__) || defined(__m68040__) || defined(__m68060__) \
+    || defined(__mc68020__) || defined(__mc68030__) || defined(__mc68040__) || defined(__mc68060__)
 #define ALLOW_UNALIGNED_ACCESS
 #endif
 

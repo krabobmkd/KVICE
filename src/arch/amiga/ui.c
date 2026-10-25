@@ -347,9 +347,11 @@ static void pause_trap(uint16_t addr, void *data)
     AMIGA_TRACE(("paused"));
     vsync_suspend_speed_eval();
     sound_suspend();
+    amiga_video_show_pause(1);
 
     while (ui_pause_loop_iteration()) {
     }
+    amiga_video_show_pause(0);
     AMIGA_TRACE(("resumed"));
 }
 

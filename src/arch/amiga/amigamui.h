@@ -36,6 +36,9 @@ void amiga_settings_open(void);
 void amiga_mui_handle_events(void);
 /* open the about window (non-modal) */
 void amiga_about_open(void);
+/* control ports 1 and 2 exchange their Amiga ports (and device type:
+   joystick, paddles), the settings Input page shows it if it exists */
+void amiga_input_switch_ports(void);
 /* free MUI resources, safe to call more than once */
 void amiga_mui_close_all(void);
 /* "no rom" state: when ROMs are missing, show "(no rom)", open the settings

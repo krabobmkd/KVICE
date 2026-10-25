@@ -772,6 +772,21 @@ static int Checked_BordersFull(void) { return amiga_video_get_borders() == AMIGA
 static int Checked_BordersHalf(void) { return amiga_video_get_borders() == AMIGA_BORDERS_HALF; }
 static int Checked_BordersNone(void) { return amiga_video_get_borders() == AMIGA_BORDERS_NONE; }
 
+static BOOL set_palette(int palette)
+{
+    amiga_video_set_palette(palette);
+    return TRUE;
+}
+
+static BOOL Action_PaletteVice(void)     { return set_palette(AMIGA_PALETTE_VICE); }
+static BOOL Action_PaletteColodore(void) { return set_palette(AMIGA_PALETTE_COLODORE); }
+static BOOL Action_PalettePepto(void)    { return set_palette(AMIGA_PALETTE_PEPTO); }
+static BOOL Action_PalettePetmate(void)  { return set_palette(AMIGA_PALETTE_PETMATE); }
+static int Checked_PaletteVice(void)     { return amiga_video_get_palette() == AMIGA_PALETTE_VICE; }
+static int Checked_PaletteColodore(void) { return amiga_video_get_palette() == AMIGA_PALETTE_COLODORE; }
+static int Checked_PalettePepto(void)    { return amiga_video_get_palette() == AMIGA_PALETTE_PEPTO; }
+static int Checked_PalettePetmate(void)  { return amiga_video_get_palette() == AMIGA_PALETTE_PETMATE; }
+
 /* ------------------------------------------------------------------------- */
 
 /* ------------------------------------------------------------------------- */
@@ -781,6 +796,14 @@ static BOOL Action_KeyboardSymbolic(void) { amiga_kbd_set_symbolic(1); return TR
 static BOOL Action_KeyboardPositional(void) { amiga_kbd_set_symbolic(0); return TRUE; }
 static int Checked_KeyboardSymbolic(void) { return amiga_kbd_get_symbolic() ? 1 : 0; }
 static int Checked_KeyboardPositional(void) { return amiga_kbd_get_symbolic() ? 0 : 1; }
+
+/* Input menu: control ports 1 and 2 exchange their Amiga ports */
+static BOOL Action_SwitchPorts(void)
+{
+    amiga_input_switch_ports();
+    amiga_video_show_message(LOC(MSG_PORTS_SWITCHED), 100, AMIGA_MESSAGE_OK);
+    return TRUE;
+}
 
 /* ------------------------------------------------------------------------- */
 /* Snapshot menu: the whole machine state in a .vsf file */
@@ -1058,7 +1081,7 @@ static BOOL Action_LoadBas(void)
                     report.lines, path, start, report.end);
         snprintf(loaded, sizeof loaded, LOC(MSG_BAS_LOADED), (long)report.lines);
         /* about 3 seconds */
-        amiga_video_show_message(loaded, 150);
+        amiga_video_show_message(loaded, 150, AMIGA_MESSAGE_OK);
     } else {
         log_error(LOG_DEFAULT, "BASIC text `%s' not loaded: %d error(s).", path, report.errors);
     }
@@ -1099,6 +1122,7 @@ static AmigaAction s_actions[AMIGA_ACTION_COUNT] = {
     /* AMIGA_ACTION_SNAPSHOT_SAVE   */ { Action_SnapshotSave,  NULL,                  MSG_SNAPSHOT_SAVE,   NULL },
     /* AMIGA_ACTION_KEYBOARD_SYMBOLIC   */ { Action_KeyboardSymbolic,   Checked_KeyboardSymbolic,   MSG_KEYBOARD_SYMBOLIC,   NULL },
     /* AMIGA_ACTION_KEYBOARD_POSITIONAL */ { Action_KeyboardPositional, Checked_KeyboardPositional, MSG_KEYBOARD_POSITIONAL, NULL },
+    /* AMIGA_ACTION_SWITCH_PORTS    */ { Action_SwitchPorts,   NULL,                  MSG_SWITCH_PORTS,    NULL },
     /* AMIGA_ACTION_CREATE_DISK8    */ { Action_CreateDisk8,   NULL,                  MSG_CREATE_DISK8,    NULL },
     /* AMIGA_ACTION_EXTRACT_DISK8   */ { Action_ExtractDisk8,  NULL,                  MSG_EXTRACT_DISK8,   NULL },
     /* AMIGA_ACTION_SAVE_BASIC      */ { Action_SaveBasic,     NULL,                  MSG_SAVE_BASIC,      NULL },
@@ -1114,7 +1138,11 @@ static AmigaAction s_actions[AMIGA_ACTION_COUNT] = {
     /* AMIGA_ACTION_TAPE_REWIND     */ { Action_TapeRewind,    NULL,                  MSG_TAPE_REWIND,     NULL },
     /* AMIGA_ACTION_TAPE_FORWARD    */ { Action_TapeForward,   NULL,                  MSG_TAPE_FORWARD,    NULL },
     /* AMIGA_ACTION_TAPE_RECORD     */ { Action_TapeRecord,    NULL,                  MSG_TAPE_RECORD,     NULL },
-    /* AMIGA_ACTION_TAPE_RESET      */ { Action_TapeReset,     NULL,                  MSG_TAPE_RESET,      NULL }
+    /* AMIGA_ACTION_TAPE_RESET      */ { Action_TapeReset,     NULL,                  MSG_TAPE_RESET,      NULL },
+    /* AMIGA_ACTION_PALETTE_VICE    */ { Action_PaletteVice,     Checked_PaletteVice,     MSG_PALETTE_VICE,     NULL },
+    /* AMIGA_ACTION_PALETTE_COLODORE */ { Action_PaletteColodore, Checked_PaletteColodore, MSG_PALETTE_COLODORE, NULL },
+    /* AMIGA_ACTION_PALETTE_PEPTO   */ { Action_PalettePepto,    Checked_PalettePepto,    MSG_PALETTE_PEPTO,    NULL },
+    /* AMIGA_ACTION_PALETTE_PETMATE */ { Action_PalettePetmate,  Checked_PalettePetmate,  MSG_PALETTE_PETMATE,  NULL }
 };
 
 void AmigaAction_Init(void)

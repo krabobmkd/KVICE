@@ -108,8 +108,7 @@ MUI_NewObjectB(const char *cl, Tag tags, ...)
 #define RID_ROM_DEFAULT 5   /* "Set ROM defaults for this model" */
 #define RID_MODEL   7   /* the C64 model cycle changed: its description */
 #define RID_DRIVE_TYPE 8    /* the drive 8 type cycle changed: its ROM file */
-#define RID_INPUT_PORTS 20  /* an Amiga port type cycle changed */
-#define RID_INPUT_APPLY 21  /* "Apply input configuration" */
+#define RID_INPUT_PORTS 20  /* an Input page cycle changed: applied at once */
 #define RID_DRIVE_ROM_EDIT 22 /* the read-only ROM file string was edited */
 #define RID_BROWSE_ROM  10  /* + 0..2: "..." of a ROM file row */
 #define RID_BROWSE_FILE 6   /* "..." of the file row (custom keymap) */
@@ -403,6 +402,8 @@ static void add_amiga_port_entries(setting_t *s, int paddles)
 {
     setting_add_entry(s, LOC(MSG_AMIGA_PORT_NONE), 0);
     setting_add_entry(s, LOC(MSG_AMIGA_PORT_JOYSTICK), 1);
+    setting_add_entry(s, LOC(MSG_AMIGA_PORT_CD32), 3);
+    setting_add_entry(s, LOC(MSG_AMIGA_PORT_MOUSE), 4);
     if (paddles) {
         setting_add_entry(s, LOC(MSG_AMIGA_PORT_PADDLES), 2);
     }
@@ -410,14 +411,13 @@ static void add_amiga_port_entries(setting_t *s, int paddles)
 
 /* Input page: the Amiga port types (mouse port, joystick port) and what
  * drives each C64 control port: none, or the device of an Amiga port. All
- * applied together by input_apply() ("Apply input configuration", Use,
+ * applied together by input_apply() (any of them changed, Use,
  * Save): the Amiga ports are opened again when their type changed. */
 #define C64_FROM_NONE           0
 #define C64_FROM_MOUSE_PORT     1   /* lowlevel port 0 */
 #define C64_FROM_JOYSTICK_PORT  2   /* lowlevel port 1 */
 static setting_t *amiga_port_setting[2];
 static setting_t *c64_port_setting[2];
-static Object *input_apply_button = NULL;
 
 static void add_c64_port_entries(setting_t *s)
 {
@@ -803,12 +803,13 @@ static void keys_list_fill(void)
     set(keys_list, MUIA_List_Quiet, FALSE);
 }
 
-/* a page: 2 columns label / gadget, then free space */
-static Object *make_page(int page)
+/* a framed section titled \a title added to \a parent, \a note (may be
+ * NULL) above its 2 columns group. Returns the columns (NULL on failure) */
+static Object *make_section(Object *parent, const char *title, const char *note)
 {
     Object *columns;
-    Object *group;
-    int i;
+    Object *text = NULL;
+    Object *section;
 
     columns = MUI_NewObjectB(MUIC_Group,
                              MUIA_Group_Columns, 2,
@@ -816,8 +817,63 @@ static Object *make_page(int page)
     if (columns == NULL) {
         return NULL;
     }
+    if (note != NULL) {
+        text = make_text(note);
+        if (text == NULL) {
+            MUI_DisposeObject(columns);
+            return NULL;
+        }
+    }
+    section = MUI_NewObjectB(MUIC_Group,
+                             MUIA_Frame, MUIV_Frame_Group,
+                             MUIA_FrameTitle, (ULONG)title,
+                             text != NULL ? MUIA_Group_Child : TAG_IGNORE, (ULONG)text,
+                             MUIA_Group_Child, (ULONG)columns,
+                             TAG_DONE);
+    if (section == NULL) {
+        /* the children are disposed by MUI (MUIA_Group_Child) */
+        return NULL;
+    }
+    DoMethod(parent, OM_ADDMEMBER, (ULONG)section);
+    return columns;
+}
+
+/* a page: 2 columns label / gadget, then free space. The Input page has
+ * 2 sections: the Amiga ports, then the machine ports they drive. */
+static Object *make_page(int page)
+{
+    /* the frame title is not copied */
+    static char mapping_title[64];
+    Object *content;
+    Object *columns = NULL;
+    Object *group;
+    int i;
+
+    if (page == PAGE_INPUT) {
+        content = MUI_NewObjectB(MUIC_Group, TAG_DONE);
+    } else {
+        content = columns = MUI_NewObjectB(MUIC_Group,
+                                           MUIA_Group_Columns, 2,
+                                           TAG_DONE);
+    }
+    if (content == NULL) {
+        return NULL;
+    }
     for (i = 0; i < settings_count[page]; i++) {
         setting_t *s = &settings[page][i];
+
+        if (page == PAGE_INPUT && s == amiga_port_setting[0]) {
+            columns = make_section(content, LOC(MSG_INPUT_AMIGA_PORTS),
+                                   LOC(MSG_INPUT_AMIGA_PORTS_NOTE));
+        } else if (page == PAGE_INPUT && s == c64_port_setting[0]) {
+            snprintf(mapping_title, sizeof mapping_title, LOC(MSG_INPUT_PORTS_MAPPING),
+                     amiga_machine.menu_title);
+            columns = make_section(content, mapping_title, NULL);
+        }
+        if (columns == NULL) {
+            MUI_DisposeObject(content);
+            return NULL;
+        }
 
         switch (s->type) {
             case BIND_CHECK:
@@ -837,7 +893,7 @@ static Object *make_page(int page)
                 break;
         }
         if (s->obj == NULL) {
-            MUI_DisposeObject(columns);
+            MUI_DisposeObject(content);
             return NULL;
         }
         DoMethod(columns, OM_ADDMEMBER, (ULONG)make_label(LOC(s->label_msg)));
@@ -890,20 +946,11 @@ static Object *make_page(int page)
     group = MUI_NewObjectB(MUIC_Group,
                            MUIA_Frame, MUIV_Frame_Group,
                            MUIA_FrameTitle, (ULONG)LOC(page_names[page]),
-                           MUIA_Group_Child, (ULONG)columns,
+                           MUIA_Group_Child, (ULONG)content,
                            TAG_DONE);
     if (group == NULL) {
-        MUI_DisposeObject(columns);
+        MUI_DisposeObject(content);
         return NULL;
-    }
-    if (page == PAGE_INPUT) {
-        /* applies the 4 choices at once, the window stays open */
-        input_apply_button = make_button(LOC(MSG_INPUT_APPLY));
-        DoMethod(group, OM_ADDMEMBER, (ULONG)MUI_NewObjectB(MUIC_Group,
-                 MUIA_Group_Horiz, TRUE,
-                 MUIA_Group_Child, (ULONG)input_apply_button,
-                 MUIA_Group_Child, (ULONG)make_space(),
-                 TAG_DONE));
     }
     if (page == PAGE_DRIVE8) {
         DoMethod(group, OM_ADDMEMBER, (ULONG)make_text(LOC(MSG_DRIVE8_DRAWER_NOTE)));
@@ -1100,7 +1147,7 @@ static void settings_to_ui(void)
 
 /* about text: MUI text engine codes, \33c centered, \33b bold, \33n normal */
 static const char about_text[] =
-    "\33c\33b" "KVICE " KVICE_VERSION "\33n\n"
+    "\33c\33b" "KVICE " VERSION " " KVICE_RELEASE "\33n\n"
     "\33c" "Fork of VICE " VERSION " by krb\n"
     "\n"
     "\33c" "License for the emulators and vkm is GPL-2\n"
@@ -1298,15 +1345,16 @@ static int create_app(void)
         DoMethod(drive_rom_text, MUIM_Notify, MUIA_String_Contents, MUIV_EveryTime,
                  (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_DRIVE_ROM_EDIT);
     }
+    /* the 4 Input cycles: applied at once, the window stays open */
     for (page = 0; page < 2; page++) {
         if (amiga_port_setting[page] != NULL && amiga_port_setting[page]->obj != NULL) {
             DoMethod(amiga_port_setting[page]->obj, MUIM_Notify, MUIA_Cycle_Active, MUIV_EveryTime,
                      (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_INPUT_PORTS);
         }
-    }
-    if (input_apply_button != NULL) {
-        DoMethod(input_apply_button, MUIM_Notify, MUIA_Pressed, FALSE,
-                 (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_INPUT_APPLY);
+        if (c64_port_setting[page] != NULL && c64_port_setting[page]->obj != NULL) {
+            DoMethod(c64_port_setting[page]->obj, MUIM_Notify, MUIA_Cycle_Active, MUIV_EveryTime,
+                     (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_INPUT_PORTS);
+        }
     }
     return 0;
 }
@@ -1472,10 +1520,15 @@ static void input_apply(void)
 
         /* each C64 port as the controller plugged: paddles for analog */
         if (index >= 0) {
+            int analog = amiga_joy_port_is_analog(from - 1);
+
             resources_set_int_sprintf("JoyPort%dDevice",
-                                      amiga_joy_port_is_analog(from - 1)
-                                      ? JOYPORT_ID_PADDLES : JOYPORT_ID_JOYSTICK,
+                                      analog ? JOYPORT_ID_PADDLES : JOYPORT_ID_JOYSTICK,
                                       c + 1);
+            if (analog) {
+                /* the paddles read the joystick axes, not the host mouse */
+                resources_set_int_sprintf("PaddlesInput%d", 1, c + 1);
+            }
         }
         if (resources_set_int_sprintf("JoyDevice%d", dev, c + 1) < 0) {
             log_error(LOG_DEFAULT, "settings: cannot set C64 control port %d.", c + 1);
@@ -1485,6 +1538,43 @@ static void input_apply(void)
     for (i = 0; i < 2; i++) {
         setting_to_ui(amiga_port_setting[i]);
         setting_to_ui(c64_port_setting[i]);
+    }
+}
+
+/* Input menu, Switch ports: works without the settings window. A host
+ * device may drive both ports, so they are just exchanged one after the
+ * other. */
+void amiga_input_switch_ports(void)
+{
+    int dev[2] = { JOYDEV_NONE, JOYDEV_NONE };
+    int type[2] = { JOYPORT_ID_JOYSTICK, JOYPORT_ID_JOYSTICK };
+    int paddles_axis[2] = { 0, 0 };
+    int has_paddles = 1;    /* PaddlesInputN: not on a machine without pots */
+    int c;
+
+    for (c = 0; c < 2; c++) {
+        resources_get_int_sprintf("JoyDevice%d", &dev[c], c + 1);
+        resources_get_int_sprintf("JoyPort%dDevice", &type[c], c + 1);
+        if (resources_get_int_sprintf("PaddlesInput%d", &paddles_axis[c], c + 1) < 0) {
+            has_paddles = 0;
+        }
+    }
+    for (c = 0; c < 2; c++) {
+        resources_set_int_sprintf("JoyPort%dDevice", type[1 - c], c + 1);
+        if (has_paddles) {
+            resources_set_int_sprintf("PaddlesInput%d", paddles_axis[1 - c], c + 1);
+        }
+        if (resources_set_int_sprintf("JoyDevice%d", dev[1 - c], c + 1) < 0) {
+            log_error(LOG_DEFAULT, "cannot set control port %d.", c + 1);
+        }
+    }
+    /* the cycles show the resources (no notification: nnset) */
+    if (mui_app != NULL) {
+        for (c = 0; c < 2; c++) {
+            if (c64_port_setting[c] != NULL && c64_port_setting[c]->obj != NULL) {
+                setting_to_ui(c64_port_setting[c]);
+            }
+        }
     }
 }
 
@@ -1690,8 +1780,6 @@ void amiga_mui_handle_events(void)
                 break;
             case RID_INPUT_PORTS:
                 input_ports_changed();
-                break;
-            case RID_INPUT_APPLY:
                 input_apply();
                 break;
             case RID_BROWSE_FILE:
@@ -1803,7 +1891,7 @@ static void drive8_no_rom_used(void)
     resources_get_int("Drive8TrueEmulation", &tde);
     if (tde) {
         /* about 6 seconds */
-        amiga_video_show_message(LOC(MSG_DRIVE8_NO_ROM_USED), 300);
+        amiga_video_show_message(LOC(MSG_DRIVE8_NO_ROM_USED), 300, AMIGA_MESSAGE_ERROR);
     }
 }
 

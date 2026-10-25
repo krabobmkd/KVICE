@@ -5,7 +5,7 @@
 @WORDWRAP
 @NODE MAIN "KVICE - Commodore 8-bit machines for AmigaOS 3"
 
-@{b}KVICE 3.10 r1@{ub}
+@{b}KVICE 3.10 r2@{ub}
 Commodore 64, Plus/4 and VIC-20 emulators for AmigaOS 3.x
 
 ------------------------------------------------------------------------------
@@ -145,16 +145,38 @@ attach, detach@{lindent 2}
 @{b}About..., Settings..., Pause, Quit@{ub}
 @{lindent 0}
 @{b}Display@{ub}@{lindent 2}
-Window / fullscreen, window size, borders, screenshot (IFF)
+Window / fullscreen, window size, borders, screenshot (IFF).
+x64 and xvic also have a @{b}Palette@{ub} submenu. The C64 has a fixed set of 16 colors, but no one agrees on their exact RGB values, as each TV and each VIC-II chip revision shows them a bit differently. Choose between four references; the choice is kept in the settings when quitting.@{lindent 4}
+@{b}VICE@{ub} (default)@{lindent 6}
+the palette of the VICE emulator, calculated from a model of the VIC-II video signal.@{lindent 4}
+@{b}Colodore@{ub}@{lindent 6}
+by Philip "Pepto" Timmermann (2017), from measurements of real VIC-II chips: today often considered the most accurate one.@{lindent 4}
+@{b}Pepto@{ub}@{lindent 6}
+his earlier palette (2001), also measured, for a long time the reference of the C64 emulators.@{lindent 4}
+@{b}PetMate@{ub}@{lindent 6}
+the default palette of the Petmate editor: see the drawings made with @{"PetMate" LINK PETMATE} with the very colors you drew them with. PetMate has the same four palettes in its Palette menu (see PetMate.guide).@{lindent 2}
+For the VIC-20 (xvic), the choices are:@{lindent 4}
+@{b}VICE@{ub} (default)@{lindent 6}
+calculated by VICE with strong colors, made to be softened by the PAL screen emulation of VICE on other computers, which KVICE does not do: they look flashy.@{lindent 4}
+@{b}Colodore@{ub}@{lindent 6}
+the Colodore method applied to the VIC chip: softer dark colors, light pastel ones.@{lindent 4}
+@{b}Mike (PAL), Mike (NTSC)@{ub}@{lindent 6}
+the palettes from the VIC-20 community, for the European (PAL) and American (NTSC) machines.
 @{lindent 0}
 @{b}Snapshot@{ub}@{lindent 2}
 Load and save the whole machine state
 @{lindent 0}
-@{b}Keyboard@{ub}
-Two ways to map the keys, which can be switched on the fly:@{lindent 2}
+@{b}Input@{ub}@{lindent 2}
+@{b}Keyboard@{ub}@{lindent 4}
+two ways to map the keys, which can be switched on the fly:
 - Symbolic: uses the keymap of your Amiga locale configuration to map the keys: useful for the BASIC.
-
-- Positional: for games and emulated tools that are very keyboard based: the C64 key positions are closer to your Amiga keyboard positions. The key correspondences are shown in the Keyboard settings panel.
+- Positional: for games and emulated tools that are very keyboard based: the C64 key positions are closer to your Amiga keyboard positions. The key correspondences are shown in the Keyboard settings panel.@{lindent 2}
+@{b}Switch ports@{ub} (Amiga+J)@{lindent 4}
+exchanges what drives control port 1 and control port 2, as set in "C64 ports mapping" of the Input settings: the Amiga port of each one, and its kind of controller (joystick, or paddles).
+Most C64 games read the joystick in port 2, but some read port 1, and some two player games give each player a port: when the joystick seems dead in a game, press Amiga+J and try again, no need to open the settings.
+It also works in fullscreen without menu, and while the settings window is open: its Input page shows the new mapping at once. A message on the emulator screen confirms the switch. To keep it for the next start, press Save in the settings window.
+To not think about it at all, you can also map the same Amiga port to both control ports: it then drives the two at the same time.
+The VIC-20 has only one control port: port 2 there exists only with a userport joystick adapter.
 @ENDNODE
 
 @NODE BASIC "BASIC programs"

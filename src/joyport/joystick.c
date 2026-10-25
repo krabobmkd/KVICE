@@ -832,21 +832,63 @@ static size_t max_joystick_devices = 0;
 static joystick_device_t **joystick_devices = NULL;
 
 
+/* the joystick port map in the devices: joyport (and joyport2 when the
+ * device drives a second port) */
+static void joystick_device_ports_update(void)
+{
+    int i;
+
+    for (i = 0; i < num_joystick_devices; i++) {
+        joystick_devices[i]->joyport = -1;
+        joystick_devices[i]->joyport2 = -1;
+    }
+    for (i = 0; i < JOYPORT_MAX_PORTS; i++) {
+        int dev = joystick_port_map[i] - JOYDEV_REALJOYSTICK_MIN;
+
+        if (joystick_port_map[i] >= JOYDEV_REALJOYSTICK_MIN && dev < num_joystick_devices) {
+            if (joystick_devices[dev]->joyport < 0) {
+                joystick_devices[dev]->joyport = i;
+            } else if (joystick_devices[dev]->joyport2 < 0) {
+                joystick_devices[dev]->joyport2 = i;
+            }
+        }
+    }
+}
+
+/* number of ports driven by host device \a dev, \a port_idx excluded */
+static int joystick_device_other_ports(int dev, int port_idx)
+{
+    int i, n = 0;
+
+    for (i = 0; i < JOYPORT_MAX_PORTS; i++) {
+        if (i != port_idx && joystick_port_map[i] == dev) {
+            n++;
+        }
+    }
+    return n;
+}
+
+/* KVICE: a host device may drive 2 ports (joyport2), the other port using
+ * it keeps it */
 static int set_joystick_device(int val, void *param)
 {
     joystick_device_t *joydev;
     int                port_idx = vice_ptr_to_int(param);
+    int                old      = joystick_port_map[port_idx];
 
-    if (val == joystick_port_map[port_idx]) {
-        /* same device, exit */
+    if (val == old) {
+        /* same device: the devices may have been registered again */
+        joystick_device_ports_update();
         return 0;
     }
 
-    if (joystick_port_map[port_idx] >= JOYDEV_REALJOYSTICK_MIN) {
-        int olddev = joystick_port_map[port_idx] - JOYDEV_REALJOYSTICK_MIN;
-        if (olddev < num_joystick_devices) {
-            joystick_devices[olddev]->joyport = -1;
-            /* close old device */
+    joystick_port_map[port_idx] = val;
+    joystick_device_ports_update();
+
+    if (old >= JOYDEV_REALJOYSTICK_MIN) {
+        int olddev = old - JOYDEV_REALJOYSTICK_MIN;
+        if (olddev < num_joystick_devices && joystick_device_other_ports(old, port_idx) == 0) {
+            /* close old device, no other port uses it */
             if (joystick_init_done) {
                 joydev = joystick_device_by_index(olddev);
 #if 0
@@ -859,19 +901,10 @@ static int set_joystick_device(int val, void *param)
         }
     }
 
-    joystick_port_map[port_idx] = val;
-
-    if (joystick_port_map[port_idx] >= JOYDEV_REALJOYSTICK_MIN) {
-        int newdev = joystick_port_map[port_idx] - JOYDEV_REALJOYSTICK_MIN;
-        if (newdev < num_joystick_devices) {
-            joystick_devices[newdev]->joyport = port_idx;
-            int i;
-            for (i = 0; i < JOYPORT_MAX_PORTS; i++) {
-                if (i != port_idx && joystick_port_map[port_idx] == joystick_port_map[i]) {
-                    joystick_port_map[i] = JOYDEV_NONE;
-                }
-            }
-            /* open device for polling */
+    if (val >= JOYDEV_REALJOYSTICK_MIN) {
+        int newdev = val - JOYDEV_REALJOYSTICK_MIN;
+        if (newdev < num_joystick_devices && joystick_device_other_ports(val, port_idx) == 0) {
+            /* open device for polling, not open yet */
             if (joystick_init_done) {
                 joydev = joystick_device_by_index(newdev);
 #if 0
@@ -897,6 +930,9 @@ void joystick_set_axis_value(unsigned int joynum, unsigned int axis_idx, uint8_t
 
         if ((joydev->joyport == 0 || joydev->joyport == 1) && (axis->mapping.pot > 0)) {
             joystick_axis_value[joydev->joyport][axis->mapping.pot - 1] = value;
+        }
+        if ((joydev->joyport2 == 0 || joydev->joyport2 == 1) && (axis->mapping.pot > 0)) {
+            joystick_axis_value[joydev->joyport2][axis->mapping.pot - 1] = value;
         }
     }
 }
@@ -2746,7 +2782,7 @@ int joystick_cmdline_options_init(void)
 int joystick_init(void)
 {
     int res = -1;
-    int i;
+    int i, j;
 
     joy_log = log_open("Joystick");
 
@@ -2775,16 +2811,21 @@ int joystick_init(void)
             if (devnum - JOYDEV_REALJOYSTICK_MIN < num_joystick_devices) {
                 joystick_device_t *joydev = joystick_devices[devnum - JOYDEV_REALJOYSTICK_MIN];
 
-                joydev->joyport = i;
                 log_message(joy_log,
                             "joystick_init(): resource JoyDevice%d: opening device %d (%s)",
                             i + 1, devnum - JOYDEV_REALJOYSTICK_MIN, joydev->name);
-                joystick_device_open(joydev);
+                /* once, when 2 ports use it */
+                for (j = 0; j < i && joystick_port_map[j] != devnum; j++) {
+                }
+                if (j == i) {
+                    joystick_device_open(joydev);
+                }
             } else {
                 joystick_port_map[i] = JOYDEV_NONE;
             }
         }
     }
+    joystick_device_ports_update();
 
     /* do not load joymap file when -default was passed on the command line */
     if (!default_settings_requested) {
@@ -2899,6 +2940,7 @@ void register_joystick_driver(
     new_joystick_device->hat_mapping = lib_calloc(num_hats, sizeof *(new_joystick_device->hat_mapping));
 
     new_joystick_device->joyport = -1;
+    new_joystick_device->joyport2 = -1;
     new_joystick_device->priv = priv;
 
     /* now create a (very simple) default mapping */
@@ -3039,6 +3081,18 @@ static void joy_perform_event(joystick_mapping_t *event, int joyport, int value)
 }
 
 
+/* an event of \a joydev: also on its second port (joyport2) for a
+ * joystick action, keys and UI actions only once */
+static void joy_perform_device_event(joystick_device_t *joydev,
+                                     joystick_mapping_t *event, int value)
+{
+    joy_perform_event(event, joydev->joyport, value);
+    if (joydev->joyport2 >= 0 && event->action == JOY_ACTION_JOYSTICK) {
+        joy_perform_event(event, joydev->joyport2, value);
+    }
+}
+
+
 /** \brief  Handle joystick axis event
  *
  * \param[in]   axis    joystick axis
@@ -3048,7 +3102,6 @@ void joy_axis_event(joystick_axis_t *axis, int32_t value)
 {
     joystick_axis_value_t  direction = JOY_AXIS_MIDDLE;
     joystick_axis_value_t  prev      = axis->prev;
-    int                    joyport   = axis->device->joyport;
 
 
     /* digital axes don't require calibration: */
@@ -3099,18 +3152,18 @@ void joy_axis_event(joystick_axis_t *axis, int32_t value)
 
     /* release directions first if needed */
     if (prev == JOY_AXIS_POSITIVE) {
-        joy_perform_event(&axis->mapping.positive, joyport, 0);
+        joy_perform_device_event(axis->device, &axis->mapping.positive, 0);
     }
     if (prev == JOY_AXIS_NEGATIVE) {
-        joy_perform_event(&axis->mapping.negative, joyport, 0);
+        joy_perform_device_event(axis->device, &axis->mapping.negative, 0);
     }
 
     /* press new direction if needed */
     if (direction == JOY_AXIS_POSITIVE) {
-        joy_perform_event(&axis->mapping.positive, joyport, 1);
+        joy_perform_device_event(axis->device, &axis->mapping.positive, 1);
     }
     if (direction == JOY_AXIS_NEGATIVE) {
-        joy_perform_event(&axis->mapping.negative, joyport, 1);
+        joy_perform_device_event(axis->device, &axis->mapping.negative, 1);
     }
 
     axis->prev = direction;
@@ -3141,7 +3194,7 @@ void joy_button_event(joystick_button_t *button, int32_t value)
     if (value != button->prev) {
         DBG(("joy_button_event: joy: %s, button: %d (%s) pressed: %d\n",
              button->device->name, button->index, button->name, pressed));
-        joy_perform_event(&button->mapping, button->device->joyport, pressed);
+        joy_perform_device_event(button->device, &button->mapping, pressed);
         button->prev = value;
     }
 }
@@ -3154,7 +3207,6 @@ void joy_button_event(joystick_button_t *button, int32_t value)
  */
 void joy_hat_event(joystick_hat_t *hat, int32_t value)
 {
-    int     joyport = hat->device->joyport;
     int32_t prev    = hat->prev;
 
     if (value == prev) {
@@ -3164,30 +3216,30 @@ void joy_hat_event(joystick_hat_t *hat, int32_t value)
     DBG(("joy_hat_event (%s): %d\n", hat->name, value));
     /* release directions first if needed */
     if (prev & JOYSTICK_DIRECTION_UP && !(value & JOYSTICK_DIRECTION_UP)) {
-        joy_perform_event(&hat->mapping.up, joyport, 0);
+        joy_perform_device_event(hat->device, &hat->mapping.up, 0);
     }
     if (prev & JOYSTICK_DIRECTION_DOWN && !(value & JOYSTICK_DIRECTION_DOWN)) {
-        joy_perform_event(&hat->mapping.down, joyport, 0);
+        joy_perform_device_event(hat->device, &hat->mapping.down, 0);
     }
     if (prev & JOYSTICK_DIRECTION_LEFT && !(value & JOYSTICK_DIRECTION_LEFT)) {
-        joy_perform_event(&hat->mapping.left, joyport, 0);
+        joy_perform_device_event(hat->device, &hat->mapping.left, 0);
     }
     if (prev & JOYSTICK_DIRECTION_RIGHT && !(value & JOYSTICK_DIRECTION_RIGHT)) {
-        joy_perform_event(&hat->mapping.right, joyport, 0);
+        joy_perform_device_event(hat->device, &hat->mapping.right, 0);
     }
 
     /* press new direction if needed */
     if (!(prev & JOYSTICK_DIRECTION_UP) && value & JOYSTICK_DIRECTION_UP) {
-        joy_perform_event(&hat->mapping.up, joyport, 1);
+        joy_perform_device_event(hat->device, &hat->mapping.up, 1);
     }
     if (!(prev & JOYSTICK_DIRECTION_DOWN) && value & JOYSTICK_DIRECTION_DOWN) {
-        joy_perform_event(&hat->mapping.down, joyport, 1);
+        joy_perform_device_event(hat->device, &hat->mapping.down, 1);
     }
     if (!(prev & JOYSTICK_DIRECTION_LEFT) && value & JOYSTICK_DIRECTION_LEFT) {
-        joy_perform_event(&hat->mapping.left, joyport, 1);
+        joy_perform_device_event(hat->device, &hat->mapping.left, 1);
     }
     if (!(prev & JOYSTICK_DIRECTION_RIGHT) && value & JOYSTICK_DIRECTION_RIGHT) {
-        joy_perform_event(&hat->mapping.right, joyport, 1);
+        joy_perform_device_event(hat->device, &hat->mapping.right, 1);
     }
 
     hat->prev = value;
@@ -3444,6 +3496,7 @@ joystick_device_t *joystick_device_new(void)
     joydev->max_hats     = NUM_HATS_INITIAL;
     joydev->disable_sort = false;
     joydev->joyport      = -1;
+    joydev->joyport2     = -1;
     joydev->priv         = NULL;
 
     return joydev;

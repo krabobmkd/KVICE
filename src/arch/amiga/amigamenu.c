@@ -32,6 +32,7 @@
 
 #include "amigaaction.h"
 #include "amigamachine.h"
+#include "amigavideo.h"
 #include "amigalocale.h"
 #include "amigamenu.h"
 #include "amigatrace.h"
@@ -46,6 +47,8 @@
 
 /* nm_MutualExclude of 3 sibling radio items: each excludes the 2 others */
 #define MX3(i) (7 & ~(1 << (i)))
+/* and of 4 sibling radio items */
+#define MX4(i) (15 & ~(1 << (i)))
 /* and of 2 sibling radio items */
 #define MX2(i) (3 & ~(1 << (i)))
 
@@ -125,6 +128,13 @@ static void buildMenuTemplate(void)
     ADD(NM_SUB,   NULL, 0, CHECKIT, MX3(0), ACTION_UD(AMIGA_ACTION_BORDERS_FULL));
     ADD(NM_SUB,   NULL, 0, CHECKIT, MX3(1), ACTION_UD(AMIGA_ACTION_BORDERS_HALF));
     ADD(NM_SUB,   NULL, 0, CHECKIT, MX3(2), ACTION_UD(AMIGA_ACTION_BORDERS_NONE));
+    if (amiga_machine.palettes != NULL) {
+        ADD(NM_ITEM,  NULL, 0, 0, 0, MSG_PALETTE);      /* branch */
+        ADD(NM_SUB,   NULL, 0, CHECKIT, MX4(0), ACTION_UD(AMIGA_ACTION_PALETTE_VICE));
+        ADD(NM_SUB,   NULL, 0, CHECKIT, MX4(1), ACTION_UD(AMIGA_ACTION_PALETTE_COLODORE));
+        ADD(NM_SUB,   NULL, 0, CHECKIT, MX4(2), ACTION_UD(AMIGA_ACTION_PALETTE_PEPTO));
+        ADD(NM_SUB,   NULL, 0, CHECKIT, MX4(3), ACTION_UD(AMIGA_ACTION_PALETTE_PETMATE));
+    }
     BAR(NM_ITEM);
     ADD(NM_ITEM,  NULL, 0, 0, 0, ACTION_UD(AMIGA_ACTION_SAVE_SCREENSHOT));
 
@@ -132,9 +142,11 @@ static void buildMenuTemplate(void)
     ADD(NM_ITEM,  NULL, "L", 0, 0, ACTION_UD(AMIGA_ACTION_SNAPSHOT_LOAD));
     ADD(NM_ITEM,  NULL, "W", 0, 0, ACTION_UD(AMIGA_ACTION_SNAPSHOT_SAVE));
 
-    ADD(NM_TITLE, NULL, 0, 0, 0, MSG_MENU_KEYBOARD);
-    ADD(NM_ITEM,  NULL, 0, CHECKIT, MX2(0), ACTION_UD(AMIGA_ACTION_KEYBOARD_SYMBOLIC));
-    ADD(NM_ITEM,  NULL, 0, CHECKIT, MX2(1), ACTION_UD(AMIGA_ACTION_KEYBOARD_POSITIONAL));
+    ADD(NM_TITLE, NULL, 0, 0, 0, MSG_MENU_INPUT);
+    ADD(NM_ITEM,  NULL, 0, 0, 0, MSG_MENU_KEYBOARD);    /* branch */
+    ADD(NM_SUB,   NULL, 0, CHECKIT, MX2(0), ACTION_UD(AMIGA_ACTION_KEYBOARD_SYMBOLIC));
+    ADD(NM_SUB,   NULL, 0, CHECKIT, MX2(1), ACTION_UD(AMIGA_ACTION_KEYBOARD_POSITIONAL));
+    ADD(NM_ITEM,  NULL, "J", 0, 0, ACTION_UD(AMIGA_ACTION_SWITCH_PORTS));
 
     ADD(NM_END, NULL, 0, 0, 0, 0);
 }
@@ -156,6 +168,13 @@ static void resolveMenuTemplate(void)
             AmigaAction *a = AmigaAction_Get(UD_ACTION(udata));
 
             e->nm_Label = (STRPTR)((a != NULL && a->name != NULL) ? a->name : "???");
+            if (UD_ACTION(udata) >= AMIGA_ACTION_PALETTE_VICE
+                    && UD_ACTION(udata) < AMIGA_ACTION_PALETTE_VICE + AMIGA_PALETTE_COUNT
+                    && amiga_machine.palette_names != NULL) {
+                /* the palettes of the machine */
+                e->nm_Label = (STRPTR)LOC(amiga_machine.palette_names[UD_ACTION(udata)
+                                                                      - AMIGA_ACTION_PALETTE_VICE]);
+            }
             if (AmigaAction_IsChecked(UD_ACTION(udata)) == 1) {
                 e->nm_Flags |= CHECKED;
             } else {

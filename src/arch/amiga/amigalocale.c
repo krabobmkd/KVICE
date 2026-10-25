@@ -111,21 +111,21 @@ static const char *default_strings[] = {
     "Fullscreen",
 
     /* MSG_AMIGA_PORT0 */
-    "Amiga mouse port:",
+    "Mouse port 1:",
     /* MSG_AMIGA_PORT1 */
-    "Amiga joystick port:",
+    "Joystick port 2:",
     /* MSG_AMIGA_PORT_NONE */
     "Not used",
     /* MSG_AMIGA_PORT_JOYSTICK */
-    "Joystick / CD32 pad",
+    "Joystick (2 buttons)",
     /* MSG_AMIGA_PORT_PADDLES */
     "Analog paddles",
     /* MSG_INPUT_APPLY */
     "Apply input configuration",
     /* MSG_C64_PORT1 */
-    "C64 control port 1:",
+    "Control port 1:",
     /* MSG_C64_PORT2 */
-    "C64 control port 2:",
+    "Control port 2:",
     /* MSG_DEVICE_NONE */
     "None",
 
@@ -212,7 +212,8 @@ static const char *default_strings[] = {
     /* MSG_FS_NOTE */
     "Amiga+F switches between window and fullscreen.\n"
     "Without menu: Amiga+P pause, Amiga+R reset,\n"
-    "Amiga+A autostart, Amiga+L/W load/save snapshot,\n Amiga+Q quit.",
+    "Amiga+A autostart, Amiga+L/W load/save snapshot,\n"
+    "Amiga+J switch control ports, Amiga+Q quit.",
 
     /* MSG_REQ_AUTOSTART */
     "Autostart a program, disk, tape or cartridge",
@@ -268,7 +269,7 @@ static const char *default_strings[] = {
     /* MSG_KEYBOARD_POSITIONAL */
     "Positional",
     /* MSG_KEYBOARD_NOTE */
-    "Keyboard menu, Symbolic:\n the keys type the characters of the Amiga keymap.\n"
+    "Input menu, Keyboard, Symbolic:\n the keys type the characters of the Amiga keymap.\n"
     "Positional: the C64 key positions (keymap file), for games.\n"
     "Symbolic only takes the special keys from the keymap file\n"
     "(Shift, C=, CTRL, Run/Stop, Clr/Home, Restore, F-keys...).",
@@ -405,7 +406,39 @@ static const char *default_strings[] = {
     /* MSG_ERROR_ATTACH_TAPE: %s is the file */
     "Cannot attach the tape image\n%s",
     /* MSG_ERROR_CREATE_TAPE: %s is the file */
-    "Cannot create the tape image\n%s"
+    "Cannot create the tape image\n%s",
+
+    /* MSG_PALETTE */
+    "Palette",
+    /* MSG_PALETTE_VICE */
+    "VICE",
+    /* MSG_PALETTE_COLODORE */
+    "Colodore",
+    /* MSG_PALETTE_PEPTO */
+    "Pepto",
+    /* MSG_PALETTE_PETMATE */
+    "PetMate",
+
+    /* MSG_INPUT_AMIGA_PORTS */
+    "Amiga ports",
+    /* MSG_INPUT_PORTS_MAPPING: %s is the machine (C64, Plus/4, VIC-20) */
+    "%s ports mapping",
+    /* MSG_INPUT_AMIGA_PORTS_NOTE */
+    "Tell what is currently plugged",
+    /* MSG_AMIGA_PORT_CD32 */
+    "CD32 pad",
+    /* MSG_AMIGA_PORT_MOUSE */
+    "Mouse (as paddles)",
+    /* MSG_MENU_INPUT */
+    "Input",
+    /* MSG_SWITCH_PORTS */
+    "Switch ports",
+    /* MSG_PORTS_SWITCHED */
+    "Control ports 1 and 2 switched",
+    /* MSG_PALETTE_MIKE_PAL */
+    "Mike (PAL)",
+    /* MSG_PALETTE_MIKE_NTSC */
+    "Mike (NTSC)"
 };
 
 /* compile-time check: one default string per MSG_* id */

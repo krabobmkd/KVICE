@@ -315,6 +315,14 @@ typedef struct joystick_device_s {
     /** \brief  Emulated machine's joystick port associated with host device */
     int                 joyport;
 
+    /** \brief  KVICE: second emulated port driven by the same host device
+     *
+     * -1 if none. One Amiga joystick may drive both C64 control ports at
+     * once, for the games that read one port or the other: its joystick
+     * events go to both \c joyport and \c joyport2.
+     */
+    int                 joyport2;
+
     /** \brief  Private arch-specific data
      *
      * An arch-specific driver can store data here that cannot be portably

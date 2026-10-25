@@ -38,6 +38,7 @@
 #include "amigalocale.h"
 #include "amigabasic.h"
 #include "amigamachine.h"
+#include "amigavideo.h"
 #include "version.h"
 #include "c64mem.h"
 #include "c64model.h"
@@ -216,6 +217,41 @@ static const unsigned char c64_letters[26][2] = {
 /* made by amiga/CMakeLists.txt from data/C64/amiga_positional.vkm */
 #include "amiga_positional_vkm_c64.h"
 
+/* Display > Palette, the Petmate tables (amigapetmate petscii_palette.c),
+ * in the VIC-II color order */
+static const ULONG c64_palette_colodore[16] = {
+    0x000000, 0xFFFFFF, 0x813338, 0x75CEC8,
+    0x8E3C97, 0x56AC4D, 0x2E2C9B, 0xEDF171,
+    0x8E5029, 0x553800, 0xC46C71, 0x4A4A4A,
+    0x7B7B7B, 0xA9FF9F, 0x706DEB, 0xB2B2B2
+};
+
+static const ULONG c64_palette_pepto[16] = {
+    0x000000, 0xFFFFFF, 0x67372D, 0x73A3B1,
+    0x6E3E83, 0x5B8D48, 0x362976, 0xB7C576,
+    0x6C4F2A, 0x423908, 0x98675B, 0x444444,
+    0x6C6C6C, 0x9DD28A, 0x6D5FB0, 0x959595
+};
+
+static const ULONG c64_palette_petmate[16] = {
+    0x000000, 0xFFFFFF, 0x924A40, 0x84C5CC,
+    0x9351B6, 0x72B14B, 0x483AA4, 0xD5DF7C,
+    0x99692D, 0x675201, 0xC08178, 0x606060,
+    0x8A8A8A, 0xB2EC91, 0x867ADE, 0xAEAEAE
+};
+
+/* by AMIGA_PALETTE_* index */
+static const ULONG *const c64_palettes[AMIGA_PALETTE_COUNT] = {
+    NULL,       /* VICE: its own VIC-II palette */
+    c64_palette_colodore,
+    c64_palette_pepto,
+    c64_palette_petmate
+};
+
+static const ULONG c64_palette_names[AMIGA_PALETTE_COUNT] = {
+    MSG_PALETTE_VICE, MSG_PALETTE_COLODORE, MSG_PALETTE_PEPTO, MSG_PALETTE_PETMATE
+};
+
 /* for the AmigaOS Version command (kept by "used": nothing reads it) */
 static const char kvice_verstag[] __attribute__((used)) = KVICE_VERSTAG("x64");
 
@@ -240,7 +276,9 @@ const amiga_machine_t amiga_machine = {
     c64_letters,
     0, 1,       /* RETURN */
     amiga_positional_vkm,
-    1           /* Tape menu */
+    1,          /* Tape menu */
+    c64_palettes,
+    c64_palette_names
 };
 
 /* ------------------------------------------------------------------------- */

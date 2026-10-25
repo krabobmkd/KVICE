@@ -6,12 +6,18 @@
  * extra lowlevel ports) as:
  *
  * - 0: not used
- * - 1: digital joystick or CD32 pad, read with lowlevel.library ReadJoyPort()
+ * - 1: digital joystick (2 buttons: red, blue), read with lowlevel.library
+ *      ReadJoyPort()
+ * - 3: CD32 pad (7 buttons), read with lowlevel.library ReadJoyPort()
  * - 2: analog paddles / proportional joystick on the DB9 POT pins of the
  *      joystick port (1) only, read by the VBlank interrupt of
  *      amiga_propjoy.c (code from AmigaMame). The mouse port belongs to
- *      input.device (Workbench mouse): taking it is dangerous, not done. To use them in the emulation, select the "Paddles"
- *      device on the C64 control port and "-paddlesNinputjoyaxis".
+ *      input.device (Workbench mouse): taking it is dangerous, not done.
+ * - 4: Amiga mouse as 2 paddles (X, Y), read with lowlevel.library
+ *      ReadJoyPort() in mouse mode, on any port.
+ *
+ * The analog ones drive the C64 "Paddles" device, which reads them as
+ * joystick axes (PaddlesInputN, set by the settings Input page).
  *
  * Each used port becomes one VICE host joystick device. Devices are
  * registered in the order port 1, port 0, port 2, port 3, so by default the
@@ -47,6 +53,7 @@
 #include <exec/types.h>
 #include <libraries/lowlevel.h>
 #include <proto/exec.h>
+#include <proto/graphics.h>
 #include <proto/lowlevel.h>
 
 #include "amigatrace.h"
@@ -65,9 +72,22 @@ struct Library *LowLevelBase = NULL;
 #define AMIGA_JOY_PORTS 4
 
 #define AMIGA_JOY_TYPE_NONE     0
-#define AMIGA_JOY_TYPE_LOWLEVEL 1
+#define AMIGA_JOY_TYPE_JOYSTICK 1
 #define AMIGA_JOY_TYPE_PADDLES  2
-#define AMIGA_JOY_TYPE_MAX      AMIGA_JOY_TYPE_PADDLES
+#define AMIGA_JOY_TYPE_CD32     3
+#define AMIGA_JOY_TYPE_MOUSE    4
+#define AMIGA_JOY_TYPE_MAX      AMIGA_JOY_TYPE_MOUSE
+
+/* read with lowlevel.library ReadJoyPort() */
+#define IS_LOWLEVEL_TYPE(t) ((t) == AMIGA_JOY_TYPE_JOYSTICK || (t) == AMIGA_JOY_TYPE_CD32 \
+                             || (t) == AMIGA_JOY_TYPE_MOUSE)
+/* C64 paddles: 2 axes, 2 buttons */
+#define IS_ANALOG_TYPE(t) ((t) == AMIGA_JOY_TYPE_PADDLES || (t) == AMIGA_JOY_TYPE_MOUSE)
+
+/* mouse as paddles: mouse counts per paddle step, as VICE does with a host
+ * mouse (mouse_paddle.c PADDLE_DIV), else games are too fast */
+#define MOUSE_PADDLE_DIV 2
+#define MOUSE_PADDLE_MAX (256 * MOUSE_PADDLE_DIV - 1)
 
 /* resources: controller type per Amiga port */
 static int amiga_port_type[AMIGA_JOY_PORTS];
@@ -76,7 +96,9 @@ static int amiga_port_type[AMIGA_JOY_PORTS];
 static const int port_order[AMIGA_JOY_PORTS] = { 1, 0, 2, 3 };
 
 /* lowlevel buttons, in VICE button order: the default mapping makes button
- * 0 the fire button, 1 and 2 the extra fire buttons on POTX/POTY */
+ * 0 the fire button, 1 and 2 the extra fire buttons on POTX/POTY (C64 2nd
+ * and 3rd fire: the 2 button pads read by SID POTX). A joystick has the
+ * first 2 (blue on pin 9), a CD32 pad all of them. */
 static const struct {
     ULONG mask;
     const char *name;
@@ -90,12 +112,17 @@ static const struct {
     { JPF_BUTTON_REVERSE, "Reverse" }
 };
 #define LL_NUM_BUTTONS (sizeof ll_buttons / sizeof ll_buttons[0])
+#define LL_JOYSTICK_BUTTONS 2
 
 /* per device private data */
 typedef struct amiga_joy_priv_s {
     int port;           /**< Amiga port, lowlevel numbering */
     int type;           /**< AMIGA_JOY_TYPE_* */
     int index;          /**< VICE joystick device index */
+    /* mouse as paddles: last lowlevel counters (-1: none read yet), and
+     * the paddle positions, 0..MOUSE_PADDLE_MAX */
+    int mouse_last[2];
+    int mouse_pos[2];
 } amiga_joy_priv_t;
 
 static log_t amiga_joy_log = LOG_DEFAULT;
@@ -126,7 +153,7 @@ static int set_port_type(int val, void *param)
 static const resource_int_t resources_int[] = {
     { "AmigaJoyPort0", AMIGA_JOY_TYPE_NONE, RES_EVENT_NO, NULL,
       &amiga_port_type[0], set_port_type, (void *)0 },
-    { "AmigaJoyPort1", AMIGA_JOY_TYPE_LOWLEVEL, RES_EVENT_NO, NULL,
+    { "AmigaJoyPort1", AMIGA_JOY_TYPE_JOYSTICK, RES_EVENT_NO, NULL,
       &amiga_port_type[1], set_port_type, (void *)1 },
     { "AmigaJoyPort2", AMIGA_JOY_TYPE_NONE, RES_EVENT_NO, NULL,
       &amiga_port_type[2], set_port_type, (void *)2 },
@@ -135,7 +162,7 @@ static const resource_int_t resources_int[] = {
     RESOURCE_INT_LIST_END
 };
 
-#define PORT_TYPE_HELP "0: none, 1: joystick/CD32 pad (lowlevel.library), 2: analog paddles (joystick port only)"
+#define PORT_TYPE_HELP "0: none, 1: joystick, 3: CD32 pad, 4: mouse as paddles (lowlevel.library), 2: analog paddles (joystick port only)"
 
 static const cmdline_option_t cmdline_options[] = {
     { "-amigajoyport0", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
@@ -146,10 +173,10 @@ static const cmdline_option_t cmdline_options[] = {
       "<type>", "Amiga joystick port (1) controller type. " PORT_TYPE_HELP },
     { "-amigajoyport2", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
       NULL, NULL, "AmigaJoyPort2", NULL,
-      "<type>", "lowlevel.library port 2 controller type (0 or 1)" },
+      "<type>", "lowlevel.library port 2 controller type (0, 1, 3 or 4)" },
     { "-amigajoyport3", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
       NULL, NULL, "AmigaJoyPort3", NULL,
-      "<type>", "lowlevel.library port 3 controller type (0 or 1)" },
+      "<type>", "lowlevel.library port 3 controller type (0, 1, 3 or 4)" },
     CMDLINE_LIST_END
 };
 
@@ -207,6 +234,51 @@ static void amiga_joy_poll_lowlevel(joystick_device_t *joydev, amiga_joy_priv_t 
     }
 }
 
+/* lowlevel mouse mode: no position, the 8 bit hardware counters of each
+ * axis (bits 0-7 X, 8-15 Y), wrapping. Their change since the last frame
+ * (wrapped back: a frame never moves 128 counts) moves the paddles, held
+ * at their ends. */
+static void amiga_joy_poll_mouse(joystick_device_t *joydev, amiga_joy_priv_t *priv)
+{
+    ULONG state;
+    int axis;
+
+    if (LowLevelBase == NULL) {
+        return;
+    }
+    state = ReadJoyPort((ULONG)priv->port);
+    if ((state & JP_TYPE_MASK) != JP_TYPE_MOUSE) {
+        return;
+    }
+    for (axis = 0; axis < 2; axis++) {
+        int count = (int)((state >> (axis * 8)) & 0xff);
+
+        if (priv->mouse_last[axis] >= 0) {
+            int delta = count - priv->mouse_last[axis];
+            int pos;
+
+            if (delta < -128) {
+                delta += 256;
+            } else if (delta > 128) {
+                delta -= 256;
+            }
+            pos = priv->mouse_pos[axis] + delta;
+            if (pos < 0) {
+                pos = 0;
+            } else if (pos > MOUSE_PADDLE_MAX) {
+                pos = MOUSE_PADDLE_MAX;
+            }
+            priv->mouse_pos[axis] = pos;
+        }
+        priv->mouse_last[axis] = count;
+        /* right (down) turns the paddle down, as VICE with a host mouse */
+        joystick_set_axis_value((unsigned int)priv->index, (unsigned int)axis,
+                                (uint8_t)(255 - priv->mouse_pos[axis] / MOUSE_PADDLE_DIV));
+    }
+    joy_button_event(joydev->buttons[0], (state & JPF_BUTTON_RED) ? 1 : 0);
+    joy_button_event(joydev->buttons[1], (state & JPF_BUTTON_BLUE) ? 1 : 0);
+}
+
 static void amiga_joy_poll_paddles(joystick_device_t *joydev, amiga_joy_priv_t *priv)
 {
     struct PPSticksValues *v;
@@ -230,7 +302,9 @@ static void amiga_joy_poll(joystick_device_t *joydev)
 {
     amiga_joy_priv_t *priv = joydev->priv;
 
-    if (priv->type == AMIGA_JOY_TYPE_LOWLEVEL) {
+    if (priv->type == AMIGA_JOY_TYPE_MOUSE) {
+        amiga_joy_poll_mouse(joydev, priv);
+    } else if (IS_LOWLEVEL_TYPE(priv->type)) {
         amiga_joy_poll_lowlevel(joydev, priv);
     } else if (priv->type == AMIGA_JOY_TYPE_PADDLES) {
         amiga_joy_poll_paddles(joydev, priv);
@@ -252,7 +326,7 @@ static void amiga_joy_customize(joystick_device_t *joydev)
     amiga_joy_priv_t *priv = joydev->priv;
     int i;
 
-    if (priv->type != AMIGA_JOY_TYPE_PADDLES) {
+    if (!IS_ANALOG_TYPE(priv->type)) {
         return;
     }
     for (i = 0; i < joydev->num_axes && i < 2; i++) {
@@ -262,11 +336,15 @@ static void amiga_joy_customize(joystick_device_t *joydev)
         axis->mapping.positive.action = JOY_ACTION_NONE;
         axis->mapping.pot = (unsigned int)(i + 1);
     }
-    /* C64 paddle fire buttons are the joystick left/right lines */
+    /* The C64 paddle fire buttons are the joystick left/right lines, but
+     * the VICE Paddles device reading joystick axes (PaddlesInputN) takes
+     * them from fire 1 / fire 2 and moves them there itself
+     * (mouse_paddle.c joyport_paddles_value(): (value & 0x30) >> 2): mapped
+     * to left/right here, they would be lost. */
     joydev->buttons[0]->mapping.action = JOY_ACTION_JOYSTICK;
-    joydev->buttons[0]->mapping.value.joy_pin = JOYSTICK_DIRECTION_LEFT;
+    joydev->buttons[0]->mapping.value.joy_pin = JOYPORT_FIRE;
     joydev->buttons[1]->mapping.action = JOY_ACTION_JOYSTICK;
-    joydev->buttons[1]->mapping.value.joy_pin = JOYSTICK_DIRECTION_RIGHT;
+    joydev->buttons[1]->mapping.value.joy_pin = JOYPORT_FIRE_POTX;
 }
 
 static const joystick_driver_t amiga_joy_driver = {
@@ -332,13 +410,18 @@ static void register_device(int port, int type)
     priv->port = port;
     priv->type = type;
     priv->index = joystick_device_count();
+    priv->mouse_last[0] = priv->mouse_last[1] = -1;
+    priv->mouse_pos[0] = priv->mouse_pos[1] = MOUSE_PADDLE_MAX / 2;
     joydev->priv = priv;
     joydev->disable_sort = true;
 
-    if (type == AMIGA_JOY_TYPE_LOWLEVEL) {
-        joydev->name = lib_msprintf("%s joystick", port_name(port));
+    if (IS_LOWLEVEL_TYPE(type) && type != AMIGA_JOY_TYPE_MOUSE) {
+        unsigned int buttons = type == AMIGA_JOY_TYPE_CD32 ? LL_NUM_BUTTONS : LL_JOYSTICK_BUTTONS;
+
+        joydev->name = lib_msprintf("%s %s", port_name(port),
+                                    type == AMIGA_JOY_TYPE_CD32 ? "CD32 pad" : "joystick");
         joystick_device_add_hat(joydev, joystick_hat_new("Directions"));
-        for (i = 0; i < LL_NUM_BUTTONS; i++) {
+        for (i = 0; i < buttons; i++) {
             joystick_button_t *button = joystick_button_new(ll_buttons[i].name);
 
             button->code = i;
@@ -347,7 +430,8 @@ static void register_device(int port, int type)
     } else {
         joystick_axis_t *axis;
 
-        joydev->name = lib_msprintf("%s analog", port_name(port));
+        joydev->name = lib_msprintf("%s %s", port_name(port),
+                                    type == AMIGA_JOY_TYPE_MOUSE ? "mouse" : "analog");
         for (i = 0; i < 2; i++) {
             axis = joystick_axis_new(i == 0 ? "Paddle X" : "Paddle Y");
             axis->code = i;
@@ -367,6 +451,50 @@ static void register_device(int port, int type)
     log_message(amiga_joy_log, "VICE joystick device %d: %s.", priv->index, joydev->name);
 }
 
+static const char *lowlevel_type_name(ULONG type)
+{
+    switch (type) {
+        case JP_TYPE_GAMECTLR: return "CD32 pad";
+        case JP_TYPE_MOUSE:    return "mouse";
+        case JP_TYPE_JOYSTK:   return "joystick";
+        case JP_TYPE_NOTAVAIL: return "nothing yet";
+        default:               return "unknown";
+    }
+}
+
+/* The controller type of each lowlevel port is forced as chosen: autosense
+ * (SJA_TYPE_AUTOSENSE, the default) does not work well and misreads
+ * controllers. lowlevel.library needs a couple of frames before the first
+ * reads are right. */
+static void amiga_joy_set_lowlevel_types(void)
+{
+    int port;
+
+    if (LowLevelBase == NULL || lowlevel_ports_used == 0) {
+        return;
+    }
+    for (port = 0; port < AMIGA_JOY_PORTS; port++) {
+        if (lowlevel_ports_used & (1 << port)) {
+            ULONG type = SJA_TYPE_JOYSTK;
+
+            if (amiga_port_type[port] == AMIGA_JOY_TYPE_CD32) {
+                type = SJA_TYPE_GAMECTLR;
+            } else if (amiga_port_type[port] == AMIGA_JOY_TYPE_MOUSE) {
+                type = SJA_TYPE_MOUSE;
+            }
+            SetJoyPortAttrs((ULONG)port, SJA_Type, type, TAG_DONE);
+        }
+    }
+    WaitTOF();
+    WaitTOF();
+    for (port = 0; port < AMIGA_JOY_PORTS; port++) {
+        if (lowlevel_ports_used & (1 << port)) {
+            log_message(amiga_joy_log, "%s: %s.", port_name(port),
+                        lowlevel_type_name(ReadJoyPort((ULONG)port) & JP_TYPE_MASK));
+        }
+    }
+}
+
 /* open lowlevel.library and the analog reader for the ports as configured,
  * and register a VICE joystick device for each used port */
 static void amiga_joy_open_ports(void)
@@ -376,7 +504,7 @@ static void amiga_joy_open_ports(void)
     int i, port;
 
     for (port = 0; port < AMIGA_JOY_PORTS; port++) {
-        if (amiga_port_type[port] == AMIGA_JOY_TYPE_LOWLEVEL && LowLevelBase == NULL) {
+        if (IS_LOWLEVEL_TYPE(amiga_port_type[port]) && LowLevelBase == NULL) {
             LowLevelBase = OpenLibrary((CONST_STRPTR)"lowlevel.library", 0);
             if (LowLevelBase == NULL) {
                 log_error(amiga_joy_log, "cannot open lowlevel.library, no digital joysticks.");
@@ -387,6 +515,29 @@ static void amiga_joy_open_ports(void)
         }
     }
     if (paddle_flags != 0) {
+        /* the paddle ports may still be lowlevel's (as joystick or pad
+         * before, or by another program): SJA_Reinitialize gives back its
+         * potgo bits, else gameport.device and AllocPotBits() fail.
+         * lowlevel.library is opened just for that if no port needs it. */
+        struct Library *ll = LowLevelBase;
+
+        if (ll == NULL) {
+            ll = OpenLibrary((CONST_STRPTR)"lowlevel.library", 0);
+        }
+        if (ll != NULL) {
+            struct Library *saved = LowLevelBase;
+
+            LowLevelBase = ll;
+            for (port = 0; port < AMIGA_JOY_PORTS; port++) {
+                if (amiga_port_type[port] == AMIGA_JOY_TYPE_PADDLES) {
+                    SetJoyPortAttrs((ULONG)port, SJA_Reinitialize, 0, TAG_DONE);
+                }
+            }
+            LowLevelBase = saved;
+            if (ll != saved) {
+                CloseLibrary(ll);
+            }
+        }
         propsticks = createProportionalSticks(paddle_flags, PROPJOYTIMER_VBLANK_ADDINT,
                                               &retcode, propjoy_log);
         if (propsticks == NULL) {
@@ -398,10 +549,12 @@ static void amiga_joy_open_ports(void)
     for (i = 0; i < AMIGA_JOY_PORTS; i++) {
         port = port_order[i];
         switch (amiga_port_type[port]) {
-            case AMIGA_JOY_TYPE_LOWLEVEL:
+            case AMIGA_JOY_TYPE_JOYSTICK:
+            case AMIGA_JOY_TYPE_CD32:
+            case AMIGA_JOY_TYPE_MOUSE:
                 if (LowLevelBase != NULL) {
                     lowlevel_ports_used |= 1 << port;
-                    register_device(port, AMIGA_JOY_TYPE_LOWLEVEL);
+                    register_device(port, amiga_port_type[port]);
                 }
                 break;
             case AMIGA_JOY_TYPE_PADDLES:
@@ -414,6 +567,7 @@ static void amiga_joy_open_ports(void)
                 break;
         }
     }
+    amiga_joy_set_lowlevel_types();
     AMIGA_TRACE(("%s: %d device(s)", __func__, joystick_device_count()));
 }
 
@@ -477,8 +631,7 @@ int amiga_joy_port_is_analog(int port)
     int index = amiga_joy_device_index(port);
 
     return index >= 0
-           && ((amiga_joy_priv_t *)joystick_device_by_index(index)->priv)->type
-              == AMIGA_JOY_TYPE_PADDLES;
+           && IS_ANALOG_TYPE(((amiga_joy_priv_t *)joystick_device_by_index(index)->priv)->type);
 }
 
 void joystick_arch_shutdown(void)

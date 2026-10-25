@@ -34,10 +34,13 @@
 #include <stddef.h>
 #include <exec/types.h>
 
+/* release of the fork, after the VICE version it is based on (VERSION,
+   from version.h): "KVICE 3.10 r2" */
+#define KVICE_RELEASE "r2"
+
 /* AmigaOS "Version" command tag of each emulator, KVICE_VERSTAG("x64"):
-   "$VER: x64 1.0 fork3.10 68030". The CPU is the one the build targets
-   (gcc -m680x0 defines __mc680x0__); VERSION comes from version.h. */
-#define KVICE_VERSION "1.0"
+   "$VER: x64 3.10 r2 68030". The CPU is the one the build targets
+   (gcc -m680x0 defines __mc680x0__). */
 #if defined(__mc68060__)
 #define KVICE_CPU "68060"
 #elif defined(__mc68040__)
@@ -47,7 +50,7 @@
 #else
 #define KVICE_CPU "68020"
 #endif
-#define KVICE_VERSTAG(name) "$VER: " name " " KVICE_VERSION " fork" VERSION " " KVICE_CPU
+#define KVICE_VERSTAG(name) "$VER: " name " " VERSION " " KVICE_RELEASE " " KVICE_CPU
 
 /* most ROM file rows of a machine (C64: Kernal, BASIC, character ROM) */
 #define AMIGA_MACHINE_ROMS_MAX 3
@@ -136,6 +139,13 @@ typedef struct amiga_machine_s {
 
     /* the machine menu has the Tape submenu (datasette) */
     int has_tape;
+
+    /* Display > Palette submenu: AMIGA_PALETTE_COUNT tables of 16 colors
+       0xRRGGBB by AMIGA_PALETTE_* index, a NULL table is the VICE palette.
+       NULL: no Palette submenu */
+    const ULONG *const *palettes;
+    /* their names in the submenu: AMIGA_PALETTE_COUNT message ids */
+    const ULONG *palette_names;
 } amiga_machine_t;
 
 /* defined by the machine UI file of each emulator */

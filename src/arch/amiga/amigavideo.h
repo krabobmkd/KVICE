@@ -50,6 +50,16 @@ int amiga_video_get_scale(void);
 void amiga_video_set_borders(int mode);
 int amiga_video_get_borders(void);
 
+/* fixed palette (Display menu, machines with amiga_machine.palettes):
+   "AmigaPalette" resource */
+#define AMIGA_PALETTE_VICE     0
+#define AMIGA_PALETTE_COLODORE 1
+#define AMIGA_PALETTE_PEPTO    2
+#define AMIGA_PALETTE_PETMATE  3
+#define AMIGA_PALETTE_COUNT    4
+void amiga_video_set_palette(int palette);
+int amiga_video_get_palette(void);
+
 /* "no rom" state: the emulator screen shows a report instead of the
    emulated screen, one line per entry: "label  value", the value in red
    when bad. A NULL label is an empty line. The strings must stay valid
@@ -66,9 +76,21 @@ void amiga_video_show_report(const amiga_report_line_t *lines, int count);
 /* menu check marks again from the states (a setting changed elsewhere) */
 void amiga_video_sync_menu(void);
 
-/* a message in a red box over the emulated screen, for \a frames refreshes
-   (the string must stay valid that long). Shown again: the time restarts. */
-void amiga_video_show_message(const char *text, int frames);
+/* color of a message box */
+typedef enum {
+    AMIGA_MESSAGE_ERROR,    /* red */
+    AMIGA_MESSAGE_OK,       /* green */
+    AMIGA_MESSAGE_INFO,     /* yellow */
+    AMIGA_MESSAGE_KINDS
+} amiga_message_kind_t;
+
+/* a message in a box of \a kind color over the emulated screen, for
+   \a frames refreshes (the string must stay valid that long). Shown again:
+   the time restarts. */
+void amiga_video_show_message(const char *text, int frames, amiga_message_kind_t kind);
+
+/* the yellow "Pause" box, kept until called with 0 */
+void amiga_video_show_pause(int on);
 
 /* around a requester or the settings window opened on the Workbench (or
    default public) screen: shown in front of the fullscreen, then back */

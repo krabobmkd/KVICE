@@ -187,16 +187,25 @@ static int redraw_full = 1;
 static int no_rom_screen = 0;
 static amiga_report_line_t report_lines[AMIGA_REPORT_LINES_MAX];
 static int report_count = 0;
-/* red pen of the report, obtained on the screen of red_pen_cm */
-static LONG red_pen = -1;
-static struct ColorMap *red_pen_cm = NULL;
-static int red_pen_obtained = 0;
+/* pens of the message boxes (red also for the report), by
+ * amiga_message_kind_t, obtained on the screen of msg_pen_cm */
+static const ULONG msg_pen_rgb[AMIGA_MESSAGE_KINDS][3] = {
+    { 0xffffffff, 0x20000000, 0x20000000 },     /* error: red */
+    { 0x20000000, 0xc0000000, 0x20000000 },     /* ok: green */
+    { 0xffffffff, 0xe0000000, 0x20000000 }      /* info: yellow */
+};
+static LONG msg_pen[AMIGA_MESSAGE_KINDS] = { -1, -1, -1 };
+static int msg_pen_obtained[AMIGA_MESSAGE_KINDS];
+static struct ColorMap *msg_pen_cm = NULL;
 /* message over the emulated screen (amiga_video_show_message()) */
 static const char *osd_text = NULL;
 static int osd_frames = 0;
+static amiga_message_kind_t osd_kind = AMIGA_MESSAGE_ERROR;
+/* "Pause" box, kept while paused (amiga_video_show_pause()) */
+static int osd_pause = 0;
 
 static void amiga_draw_message(void);
-static LONG amiga_report_red_pen(struct Screen *screen);
+static LONG amiga_message_pen(struct Screen *screen, amiga_message_kind_t kind);
 
 static void amiga_report_release_pen(void);
 
@@ -213,6 +222,10 @@ static void amiga_free_prev_frame(void)
 static int canvas_x0 = -1;
 static int canvas_y0 = -1;
 static int border_mode = AMIGA_BORDERS_FULL;
+/* AMIGA_PALETTE_*, "AmigaPalette" */
+static int palette_choice = AMIGA_PALETTE_VICE;
+/* chosen in the Display menu: saved when quitting */
+static int palette_menu_changed = 0;
 static int display_scale = 1;
 
 /* to redraw everything after a resize or an exposure */
@@ -273,6 +286,29 @@ static int set_window_int(int val, void *param)
     *(int *)param = val;
     return 0;
 }
+
+static int set_palette_choice(int val, void *param)
+{
+    if (val < 0 || val >= AMIGA_PALETTE_COUNT) {
+        val = AMIGA_PALETTE_VICE;
+    }
+    if (val != palette_choice) {
+        palette_choice = val;
+        /* VICE makes a new palette, video_canvas_set_palette() replaces its
+         * colors: the screenshots get them too */
+        if (amiga_canvas != NULL) {
+            video_color_update_palette(amiga_canvas);
+        }
+    }
+    return 0;
+}
+
+static const resource_int_t resources_int_palette[] =
+{
+    { "AmigaPalette", AMIGA_PALETTE_VICE, RES_EVENT_NO, NULL,
+      &palette_choice, set_palette_choice, NULL },
+    RESOURCE_INT_LIST_END
+};
 
 static const resource_int_t resources_int[] =
 {
@@ -530,6 +566,21 @@ void amiga_video_set_borders(int mode)
 int amiga_video_get_borders(void)
 {
     return border_mode;
+}
+
+/** \brief  Fixed palette from the Display menu (AMIGA_PALETTE_*)
+ */
+void amiga_video_set_palette(int palette)
+{
+    if (palette != palette_choice) {
+        palette_menu_changed = 1;
+    }
+    resources_set_int("AmigaPalette", palette);
+}
+
+int amiga_video_get_palette(void)
+{
+    return palette_choice;
 }
 
 /** \brief  Compute the shown part of the canvas from the border mode
@@ -1141,6 +1192,7 @@ int amiga_video_is_fullscreen(void)
 #define AMIGA_RAWKEY_A 0x20
 #define AMIGA_RAWKEY_L 0x28
 #define AMIGA_RAWKEY_W 0x11
+#define AMIGA_RAWKEY_J 0x26
 
 /* the letter of an Amiga+key shortcut. Like Intuition does for the menu
  * shortcuts, it is the character of the Amiga keymap (AZERTY, QWERTZ...),
@@ -1161,6 +1213,7 @@ static int amiga_shortcut_char(UWORD code)
         case AMIGA_RAWKEY_A: return 'a';
         case AMIGA_RAWKEY_L: return 'l';
         case AMIGA_RAWKEY_W: return 'w';
+        case AMIGA_RAWKEY_J: return 'j';
         default: return -1;
     }
 }
@@ -1190,6 +1243,9 @@ static int amiga_fullscreen_shortcut(UWORD code)
             break;
         case 'w':
             action = AMIGA_ACTION_SNAPSHOT_SAVE;
+            break;
+        case 'j':
+            action = AMIGA_ACTION_SWITCH_PORTS;
             break;
         default:
             return 0;
@@ -1451,6 +1507,10 @@ int video_arch_resources_init(void)
     AMIGA_TRACE(("%s", __func__));
 
     if (machine_class != VICE_MACHINE_VSID) {
+        if (amiga_machine.palettes != NULL
+                && resources_register_int(resources_int_palette) < 0) {
+            return -1;
+        }
         return resources_register_int(resources_int);
     }
     return 0;
@@ -1759,28 +1819,81 @@ void amiga_video_sync_menu(void)
     }
 }
 
-void amiga_video_show_message(const char *text, int frames)
+void amiga_video_show_message(const char *text, int frames, amiga_message_kind_t kind)
 {
     osd_text = text;
     osd_frames = frames;
+    osd_kind = kind;
 }
 
-/* after a refresh: the message box over what was just drawn, every time
- * (changed lines may have covered it). At the end, a full redraw erases it. */
-static void amiga_draw_message(void)
+
+void amiga_video_show_pause(int on)
 {
-    struct Screen *screen = NULL;
-    struct ColorMap *cm;
-    struct TextFont *font;
-    LONG red, white;
+    osd_pause = on;
+    if (on) {
+        /* no refresh while paused: drawn now, then on each window redraw */
+        amiga_redraw_all();
+    } else {
+        /* the next emulated frame erases it */
+        redraw_full = 1;
+    }
+}
+
+/* one box, centered, its bottom at \a bottom. Returns its height (0: not
+ * drawn) */
+static WORD amiga_draw_message_box(struct Screen *screen, const char *text,
+                                   amiga_message_kind_t kind, WORD bottom)
+{
+    struct ColorMap *cm = screen->ViewPort.ColorMap;
+    struct TextFont *font = draw_rp->Font;
+    LONG back, front;
     ULONG len;
     WORD tw, bw, bh, x, y;
 
-    if (osd_frames <= 0 || osd_text == NULL) {
-        return;
+    back = amiga_message_pen(screen, kind);
+    if (kind == AMIGA_MESSAGE_INFO) {
+        /* white is unreadable on yellow */
+        front = FindColor(cm, 0, 0, 0, fs_planes == 5 ? 15 : -1);
+    } else {
+        front = FindColor(cm, 0xffffffff, 0xffffffff, 0xffffffff, fs_planes == 5 ? 15 : -1);
     }
-    if (--osd_frames == 0) {
+    if (back < 0 || front < 0) {
+        return 0;
+    }
+    len = (ULONG)strlen(text);
+    tw = TextLength(draw_rp, (CONST_STRPTR)text, len);
+    bw = tw + 2 * (WORD)font->tf_XSize;
+    bh = (WORD)font->tf_YSize + 6;
+    if (bw > (WORD)draw_width) {
+        bw = (WORD)draw_width;
+    }
+    y = bottom - bh;
+    if (y < draw_y) {
+        return 0;
+    }
+    x = draw_x + ((WORD)draw_width - bw) / 2;
+    SetAPen(draw_rp, (UWORD)back);
+    RectFill(draw_rp, x, y, x + bw - 1, y + bh - 1);
+    SetAPen(draw_rp, (UWORD)front);
+    SetDrMd(draw_rp, JAM1);
+    Move(draw_rp, x + (bw - tw) / 2, y + 3 + (WORD)font->tf_Baseline);
+    Text(draw_rp, (CONST_STRPTR)text, len);
+    return bh;
+}
+
+/* after a refresh: the message boxes over what was just drawn, every time
+ * (changed lines may have covered them). At the end of a timed message, a
+ * full redraw erases it. The pause box is the lowest, a timed message goes
+ * above it. */
+static void amiga_draw_message(void)
+{
+    struct Screen *screen = NULL;
+    WORD bottom;
+
+    if (osd_frames > 0 && osd_text != NULL && --osd_frames == 0) {
         redraw_full = 1;
+    }
+    if (!osd_pause && (osd_frames <= 0 || osd_text == NULL)) {
         return;
     }
     if (amiga_window != NULL) {
@@ -1791,68 +1904,58 @@ static void amiga_draw_message(void)
     if (screen == NULL || draw_rp == NULL || draw_width == 0 || draw_height == 0) {
         return;
     }
-    cm = screen->ViewPort.ColorMap;
-    red = amiga_report_red_pen(screen);
-    white = FindColor(cm, 0xffffffff, 0xffffffff, 0xffffffff, fs_planes == 5 ? 15 : -1);
-    if (red < 0 || white < 0) {
-        return;
-    }
-    font = draw_rp->Font;
-    len = (ULONG)strlen(osd_text);
-    tw = TextLength(draw_rp, (CONST_STRPTR)osd_text, len);
-    bw = tw + 2 * (WORD)font->tf_XSize;
-    bh = (WORD)font->tf_YSize + 6;
-    if (bw > (WORD)draw_width) {
-        bw = (WORD)draw_width;
-    }
-    if (bh > (WORD)draw_height) {
-        return;
-    }
-    x = draw_x + ((WORD)draw_width - bw) / 2;
     /* low on the screen, above the bottom border of most programs */
-    y = draw_y + (WORD)draw_height - bh - (WORD)draw_height / 8;
-    SetAPen(draw_rp, (UWORD)red);
-    RectFill(draw_rp, x, y, x + bw - 1, y + bh - 1);
-    SetAPen(draw_rp, (UWORD)white);
-    SetDrMd(draw_rp, JAM1);
-    Move(draw_rp, x + (bw - tw) / 2, y + 3 + (WORD)font->tf_Baseline);
-    Text(draw_rp, (CONST_STRPTR)osd_text, len);
+    bottom = draw_y + (WORD)draw_height - (WORD)draw_height / 8;
+    if (osd_pause) {
+        bottom -= amiga_draw_message_box(screen, LOC(MSG_PAUSE), AMIGA_MESSAGE_INFO, bottom) + 2;
+    }
+    if (osd_frames > 0 && osd_text != NULL) {
+        amiga_draw_message_box(screen, osd_text, osd_kind, bottom);
+    }
 }
 
 static void amiga_report_release_pen(void)
 {
-    if (red_pen_obtained && red_pen_cm != NULL) {
-        ReleasePen(red_pen_cm, (ULONG)red_pen);
+    int i;
+
+    for (i = 0; i < AMIGA_MESSAGE_KINDS; i++) {
+        if (msg_pen_obtained[i] && msg_pen_cm != NULL) {
+            ReleasePen(msg_pen_cm, (ULONG)msg_pen[i]);
+        }
+        msg_pen[i] = -1;
+        msg_pen_obtained[i] = 0;
     }
-    red_pen = -1;
-    red_pen_cm = NULL;
-    red_pen_obtained = 0;
+    msg_pen_cm = NULL;
 }
 
-/* a red pen on \a screen: a shared pen when one is free, else the nearest
- * color (custom screens have no shared pen) */
-static LONG amiga_report_red_pen(struct Screen *screen)
+/* a pen of \a kind color on \a screen: a shared pen when one is free, else
+ * the nearest color (custom screens have no shared pen) */
+static LONG amiga_message_pen(struct Screen *screen, amiga_message_kind_t kind)
 {
     struct ColorMap *cm = screen->ViewPort.ColorMap;
+    const ULONG *rgb = msg_pen_rgb[kind];
+    LONG pen;
 
-    if (red_pen_cm == cm && red_pen >= 0) {
-        return red_pen;
+    if (msg_pen_cm != cm) {
+        amiga_report_release_pen();
+        msg_pen_cm = cm;
     }
-    amiga_report_release_pen();
-    red_pen = ObtainBestPen(cm, 0xffffffff, 0x20000000, 0x20000000,
-                            OBP_Precision, PRECISION_GUI, TAG_DONE);
-    if (red_pen >= 0 && (fs_planes != 5 || red_pen < 16)) {
-        red_pen_obtained = 1;
+    if (msg_pen[kind] >= 0) {
+        return msg_pen[kind];
+    }
+    pen = ObtainBestPen(cm, rgb[0], rgb[1], rgb[2],
+                        OBP_Precision, PRECISION_GUI, TAG_DONE);
+    if (pen >= 0 && (fs_planes != 5 || pen < 16)) {
+        msg_pen_obtained[kind] = 1;
     } else {
-        if (red_pen >= 0) {
-            ReleasePen(cm, (ULONG)red_pen);
+        if (pen >= 0) {
+            ReleasePen(cm, (ULONG)pen);
         }
         /* 5 planes fullscreen: drawn in planes 1-4 only, pens 0-15 */
-        red_pen = FindColor(cm, 0xffffffff, 0x20000000, 0x20000000,
-                            fs_planes == 5 ? 15 : -1);
+        pen = FindColor(cm, rgb[0], rgb[1], rgb[2], fs_planes == 5 ? 15 : -1);
     }
-    red_pen_cm = cm;
-    return red_pen;
+    msg_pen[kind] = pen;
+    return pen;
 }
 
 /* the drawing area in the screen's darkest pen, the report lines in its
@@ -1885,7 +1988,7 @@ static void amiga_draw_no_rom(void)
             FreeScreenDrawInfo(screen, dri);
         }
     }
-    red = screen != NULL ? amiga_report_red_pen(screen) : -1;
+    red = screen != NULL ? amiga_message_pen(screen, AMIGA_MESSAGE_ERROR) : -1;
     if (red < 0) {
         red = front;
     }
@@ -1995,6 +2098,18 @@ int video_canvas_set_palette(struct video_canvas_s *canvas,
     if (palette == NULL) {
         return 0;
     }
+    /* a fixed palette instead of the VICE one, in the palette itself so
+     * the screenshots use it too */
+    if (amiga_machine.palettes != NULL
+            && amiga_machine.palettes[palette_choice] != NULL) {
+        const ULONG *rgb = amiga_machine.palettes[palette_choice];
+
+        for (i = 0; i < palette->num_entries && i < 16; i++) {
+            palette->entries[i].red = (uint8_t)(rgb[i] >> 16);
+            palette->entries[i].green = (uint8_t)(rgb[i] >> 8);
+            palette->entries[i].blue = (uint8_t)rgb[i];
+        }
+    }
     for (i = 0; i < palette->num_entries && i < 256; i++) {
         amiga_ctab[i] = ((ULONG)palette->entries[i].red << 16)
                       | ((ULONG)palette->entries[i].green << 8)
@@ -2048,40 +2163,48 @@ static char *amiga_vicerc_name(void)
     return archdep_default_resource_file_name();
 }
 
-static int is_window_geometry_line(const char *line)
+/* a line amiga_save_quit_settings() writes again: the geometry ones when
+ * \a geometry, the palette one when \a palette */
+static int is_quit_settings_line(const char *line, int geometry, int palette)
 {
     static const char *const names[] = {
         "AmigaWindowLeft=", "AmigaWindowTop=", "AmigaWindowWidth=", "AmigaWindowHeight="
     };
     int i;
 
-    for (i = 0; i < 4; i++) {
-        if (strncmp(line, names[i], strlen(names[i])) == 0) {
-            return 1;
+    if (geometry) {
+        for (i = 0; i < 4; i++) {
+            if (strncmp(line, names[i], strlen(names[i])) == 0) {
+                return 1;
+            }
         }
     }
-    return 0;
+    return palette && strncmp(line, "AmigaPalette=", 13) == 0;
 }
 
-/** \brief  Write the window geometry in vicerc, nothing else
+/** \brief  Write the window geometry and the Display menu palette in
+ *          vicerc, nothing else
  *
  * Not resources_save(): settings only applied with "Use" must not be saved
- * when quitting. The geometry lines of this machine section are replaced,
- * the rest of the file is copied as it is.
+ * when quitting. The lines of this machine section that changed are
+ * replaced, the rest of the file is copied as it is.
  */
-static void amiga_save_window_geometry(void)
+static void amiga_save_quit_settings(void)
 {
     char *fname;
     char *old = NULL;
     size_t old_len = 0;
     FILE *f;
     char section[64];
-    char geometry[160];
+    char geometry[180];
+    int save_geometry, save_palette;
     int in_section = 0;
     int written = 0;
     char *line, *next;
 
-    if (!window_geometry_changed || window_inner_w <= 0 || window_inner_h <= 0) {
+    save_geometry = window_geometry_changed && window_inner_w > 0 && window_inner_h > 0;
+    save_palette = palette_menu_changed && amiga_machine.palettes != NULL;
+    if (!save_geometry && !save_palette) {
         return;
     }
     fname = amiga_vicerc_name();
@@ -2089,9 +2212,17 @@ static void amiga_save_window_geometry(void)
         return;
     }
     snprintf(section, sizeof section, "[%s]", machine_name);
-    snprintf(geometry, sizeof geometry,
-             "AmigaWindowLeft=%d\nAmigaWindowTop=%d\nAmigaWindowWidth=%d\nAmigaWindowHeight=%d\n",
-             window_left, window_top, window_inner_w, window_inner_h);
+    geometry[0] = '\0';
+    if (save_geometry) {
+        snprintf(geometry, sizeof geometry,
+                 "AmigaWindowLeft=%d\nAmigaWindowTop=%d\nAmigaWindowWidth=%d\nAmigaWindowHeight=%d\n",
+                 window_left, window_top, window_inner_w, window_inner_h);
+    }
+    if (save_palette) {
+        /* also the default one: resources_save() leaves it out */
+        snprintf(geometry + strlen(geometry), sizeof geometry - strlen(geometry),
+                 "AmigaPalette=%d\n", palette_choice);
+    }
 
     /* the whole old file in memory */
     f = fopen(fname, "rb");
@@ -2111,7 +2242,7 @@ static void amiga_save_window_geometry(void)
 
     f = fopen(fname, "wb");
     if (f == NULL) {
-        log_error(amiga_video_log, "cannot write the window geometry to %s.", fname);
+        log_error(amiga_video_log, "cannot write the window geometry and palette to %s.", fname);
         lib_free(old);
         lib_free(fname);
         return;
@@ -2138,7 +2269,7 @@ static void amiga_save_window_geometry(void)
                 }
                 continue;
             }
-            if (in_section && is_window_geometry_line(line)) {
+            if (in_section && is_quit_settings_line(line, save_geometry, save_palette)) {
                 continue;
             }
             fwrite(line, 1, n, f);
@@ -2149,11 +2280,12 @@ static void amiga_save_window_geometry(void)
         fprintf(f, "%s%s\n%s", (old != NULL) ? "\n" : "", section, geometry);
     }
     fclose(f);
-    AMIGA_TRACE(("window geometry saved: %d,%d %dx%d", window_left, window_top,
-                 window_inner_w, window_inner_h));
+    AMIGA_TRACE(("window geometry saved: %d,%d %dx%d, palette %d", window_left, window_top,
+                 window_inner_w, window_inner_h, palette_choice));
     lib_free(old);
     lib_free(fname);
     window_geometry_changed = 0;
+    palette_menu_changed = 0;
 }
 
 /** \brief Perform any frontend-specific uninitialization. */
@@ -2163,7 +2295,7 @@ void video_shutdown(void)
 
     /* the window is closed by now (video_canvas_destroy()) */
     amiga_sync_window_geometry();
-    amiga_save_window_geometry();
+    amiga_save_quit_settings();
 
     amiga_video_close_all();
 }

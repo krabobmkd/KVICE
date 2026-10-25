@@ -35,6 +35,7 @@
 #include "amigalocale.h"
 #include "amigabasic.h"
 #include "amigamachine.h"
+#include "amigavideo.h"
 #include "version.h"
 #include "machine.h"
 #include "resources.h"
@@ -207,6 +208,42 @@ static const unsigned char vic20_letters[26][2] = {
 /* made by amiga/CMakeLists.txt from data/VIC20/amiga_positional.vkm */
 #include "amiga_positional_vkm_vic20.h"
 
+/* Display > Palette, the VICE .vpl tables (data/VIC20), in the VIC color
+ * order. The VICE palette is calculated with a strong saturation, made for
+ * the PAL rendering of the VICE CRT emulation (not done here): flashy. */
+static const ULONG vic20_palette_colodore[16] = {
+    0x000000, 0xFFFFFF, 0x6D2327, 0xA0FEF8,
+    0x8E3C97, 0x7EDA75, 0x252390, 0xFFFF86,
+    0xA4643B, 0xFFC8A1, 0xF2A7AB, 0xDBFFFF,
+    0xFFB4FF, 0xD7FFCE, 0x9D9AFF, 0xFFFFC9
+};
+
+static const ULONG vic20_palette_mike_pal[16] = {
+    0x000000, 0xFFFFFF, 0xB61F21, 0x4DF0FF,
+    0xB43FFF, 0x44E237, 0x1A34FF, 0xDCD71B,
+    0xCA5400, 0xE9B072, 0xE79293, 0x9AF7FD,
+    0xE09FFF, 0x8FE493, 0x8290FF, 0xE5DE85
+};
+
+static const ULONG vic20_palette_mike_ntsc[16] = {
+    0x000000, 0xFFFFFF, 0xF91137, 0x35F9F6,
+    0xFF3CC6, 0x3CEDA9, 0x0F57F7, 0xFEE963,
+    0xFB6244, 0xFBBFDE, 0xF3ACE5, 0xA8EADD,
+    0xE6B8F7, 0xABDDA4, 0x6AB3E7, 0xF7DAA5
+};
+
+/* by AMIGA_PALETTE_* index (menu positions) */
+static const ULONG *const vic20_palettes[AMIGA_PALETTE_COUNT] = {
+    NULL,       /* VICE: its own VIC palette */
+    vic20_palette_colodore,
+    vic20_palette_mike_pal,
+    vic20_palette_mike_ntsc
+};
+
+static const ULONG vic20_palette_names[AMIGA_PALETTE_COUNT] = {
+    MSG_PALETTE_VICE, MSG_PALETTE_COLODORE, MSG_PALETTE_MIKE_PAL, MSG_PALETTE_MIKE_NTSC
+};
+
 /* for the AmigaOS Version command (kept by "used": nothing reads it) */
 static const char kvice_verstag[] __attribute__((used)) = KVICE_VERSTAG("xvic");
 
@@ -231,7 +268,9 @@ const amiga_machine_t amiga_machine = {
     vic20_letters,
     7, 1,       /* RETURN */
     amiga_positional_vkm,
-    1           /* Tape menu */
+    1,          /* Tape menu */
+    vic20_palettes,
+    vic20_palette_names
 };
 
 /* ------------------------------------------------------------------------- */

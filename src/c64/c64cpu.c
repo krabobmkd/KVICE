@@ -188,6 +188,59 @@ static inline void c64cpu_store_zero(unsigned int addr, uint8_t value)
 #define LOAD_ZERO(addr) c64cpu_load_zero((unsigned int)(addr))
 #define STORE_ZERO(addr, value) c64cpu_store_zero((unsigned int)(addr), (uint8_t)(value))
 
+/* Dummy accesses (taken branches, page crossings, read-modify-write
+   opcodes): same direct paths. On a plain RAM/ROM page a dummy read has no
+   side effect, gcc drops it when its value is not used. A dummy write is
+   still done: a RMW opcode on a ROM page writes the RAM below it. With
+   watchpoints the direct pointers are all NULL, so the dummy handler tables
+   (watched or not, see mem_update_tab_ptrs()) are still used. */
+static inline uint8_t c64cpu_load_dummy(unsigned int addr)
+{
+    uint8_t *p = _mem_read_direct_ptr[addr >> 8];
+
+    if (p != NULL) {
+        return p[addr];
+    }
+    return (*_mem_read_tab_ptr_dummy[addr >> 8])((uint16_t)addr);
+}
+
+static inline void c64cpu_store_dummy(unsigned int addr, uint8_t value)
+{
+    uint8_t *p = _mem_write_direct_ptr[addr >> 8];
+
+    if (p != NULL) {
+        p[addr] = value;
+    } else {
+        (*_mem_write_tab_ptr_dummy[addr >> 8])((uint16_t)addr, value);
+    }
+}
+
+static inline uint8_t c64cpu_load_zero_dummy(unsigned int addr)
+{
+    unsigned int a = addr & 0xff;
+
+    if (a >= 2 && _mem_zero_read_direct != NULL) {
+        return _mem_zero_read_direct[a];
+    }
+    return (*_mem_read_tab_ptr_dummy[0])((uint16_t)addr);
+}
+
+static inline void c64cpu_store_zero_dummy(unsigned int addr, uint8_t value)
+{
+    unsigned int a = addr & 0xff;
+
+    if (a >= 2 && _mem_zero_write_direct != NULL) {
+        _mem_zero_write_direct[a] = value;
+    } else {
+        (*_mem_write_tab_ptr_dummy[0])((uint16_t)addr, value);
+    }
+}
+
+#define LOAD_DUMMY(addr) c64cpu_load_dummy((unsigned int)(addr))
+#define STORE_DUMMY(addr, value) c64cpu_store_dummy((unsigned int)(addr), (uint8_t)(value))
+#define LOAD_ZERO_DUMMY(addr) c64cpu_load_zero_dummy((unsigned int)(addr))
+#define STORE_ZERO_DUMMY(addr, value) c64cpu_store_zero_dummy((unsigned int)(addr), (uint8_t)(value))
+
 #endif
 
 /* the CP/M cartridge Z80 runs from the maincpu_attention epilogue, after an

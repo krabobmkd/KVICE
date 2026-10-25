@@ -1005,8 +1005,10 @@ char *util_join_paths(const char *path, ...)
 #endif
         len = strlen(arg);
 #ifdef AMIGA_COMPILE
-        /* AmigaDOS: "DH0:" + "/" + "x" would mean the parent of DH0: */
-        if (*arg != ARCHDEP_DIR_SEP_CHR && endptr > result && endptr[-1] != ':') {
+        /* AmigaDOS: "DH0:" + "/" + "x" would mean the parent of DH0:.
+           A leading "/" of arg is not a separator but a parent: "a/b" +
+           "//c" (from b: up twice) is "a/b///c", not "a/b//c" (up once) */
+        if (endptr > result && endptr[-1] != ':') {
 #else
         if (*arg != ARCHDEP_DIR_SEP_CHR) {
 #endif

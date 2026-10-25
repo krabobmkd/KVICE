@@ -208,7 +208,9 @@ const amiga_machine_t amiga_machine = {
     plus4_letters,
     0, 1,       /* RETURN */
     amiga_positional_vkm,
-    1           /* Tape menu */
+    1,          /* Tape menu */
+    NULL,       /* no Palette menu */
+    NULL
 };
 
 /* ------------------------------------------------------------------------- */
