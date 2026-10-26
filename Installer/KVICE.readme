@@ -8,22 +8,32 @@ Requires:     OS3.1, 68060+, MUI
 
 ---------------------------------------------------------------------------
 
-KVICE 3.10 r2
+KVICE 3.10 release r2
 
  What's new since r1 ?
  
  New features:
- - Can change between 4 C64 palettes in real time, on popular demand. 
+ - Can change between 4 C64 palettes in real time, so colours are not flashy.
+ - You can switch joyports 1 & 2 in real time (games are using either port1 or 2). 
  - Some experimental "scanlines" display mode, need twice the vertical resolution.
- - You can switch joyports 1 & 2 in real time.
- - 
-
+ - Monitoring window with:
+   Breakpoints, disassembler, memory watch, CPU, vicII, SID states.
+ - Monitoring can use .sym symbol files (tested from wla-dx.7 assembler), so
+  you can see your asm source labels in the monitor and breakpoint them.
+  Actually if you load hello.prg and there is hello.sym aside, 
+  monitor will automatically update labels.
+  (so you can totally go wild developping things, asm examples added.)
+ - Amiga mouse can emulate paddles (for Arkanoid1 and Puzzle bobble.)
  - a few improvements (display "pause" when paused,...)
+ - AmigaGuides are updated about all this. New special guide for the monitor window.
  
  Corrections:
  - 5 to 10% speed optimized 
- - Input panel rewritten , mouse can emulate paddles, changes applied at once.
+ - Input panel rewritten, changes applied when changed:
+   no more misleading "Use" button.
  - Some file path bugs that could prevent loading is corrected.
+
+ Thanks to the people that suggested the palette, joyport and scanlines evolutions.
 
 ---------------------------------------------------------------------------
 

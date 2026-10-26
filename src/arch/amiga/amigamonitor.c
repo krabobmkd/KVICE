@@ -18,6 +18,17 @@
  * between two instructions: the window shows its state too, Run ends the
  * pause, Break and Step go from the pause to the monitor.
  *
+ * Labels: Load labels... reads a WLA-DX symbol file (wlalink -s, "00:080d
+ * start") or a VICE one ("al C:080d .start") into the VICE monitor symbol
+ * table: the disassembly shows them before their address and in the
+ * operands (VICE's own disassembler), the address strings accept them.
+ * Autostarting a .prg also loads the .sym file next to it.
+ *
+ * Closing the window ends the debugging: a stopped CPU runs again, and the
+ * breakpoints are put aside (they would stop it and open the window again,
+ * and while one exists each instruction is checked): the next opening puts
+ * them back.
+ *
  * The window is in the MUI application of amigamui.c.
  */
 
@@ -46,6 +57,7 @@
 
 #include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <exec/types.h>
@@ -56,6 +68,7 @@
 #include <proto/muimaster.h>
 #include <proto/alib.h>
 
+#include "amigafile.h"
 #include "amigalocale.h"
 #include "amigamonchips.h"
 #include "amigamonitor.h"
@@ -117,7 +130,7 @@ static char hex_text[HEX_ROWS * (6 + HEX_COLS * 3 + 1 + HEX_COLS + 1) + 1];
 typedef struct bp_row_s {
     int checknum;
     char num[8];
-    char addr[16];
+    char addr[48];          /* with the label of the address */
     char hits[12];
 } bp_row_t;
 
@@ -138,6 +151,7 @@ static Object *mon_hex = NULL;
 static Object *mem_addr_str, *bt_mem_prev, *bt_mem_next;
 static Object *mon_bp_list = NULL;
 static Object *bp_addr_str, *bt_bp_add, *bt_bp_remove;
+static Object *bt_labels;
 static Object *mon_video_list = NULL;
 static Object *mon_sound_list = NULL;
 static int mon_open = 0;
@@ -150,6 +164,20 @@ static int in_monitor = 0;
 /* registers line and last monitor output line */
 static char regs_text[160];
 static char status_text[128];
+
+/* the breakpoints put aside while the window is closed */
+typedef struct parked_bp_s {
+    MON_ADDR start, end;
+    MEMORY_OP op;
+    bool enabled;
+} parked_bp_t;
+
+static parked_bp_t parked_bps[BP_ROWS_MAX];
+static int parked_count = 0;
+
+/* the labels in the symbol table come from an autostart (replaced by the
+ * next one), not from Load labels... */
+static int labels_autoloaded = 0;
 
 /* a jam reason without its padding spaces in status_text */
 static void status_from_reason(const char *reason)
@@ -257,12 +285,12 @@ static Object *make_chip_panel(const char *title, Object **list)
                           TAG_DONE);
 }
 
+/* an address: hexadecimal, or a label */
 static Object *make_hex_string(void)
 {
     return MUI_NewObjectB(MUIC_String,
                           MUIA_Frame, MUIV_Frame_String,
-                          MUIA_String_MaxLen, 8,
-                          MUIA_String_Accept, (ULONG)"$0123456789abcdefABCDEFx",
+                          MUIA_String_MaxLen, 48,
                           MUIA_CycleChain, 1,
                           TAG_DONE);
 }
@@ -314,8 +342,9 @@ static int create_window(void)
     bt_run = make_button(LOC(MSG_MON_RUN));
     bt_step = make_button(LOC(MSG_MON_STEP));
     bt_next = make_button(LOC(MSG_MON_NEXT));
+    bt_labels = make_button(LOC(MSG_MON_LABELS));
 
-    /* left: disassembly and the CPU buttons */
+    /* left: disassembly, the CPU buttons, the labels */
     dis_group = MUI_NewObjectB(MUIC_Group,
                 MUIA_Group_Child, (ULONG)MUI_NewObjectB(MUIC_Listview,
                     MUIA_Listview_List, (ULONG)mon_dis_list,
@@ -330,6 +359,7 @@ static int create_window(void)
                     MUIA_Group_Child, (ULONG)bt_step,
                     MUIA_Group_Child, (ULONG)bt_next,
                     TAG_DONE),
+                MUIA_Group_Child, (ULONG)bt_labels,
                 TAG_DONE);
 
     /* right: the memory view, its address, previous and next page */
@@ -440,6 +470,8 @@ static int create_window(void)
              (ULONG)app, 2, MUIM_Application_ReturnID, RID_MON_BP_ADD);
     DoMethod(bt_bp_remove, MUIM_Notify, MUIA_Pressed, FALSE,
              (ULONG)app, 2, MUIM_Application_ReturnID, RID_MON_BP_REMOVE);
+    DoMethod(bt_labels, MUIM_Notify, MUIA_Pressed, FALSE,
+             (ULONG)app, 2, MUIM_Application_ReturnID, RID_MON_LABELS);
 
     /* the memory view at its full size from the start (its text sets it) */
     hex_update();
@@ -564,18 +596,29 @@ static void dis_update(void)
     int mem_config = mem_get_current_bank_config();
     uint16_t pc, addr;
     const char *text;
+    int label_shown = 0;
     int i;
 
     pc = (uint16_t)monitor_cpu_for_memspace[e_comp_space]->mon_register_get_val(e_comp_space, e_PC);
     addr = dis_start(pc, mem_config);
     for (i = 0; i < DIS_ROWS; i++) {
-        unsigned size = disassemble(addr, mem_config, &text);
+        const char *label = mon_symbol_table_lookup_name(e_comp_space, addr);
+        unsigned size;
         /* PC line in bold */
         const char *mark = (addr == pc) ? "\33b" : "";
 
+        if (label != NULL && !label_shown) {
+            /* "start:" on its own line, before the instruction */
+            dis_rows[i].addr[0] = '\0';
+            snprintf(dis_rows[i].ins, sizeof dis_rows[i].ins, "%s:", label);
+            label_shown = 1;
+            continue;
+        }
+        size = disassemble(addr, mem_config, &text);
         snprintf(dis_rows[i].addr, sizeof dis_rows[i].addr, "%s%04X", mark, addr);
         snprintf(dis_rows[i].ins, sizeof dis_rows[i].ins, "%s%s", mark, text);
         addr = (uint16_t)(addr + size);
+        label_shown = 0;
     }
     set(mon_dis_list, MUIA_List_Quiet, TRUE);
     DoMethod(mon_dis_list, MUIM_List_Clear);
@@ -643,6 +686,15 @@ static void bp_update(void)
         } else {
             sprintf(row->addr, "%04X", (unsigned)addr_location(cp->start_addr));
         }
+        {
+            const char *label = mon_symbol_table_lookup_name(e_comp_space,
+                                                             (uint16_t)addr_location(cp->start_addr));
+
+            if (label != NULL) {
+                snprintf(row->addr + strlen(row->addr), sizeof row->addr - strlen(row->addr),
+                         " %s", label);
+            }
+        }
         if (!cp->enabled) {
             /* disabled from the monitor commands: shown, does not stop */
             strcat(row->addr, " -");
@@ -680,19 +732,33 @@ static void chips_update(void)
     chip_list_fill(mon_sound_list, sound_rows, amiga_chips_sound_rows(sound_rows, CHIP_ROWS_MAX));
 }
 
-/* "C000", "$C000" or "0xC000" in a string gadget, -1 if not an address */
+/* "C000", "$C000", "0xC000" or a label in a string gadget, -1 if not an
+ * address. A label first: "add" or "beef" may be both. */
 static int read_address(Object *str)
 {
     STRPTR text = NULL;
     const char *p;
     unsigned long v = 0;
     int digits = 0;
+    char name[64];
 
     get(str, MUIA_String_Contents, &text);
     if (text == NULL) {
         return -1;
     }
     p = (const char *)text;
+    while (*p == ' ') {
+        p++;
+    }
+    /* VICE labels are written with a dot: ".start" */
+    snprintf(name, sizeof name, "%s", *p == '.' ? p + 1 : p);
+    if (name[0] != '\0') {
+        int addr = mon_symbol_table_lookup_addr(e_comp_space, name);
+
+        if (addr >= 0) {
+            return addr;
+        }
+    }
     if (*p == '$') {
         p++;
     } else if (p[0] == '0' && (p[1] == 'x' || p[1] == 'X')) {
@@ -748,6 +814,239 @@ static void bp_remove(void)
     bp_update();
 }
 
+/* ------------------------------------------------------------------------- */
+/* labels */
+
+static void refresh(void);
+
+/* one label line, 0 if it is not one:
+ * - WLA-DX (wlalink -s): "00:080d start", older ones "0000:080d start"
+ * - VICE (ll): "al C:080d .start" */
+static int label_line(char *line, unsigned int *addr, char **name)
+{
+    char *p = line;
+    char *end;
+    unsigned long v;
+
+    while (*p == ' ' || *p == '\t') {
+        p++;
+    }
+    if (strncmp(p, "al ", 3) == 0) {
+        p += 3;
+        while (*p == ' ') {
+            p++;
+        }
+        if (isalpha((unsigned char)p[0]) && p[1] == ':') {
+            /* memory space: C: the computer */
+            if (toupper((unsigned char)p[0]) != 'C') {
+                return 0;
+            }
+            p += 2;
+        }
+    } else {
+        char *bank = p;
+
+        /* the bank, not used: the CPU sees 64K */
+        while (isxdigit((unsigned char)*p)) {
+            p++;
+        }
+        if (*p != ':' || p == bank) {
+            return 0;
+        }
+        p++;
+    }
+    v = strtoul(p, &end, 16);
+    if (end == p || v > 0xffff || (*end != ' ' && *end != '\t')) {
+        return 0;
+    }
+    p = end;
+    while (*p == ' ' || *p == '\t') {
+        p++;
+    }
+    if (*p == '.') {
+        p++;
+    }
+    end = p;
+    while (*end != '\0' && !isspace((unsigned char)*end)) {
+        end++;
+    }
+    *end = '\0';
+    /* the label sizes made by wlalink */
+    if (*p == '\0' || strncmp(p, "_sizeof_", 8) == 0) {
+        return 0;
+    }
+    *addr = (unsigned int)v;
+    *name = p;
+    return 1;
+}
+
+/* the labels of \a path in the symbol table, instead of the ones there.
+ * Returns how many, -1 if the file cannot be read. */
+static int labels_load(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    char line[256];
+    int in_labels = 1;  /* wlalink -S: only its [labels] part */
+    int n = 0;
+
+    if (f == NULL) {
+        return -1;
+    }
+    mon_clear_symbol_table(e_comp_space);
+    while (fgets(line, sizeof line, f) != NULL) {
+        unsigned int addr;
+        char *name;
+
+        if (line[0] == ';' || line[0] == '#') {
+            continue;
+        }
+        if (line[0] == '[') {
+            in_labels = strncmp(line, "[labels]", 8) == 0;
+            continue;
+        }
+        if (in_labels && label_line(line, &addr, &name)) {
+            /* the table keeps the name */
+            mon_add_name_to_symbol_table(new_addr(e_comp_space, addr), lib_strdup(name));
+            n++;
+        }
+    }
+    fclose(f);
+    return n;
+}
+
+/* the result in the status line (after the warnings of the symbol table,
+ * duplicate labels) */
+static void labels_status(const char *path, int n)
+{
+    if (n < 0) {
+        snprintf(status_text, sizeof status_text, LOC(MSG_MON_LABELS_ERROR), path);
+    } else {
+        snprintf(status_text, sizeof status_text, LOC(MSG_MON_LABELS_LOADED), n, path);
+    }
+}
+
+/* Load labels...: a file requester on the window */
+static void labels_request(void)
+{
+    struct Window *window = NULL;
+    Object *app = amiga_mui_app();
+    char *path;
+
+    get(mon_win, MUIA_Window_Window, &window);
+    set(app, MUIA_Application_Sleep, TRUE);
+    path = amiga_file_request(window, LOC(MSG_REQ_LABELS), "#?.(sym|lbl|vs|labels)");
+    set(app, MUIA_Application_Sleep, FALSE);
+    if (path == NULL) {
+        return;
+    }
+    labels_status(path, labels_load(path));
+    labels_autoloaded = 0;
+    lib_free(path);
+}
+
+/** \brief  The labels of a started or loaded program: its .sym file, if any
+ */
+void amiga_monitor_autoload_labels(const char *path, int forget)
+{
+    /* kept: the emulator screen shows it later */
+    static char message[64];
+    char sym[256];
+    char *dot, *slash;
+    FILE *f;
+    int n;
+
+    snprintf(sym, sizeof sym, "%s", path);
+    dot = strrchr(sym, '.');
+    slash = strrchr(sym, '/');
+    if (slash == NULL) {
+        slash = strrchr(sym, ':');
+    }
+    if (dot == NULL || (slash != NULL && dot < slash)) {
+        dot = sym + strlen(sym);
+    }
+    if ((size_t)(dot - sym) + 5 > sizeof sym) {
+        return;
+    }
+    strcpy(dot, ".sym");
+    f = fopen(sym, "r");
+    if (f == NULL) {
+        if (forget && labels_autoloaded) {
+            /* the ones of the previous program would be wrong */
+            mon_clear_symbol_table(e_comp_space);
+            labels_autoloaded = 0;
+        }
+        return;
+    }
+    fclose(f);
+    n = labels_load(sym);
+    labels_autoloaded = 1;
+    labels_status(sym, n);
+    if (n >= 0) {
+        snprintf(message, sizeof message, LOC(MSG_MON_SYMBOLS_UPDATED), n);
+        /* about 3 seconds */
+        amiga_video_show_message(message, 150, AMIGA_MESSAGE_INFO);
+    }
+    if (mon_open) {
+        /* the disassembly with the new names */
+        refresh();
+    }
+}
+
+/* the window is closed: the breakpoints that stop the CPU are removed and
+ * kept here (not the temporary ones of the VICE monitor commands) */
+static void breakpoints_park(void)
+{
+    mon_checkpoint_t **list;
+    unsigned int len = 0, i;
+    int nums[BP_ROWS_MAX];
+    int n = 0;
+
+    list = mon_breakpoint_checkpoint_list_get(&len);
+    for (i = 0; i < len && n < BP_ROWS_MAX; i++) {
+        mon_checkpoint_t *cp = list[i];
+        parked_bp_t *bp = &parked_bps[parked_count];
+
+        if (!cp->stop) {
+            /* trace points: they do not stop the CPU */
+            continue;
+        }
+        nums[n++] = cp->checknum;
+        if (cp->temporary || parked_count >= BP_ROWS_MAX) {
+            continue;
+        }
+        bp->start = cp->start_addr;
+        bp->end = cp->end_addr;
+        bp->op = (MEMORY_OP)((cp->check_load ? e_load : 0) | (cp->check_store ? e_store : 0)
+                             | (cp->check_exec ? e_exec : 0));
+        bp->enabled = cp->enabled;
+        parked_count++;
+    }
+    lib_free(list);
+    /* after the list, which the deletions change: the last one turns the
+       CPU loop monitor test off */
+    for (i = 0; i < (unsigned int)n; i++) {
+        mon_breakpoint_delete_checkpoint(nums[i]);
+    }
+}
+
+/* the window opens: the breakpoints put aside are back (new numbers, hits
+ * from 0) */
+static void breakpoints_unpark(void)
+{
+    int i;
+
+    for (i = 0; i < parked_count; i++) {
+        parked_bp_t *bp = &parked_bps[i];
+        int num = mon_breakpoint_add_checkpoint(bp->start, bp->end, true, bp->op,
+                                                false, false);
+
+        if (!bp->enabled && num > 0) {
+            mon_breakpoint_switch_checkpoint(e_OFF, num);
+        }
+    }
+    parked_count = 0;
+}
+
 /* buttons for the state, and the CPU state when it is stopped */
 static void refresh(void)
 {
@@ -792,6 +1091,7 @@ void amiga_monitor_open(void)
     amiga_video_requester_begin();
     set(mon_win, MUIA_Window_Open, TRUE);
     mon_open = 1;
+    breakpoints_unpark();
     refresh();
 
     /* first input round: gives the signals MUI waits for */
@@ -869,10 +1169,17 @@ void amiga_monitor_handle_rid(ULONG rid)
         case RID_MON_BP_REMOVE:
             bp_remove();
             break;
+        case RID_MON_LABELS:
+            labels_request();
+            /* the disassembly and the breakpoints with them */
+            refresh();
+            break;
         case RID_MON_CLOSE:
+            /* the end of the debugging: no breakpoint opens the window
+               again, a stopped CPU runs (a pause from the menu stays) */
+            breakpoints_park();
             close_window();
             if (in_monitor) {
-                /* nothing left to control the monitor: go on */
                 strcpy(pending_cmd, "x");
             }
             break;

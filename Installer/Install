@@ -7,6 +7,8 @@
 ;   - xvic    + icon, the files of data/VIC20 -> VIC20/
 ;   - asked: BASICv2Quick.guide (x64, xvic), BASICv3Quick.guide (xplus4),
 ;     and the .bas examples of the chosen emulators -> <dest>/BasicExample/
+;   - asked: the WLA-DX 7 assembler examples and the C64, Plus/4, VIC-20
+;     includes -> <dest>/AsmExample/
 ;   - PetMate PETSCII draw tool, its guide and license -> <dest>
 ;     and its .petmate example drawings -> <dest>/PetmateExample/
 ;   - PetMe TrueType fonts      -> FONTS:  (for EmojiGear, BASIC .bas texts),
@@ -332,6 +334,51 @@
 )
 
 ; ---------------------------------------------------------------------------
+; WLA-DX assembler examples: hello.s, poke.s (C64) and the hardware
+; includes of the 3 machines
+; ---------------------------------------------------------------------------
+(set #install-asm 0)
+(if (BITAND #install-apps 7)
+    (set #install-asm
+        (askbool
+            (prompt
+                (cat
+                    "Do you want to install assembler programs\n"
+                    "examples for WLA-DX 7?"
+                )
+            )
+            (help
+                (cat
+                    "WLA-DX is a 6502 / 6510 cross assembler, on Aminet:\n"
+                    "dev/cross/wla_dx_020_7.1.lzh.\n\n"
+                    "The AsmExample drawer has two C64 programs,\n"
+                    "hello.s and poke.s, with their link files, and the\n"
+                    "includes c64.i, plus4.i and vic20.i: the chip\n"
+                    "registers, KERNAL calls, colors and a BASIC SYS\n"
+                    "line for each machine.\n\n"
+                    "Linked with wlalink -bs, a program also gets a .sym\n"
+                    "file: autostarted, its labels show in the monitor."
+                )
+            )
+            (choices "Yes" "No")
+            (default 1)
+        )
+    )
+)
+
+(if (= #install-asm 1)
+    (
+        (working "Copying the assembler examples ...")
+        (makedir (tackon #dest "AsmExample") (infos))
+        (copyfiles
+            (source "AsmExample")
+            (dest (tackon #dest "AsmExample"))
+            (all)
+        )
+    )
+)
+
+; ---------------------------------------------------------------------------
 ; KVICE Resource Installer, when the package has it
 ; ---------------------------------------------------------------------------
 (if (exists "bin/KVICEResourceInstaller")
@@ -413,6 +460,7 @@
         (if (BITAND #install-apps 8) "  PetMate drawing tool\n" "")
         (if (BITAND #install-apps 16) "  PetMe fonts in FONTS:\n" "")
         (if (= #install-basic 1) "  BASIC guides and examples\n" "")
+        (if (= #install-asm 1) "  WLA-DX assembler examples\n" "")
         "\n"
         (if (= #run-resinst 1)
             "Run KVICE Resource Installer again\nany time to check missing files."

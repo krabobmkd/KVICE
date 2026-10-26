@@ -180,6 +180,10 @@ for machine in C64 PLUS4 VIC20; do
     mkdir -p "$PKG/BasicExample/$machine"
     cp "$INSTALLER_SRC/BasicExample/$machine"/*.bas "$PKG/BasicExample/$machine/"
 done
+# the WLA-DX assembler examples and machine includes (the Installer asks)
+mkdir -p "$PKG/AsmExample"
+cp "$INSTALLER_SRC/AsmExample"/*.s "$INSTALLER_SRC/AsmExample"/*.i \
+   "$INSTALLER_SRC/AsmExample"/*.l "$PKG/AsmExample/"
 
 # ---------------------------------------------------------------------------
 # No Commodore system file may end in the package

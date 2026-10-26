@@ -440,7 +440,7 @@ static const char *default_strings[] = {
     /* MSG_PALETTE_MIKE_NTSC */
     "Mike (NTSC)",
     /* MSG_SCANLINES */
-    "Try scanlines",
+    "Scanlines",
     /* MSG_MONITOR_DOTS */
     "Monitor...",
     /* MSG_MON_TITLE */
@@ -476,7 +476,17 @@ static const char *default_strings[] = {
     /* MSG_MON_VALUE */
     "Value",
     /* MSG_MON_OTHER_CPU */
-    "Stopped on a drive CPU: not shown here, it goes on"
+    "Stopped on a drive CPU: not shown here, it goes on",
+    /* MSG_MON_LABELS */
+    "Load labels...",
+    /* MSG_REQ_LABELS */
+    "Load labels (WLA-DX .sym, VICE)",
+    /* MSG_MON_LABELS_LOADED: %d labels, %s the file */
+    "%d labels loaded from %s",
+    /* MSG_MON_LABELS_ERROR: %s is the file */
+    "Cannot read the labels of %s",
+    /* MSG_MON_SYMBOLS_UPDATED: %d labels */
+    "Monitor symbols updated: %d labels"
 };
 
 /* compile-time check: one default string per MSG_* id */

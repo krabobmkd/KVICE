@@ -70,6 +70,10 @@
 #include "vsync.h"
 #include "zfile.h"
 
+#ifdef AMIGA_COMPILE
+#include "amigamonitor.h"
+#endif
+
 #ifdef USE_SVN_REVISION
 #include "svnversion.h"
 #endif
@@ -578,6 +582,10 @@ void initcmdline_check_attach(void)
                 }
                 archdep_vice_exit(1);
             }
+#ifdef AMIGA_COMPILE
+            /* an assembled program: its labels in the monitor */
+            amiga_monitor_autoload_labels(autostart_string, 1);
+#endif
         }
         /* `-8', `-9', `-10' and `-11': Attach specified disk image.  */
         {

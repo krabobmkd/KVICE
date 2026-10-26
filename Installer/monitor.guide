@@ -1,5 +1,5 @@
 @DATABASE monitor.guide
-@$VER: monitor.guide 1.0 (25.10.2026)
+@$VER: monitor.guide 1.1 (26.10.2026)
 @AUTHOR krabobmkd
 @(C) 2026 krabobmkd
 @WORDWRAP
@@ -19,6 +19,7 @@ The machine code monitor of x64, xplus4 and xvic: stop the emulated CPU, look at
   @{" Memory                " LINK MEMORY}    The hexadecimal memory view
   @{" Video and sound chips " LINK CHIPS}     VIC-II and SID, TED, VIC
   @{" Breakpoints           " LINK BREAKPOINTS} Stop the CPU at an address
+  @{" Labels                " LINK LABELS}    Names of your assembled program
   @{" Tips                  " LINK TIPS}      A first session, and good to know
 
 ------------------------------------------------------------------------------
@@ -170,6 +171,8 @@ its mnemonic and operand, as in the 6502 books: LDA #$00 loads the value $00, ST
 The line of PC, the next instruction to run, is in bold. The lines above it are a guess: the 6502 instructions are 1 to 3 bytes long, so starting from an earlier address can fall in the middle of an instruction. The monitor keeps the start that falls exactly on PC, which is almost always the real code, but data just before the code can show as strange instructions.
 
 The bytes are read as the CPU sees them, with the current memory banks (see io00 in @{"CPU state line" LINK REGISTERS}).
+
+With @{"Labels" LINK LABELS} loaded, a labelled address has its name on a line above its instruction (start:), and the operands show the names: JSR print instead of JSR $0819.
 @ENDNODE
 
 @NODE MEMORY "Memory"
@@ -182,7 +185,7 @@ The right panel shows 128 bytes of memory, 16 lines of 8 bytes:
 Each line is its address, the 8 bytes in hexadecimal, and the same bytes as text: the printable ASCII characters, a dot for the others. Commodore text is PETSCII and the screen uses screen codes, so the text column is only a hint.
 
 @{b}Address field@{ub}@{lindent 2}
-type an address and press Return: C000, $C000 or 0xC000 (hexadecimal, 0000 to FFFF). An invalid address shows a message in the status line.@{lindent 0}
+type an address and press Return: C000, $C000 or 0xC000 (hexadecimal, 0000 to FFFF), or the name of a @{"label" LINK LABELS}. An invalid address shows a message in the status line.@{lindent 0}
 
 @{b}< and >@{ub}@{lindent 2}
 the previous and next 128 bytes.@{lindent 0}
@@ -243,7 +246,7 @@ raster line, screen origin, columns and rows, screen, color RAM and charset addr
 A breakpoint stops the CPU when it is about to execute the instruction at an address. The list shows the breakpoints: their number, address, and how many times they were reached (Hits).
 
 @{b}Add@{ub}@{lindent 2}
-type the address in the field under the list (C000, $C000 or 0xC000) and press Add or Return.@{lindent 0}
+type the address in the field under the list (C000, $C000, 0xC000 or a @{"label" LINK LABELS} name) and press Add or Return. The list shows the label of the address after it.@{lindent 0}
 
 @{b}Remove@{ub}@{lindent 2}
 removes the breakpoint selected in the list.@{lindent 0}
@@ -253,6 +256,33 @@ Breakpoints can be added and removed while the emulation runs. When one is reach
 An address followed by - is a breakpoint disabled with a command of the VICE monitor: it is kept, but does not stop the CPU.
 
 While at least one breakpoint exists, the emulation checks the address of each instruction, and it is slower. Remove them all to get the full speed back.
+
+@{b}Closing the window@{ub}@{lindent 2}
+the close gadget of the Monitor window ends the debugging: a CPU stopped by the monitor runs again, and the breakpoints are put aside, so none of them stops the CPU and opens the window again. The emulation runs at full speed. The next time the window opens (menu, Amiga+M), the breakpoints are back, with their hits counted from 0. A pause from the menu stays a pause.@{lindent 0}
+@ENDNODE
+
+@NODE LABELS "Labels"
+@{b}Labels@{ub}
+
+The labels of an assembled program, its routines and data, can be loaded in the monitor: the code is then much easier to follow.
+
+@{b}Load labels...@{ub}@{lindent 2}
+the button under the disassembly loads a labels file:
+- WLA-DX: the symbol file made by its linker with the s option, for example wlalink -bs linkerscript.l hello.prg makes hello.sym, lines like "0000:080d start".
+- VICE: the files of its monitor commands ll and sl, lines like "al C:080d .start".
+They replace the labels loaded before. The status line tells how many were loaded.@{lindent 0}
+
+@{b}Automatically@{ub}@{lindent 2}
+starting or loading a program also loads the .sym file next to it, if there is one: hello.prg loads hello.sym. This is done by Autostart (menu, or the file dropped on the emulator window), by a program given when the emulator starts (its project icon, or the Shell), and by LOAD "HELLO.PRG",8 (or ,8,1) from an Amiga drawer used as drive 8.
+The .sym file is read again each time: link the program again, load it again, and the monitor has the new addresses. The emulator screen shows "Monitor symbols updated" with the number of labels.
+Autostarting another program without a .sym file removes those labels.@{lindent 0}
+
+Then:
+- the disassembly shows each label on a line above its instruction, and in the operands: JSR print, LDA message,X,
+- the memory and breakpoint address fields accept a label name: type start and press Return. A name is looked for among the labels first, then read as hexadecimal: a label named beef or add gives its own address. Type $BEEF to mean the hexadecimal address. The names are case sensitive, as in the labels file,
+- the breakpoint list shows the label of each address.
+
+The examples in the AsmExample drawer are made for the WLA-DX assembler: assemble hello.s, link it with wlalink -bs, and autostart hello.prg to see its labels in the monitor.
 @ENDNODE
 
 @NODE TIPS "Tips"

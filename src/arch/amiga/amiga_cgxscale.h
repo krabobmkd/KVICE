@@ -50,10 +50,15 @@ BOOL cgxscale_prepare(struct BitMap *bm, struct ColorMap *cm);
 /* palette of the source pixels, 0x00RRGGBB per entry */
 void cgxscale_set_palette(const ULONG *rgb, int count);
 
-/* "Try scanlines": darker lines between the source rows (CRT look), only
- * used for 15/16, 24, 32 bit bitmaps and a height zoom of 1.5 or more.
- * The caller redraws. */
-void cgxscale_set_scanlines(int on);
+/* Display > Scanlines: darker lines between the source rows (CRT look),
+ * only used for 15/16, 24, 32 bit bitmaps and a height zoom of 1.5 or
+ * more. "Bilinear" is archived, not compiled (amiga_cgxscale.c): it mixes
+ * 2 source rows in a destination line, so a changed source row would also
+ * change the lines of the row above it. The caller redraws. */
+#define CGXSCALE_SCANLINES_NONE     0
+#define CGXSCALE_SCANLINES_SIMPLE   1
+#define CGXSCALE_SCANLINES_BILINEAR 2   /* archived */
+void cgxscale_set_scanlines(int mode);
 
 /* Draw source area (src_x, src_y, src_w, src_h) of the 8 bit buffer
  * \a src (bytes per row \a src_pitch), scaled to the destination area

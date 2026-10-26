@@ -146,7 +146,7 @@ attach, detach@{lindent 2}
 @{b}About..., Settings..., Pause, Quit@{ub}
 @{lindent 0}
 @{b}Display@{ub}@{lindent 2}
-Window / fullscreen, window size, borders, screenshot (IFF).
+Window / fullscreen, window size, borders, scanlines, screenshot (IFF).
 x64 and xvic also have a @{b}Palette@{ub} submenu. The C64 has a fixed set of 16 colors, but no one agrees on their exact RGB values, as each TV and each VIC-II chip revision shows them a bit differently. Choose between four references; the choice is kept in the settings when quitting.@{lindent 4}
 @{b}VICE@{ub} (default)@{lindent 6}
 the palette of the VICE emulator, calculated from a model of the VIC-II video signal.@{lindent 4}
@@ -162,7 +162,8 @@ calculated by VICE with strong colors, made to be softened by the PAL screen emu
 @{b}Colodore@{ub}@{lindent 6}
 the Colodore method applied to the VIC chip: softer dark colors, light pastel ones.@{lindent 4}
 @{b}Mike (PAL), Mike (NTSC)@{ub}@{lindent 6}
-the palettes from the VIC-20 community, for the European (PAL) and American (NTSC) machines.
+the palettes from the VIC-20 community, for the European (PAL) and American (NTSC) machines.@{lindent 2}
+@{b}Scanlines@{ub} gives the emulated screen the look of a CRT monitor, with darker lines between the rows of pixels, almost as fast as the classic drawing. It is used on RTG screens of 15, 16, 24 or 32 bits, when the window or fullscreen is at least 1.5 times the height of the emulated screen; elsewhere the drawing stays the classic one. The choice is kept in the settings when quitting.
 @{lindent 0}
 @{b}Monitor@{ub}@{lindent 2}
 @{b}Monitor...@{ub} (Amiga+M)@{lindent 4}

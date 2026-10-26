@@ -226,7 +226,7 @@ static int border_mode = AMIGA_BORDERS_FULL;
 static int palette_choice = AMIGA_PALETTE_VICE;
 /* chosen in the Display menu: saved when quitting */
 static int palette_menu_changed = 0;
-/* "AmigaScanlines", Display > Try scanlines: saved when quitting */
+/* "AmigaScanlines", Display > Scanlines: saved when quitting */
 static int scanlines = 0;
 static int scanlines_menu_changed = 0;
 static int display_scale = 1;
@@ -601,7 +601,7 @@ int amiga_video_get_palette(void)
     return palette_choice;
 }
 
-/** \brief  Display > Try scanlines: CRT like darker lines between the rows,
+/** \brief  Display > Scanlines: CRT like darker lines between the rows,
  *          when the screen allows it (amiga_cgxscale.c), else no change
  */
 void amiga_video_set_scanlines(int on)

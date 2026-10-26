@@ -275,7 +275,7 @@ enum {
     MSG_PORTS_SWITCHED,
     MSG_PALETTE_MIKE_PAL,
     MSG_PALETTE_MIKE_NTSC,
-    /* Display menu: Try scanlines */
+    /* Display menu: Scanlines */
     MSG_SCANLINES,
     /* Monitor window */
     MSG_MONITOR_DOTS,
@@ -296,6 +296,11 @@ enum {
     MSG_MON_REGISTER,
     MSG_MON_VALUE,
     MSG_MON_OTHER_CPU,
+    MSG_MON_LABELS,
+    MSG_REQ_LABELS,
+    MSG_MON_LABELS_LOADED,
+    MSG_MON_LABELS_ERROR,
+    MSG_MON_SYMBOLS_UPDATED,
 
     /* Must be last */
     MSG_COUNT

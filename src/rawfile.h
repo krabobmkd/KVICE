@@ -41,5 +41,7 @@ unsigned int rawfile_remove(const char *src_name, const char *path);
 unsigned int rawfile_get_bytes_left(struct rawfile_info_s *info);
 unsigned int rawfile_seek(struct rawfile_info_s *info, off_t offset, int whence);
 unsigned int rawfile_tell(struct rawfile_info_s *info);
+/* the host file opened, path and name (lib_malloc'ed) */
+char *rawfile_get_host_name(struct rawfile_info_s *info);
 
 #endif

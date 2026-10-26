@@ -41,6 +41,7 @@
 #define RID_MON_MEM_NEXT 107
 #define RID_MON_BP_ADD  108
 #define RID_MON_BP_REMOVE 109
+#define RID_MON_LABELS  110
 #define RID_MON_LAST    199
 
 /* open the monitor window (non-modal), or bring it to front */
@@ -54,6 +55,12 @@ char *amiga_monitor_get_command(void);
 void amiga_monitor_refresh(void);
 /* monitor text output (uimon_out()) */
 void amiga_monitor_out(const char *text);
+/* the labels of a program started or loaded from \a path: its .sym file
+   next to it (WLA-DX), loaded again each time (it may have been linked
+   again), with a message on the emulator screen. Without one, the labels
+   loaded this way before go when \a forget (an autostart: another program),
+   stay otherwise (LOAD of a data file from the drive 8 drawer). */
+void amiga_monitor_autoload_labels(const char *path, int forget);
 /* the MUI application is disposed, the window with it */
 void amiga_monitor_dispose(void);
 

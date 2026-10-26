@@ -63,9 +63,9 @@ static UWORD clut16[256];               /* 2 bytes per pixel */
 static ULONG clut24[256];               /* 3 bytes per pixel, memory order 0x00aabbcc */
 static ULONG clut32[256];               /* 4 bytes per pixel */
 
-/* "scanlines": darker lines between the source rows, as on a CRT monitor.
- * Only for 15/16, 24 and 32 bit, and a zoom of 1.5 or more in height,
- * else the classic drawing. Nothing is computed per pixel:
+/* "Simple" scanlines: darker lines between the source rows, as on a CRT
+ * monitor. Only for 15/16, 24 and 32 bit, and a zoom of 1.5 or more in
+ * height, else the classic drawing. Nothing is computed per pixel:
  * - SHADE_LEVELS copies of the color table, darker and darker (level 0 is
  *   the normal one), built once per palette or pixel format,
  * - the level of each destination line, built once per source and
@@ -79,7 +79,7 @@ static ULONG clut32[256];               /* 4 bytes per pixel */
 /* longest destination area, taller ones get the classic drawing */
 #define SHADE_MAX_LINES 4096
 
-static int scanlines_on = 0;
+static int scanlines_mode = CGXSCALE_SCANLINES_NONE;
 static int shade_valid = 0;             /* shade tables of this palette */
 static UWORD shade16[SHADE_LEVELS][256];
 static ULONG shade32[SHADE_LEVELS][256]; /* 24 bit (memory order) and 32 bit */
@@ -87,6 +87,45 @@ static ULONG shade32[SHADE_LEVELS][256]; /* 24 bit (memory order) and 32 bit */
 static UBYTE line_level[SHADE_MAX_LINES];
 static ULONG line_level_step = 0;       /* step_y and height they are for */
 static int line_level_h = 0;
+
+#ifdef CGXSCALE_SCANLINES_BILINEAR_ARCHIVE
+/* "Bilinear" scanlines, archived: not compiled (CGXSCALE_SCANLINES_BILINEAR_ARCHIVE
+ * is never defined). Tested 2026-10-26: no real gain over "Simple" for its
+ * CPU cost, so the menu only has Scanlines on / off.
+ * Each destination line mixes the 2 source rows
+ * around it, each weighted by a CRT beam profile of its distance: bright on
+ * the rows, smooth darker lines between them at any zoom. Same conditions
+ * as "Simple". The weights are the same along a line and the source is
+ * palettized, so they are in the color tables: BLEND_LEVELS copies of the
+ * table, color * level / BLEND_LEVEL_MAX, and a pixel is 2 lookups and an
+ * add. The weights of a line never sum over BLEND_LEVEL_MAX: each field of
+ * the sum stays in range, no carry between them.
+ * The 2 bytes formats are in the tables in their big endian order, the PC
+ * ones swapped at the store. */
+#define BLEND_LEVEL_MAX 32
+#define BLEND_LEVELS (BLEND_LEVEL_MAX + 1)
+
+/* the beam: weight /256 of a row at distance d / 32 rows from its center,
+ * exp(-d^2 / 0.2076): 154/256 between 2 rows */
+static const UBYTE beam_weight[BLEND_LEVEL_MAX + 1] = {
+    255, 255, 251, 245, 237, 228, 216, 203, 189, 175, 160, 145, 130, 116, 102, 89,
+    77, 66, 56, 47, 39, 32, 26, 21, 17, 14, 11, 8, 6, 5, 4, 3, 0
+};
+
+static int blend_valid = 0;             /* blend tables of this palette */
+static ULONG blend_tab[BLEND_LEVELS][256];
+static int blend_swap = 0;              /* PC 15/16 bit: bytes swapped at the store */
+static ULONG blend_alpha = 0;           /* 32 bit: the alpha byte, out of the sums */
+
+/* per destination line: the first source row, the levels of it and of the
+ * next one */
+static UWORD line_row[SHADE_MAX_LINES];
+static UBYTE line_la[SHADE_MAX_LINES];
+static UBYTE line_lb[SHADE_MAX_LINES];
+static ULONG line_blend_step = 0;       /* step_y and heights they are for */
+static int line_blend_h = 0;
+static int line_blend_src_h = 0;
+#endif /* CGXSCALE_SCANLINES_BILINEAR_ARCHIVE */
 
 static UWORD swap16(UWORD v)
 {
@@ -143,6 +182,9 @@ static void build_tables(void)
         }
     }
     shade_valid = 0;
+#ifdef CGXSCALE_SCANLINES_BILINEAR_ARCHIVE
+    blend_valid = 0;
+#endif /* CGXSCALE_SCANLINES_BILINEAR_ARCHIVE */
 }
 
 /* the shade tables, from the source palette: 16 x 16 bit products only
@@ -171,6 +213,73 @@ static void build_shade_tables(void)
     }
     shade_valid = 1;
 }
+
+#ifdef CGXSCALE_SCANLINES_BILINEAR_ARCHIVE
+/* the blend tables: 16 x 16 bit products only (mulu.w) */
+static void build_blend_tables(void)
+{
+    int lv, i;
+
+    blend_swap = dst_pixfmt == PIXFMT_RGB15PC || dst_pixfmt == PIXFMT_BGR15PC
+                 || dst_pixfmt == PIXFMT_RGB16PC || dst_pixfmt == PIXFMT_BGR16PC;
+    blend_alpha = dst_bpp == 4 ? pack_color(0, 0, 0) : 0;
+    for (lv = 0; lv < BLEND_LEVELS; lv++) {
+        UWORD k = (UWORD)(lv * (256 / BLEND_LEVEL_MAX));
+
+        for (i = 0; i < src_count; i++) {
+            UWORD r = (UWORD)((src_rgb[i] >> 16) & 0xff);
+            UWORD g = (UWORD)((src_rgb[i] >> 8) & 0xff);
+            UWORD b = (UWORD)(src_rgb[i] & 0xff);
+            ULONG c = pack_color((ULONG)(UWORD)(r * k) >> 8,
+                                 (ULONG)(UWORD)(g * k) >> 8,
+                                 (ULONG)(UWORD)(b * k) >> 8);
+
+            if (blend_swap) {
+                c = swap16((UWORD)c);
+            }
+            blend_tab[lv][i] = c & ~blend_alpha;
+        }
+    }
+    blend_valid = 1;
+}
+
+/* the rows and levels of each destination line. The line at ay (16.16
+ * source) is between row a = ay >> 16 and a + 1, at distance t and 1 - t
+ * from them. The next row is the last one at the bottom. */
+static void build_line_blend(ULONG step_y, int dst_h, int src_h)
+{
+    ULONG ay = 0;
+    int y;
+
+    for (y = 0; y < dst_h; y++) {
+        int a = (int)(ay >> 16);
+        int t = (int)(((ay & 0xffffUL) + 0x400UL) >> 11);  /* 0..32 */
+        int wa = beam_weight[t];
+        int wb = beam_weight[BLEND_LEVEL_MAX - t];
+        int la, lb;
+
+        if (a >= src_h) {
+            a = src_h - 1;
+        }
+        la = (wa + 4) >> 3;
+        lb = (wb + 4) >> 3;
+        if (la + lb > BLEND_LEVEL_MAX) {
+            lb = BLEND_LEVEL_MAX - la;
+        }
+        if (a + 1 >= src_h) {
+            /* no next row: its part is lost, as the beam below the screen */
+            lb = 0;
+        }
+        line_row[y] = (UWORD)a;
+        line_la[y] = (UBYTE)la;
+        line_lb[y] = (UBYTE)lb;
+        ay += step_y;
+    }
+    line_blend_step = step_y;
+    line_blend_h = dst_h;
+    line_blend_src_h = src_h;
+}
+#endif /* CGXSCALE_SCANLINES_BILINEAR_ARCHIVE */
 
 /* the level of each destination line: how much of it covers the dark part
  * of its source row (SHADE_GAP at the bottom). The part of a line that
@@ -202,9 +311,9 @@ static void build_line_levels(ULONG step_y, int dst_h)
     line_level_h = dst_h;
 }
 
-void cgxscale_set_scanlines(int on)
+void cgxscale_set_scanlines(int mode)
 {
-    scanlines_on = on;
+    scanlines_mode = mode;
 }
 
 BOOL cgxscale_prepare(struct BitMap *bm, struct ColorMap *cm)
@@ -429,6 +538,168 @@ static ULONG cliprect_hook_scanlines(register struct Hook *hook __asm("a0"),
     return 0;
 }
 
+#ifdef CGXSCALE_SCANLINES_BILINEAR_ARCHIVE
+/* the blended pixel of source column i: rows sa and sb through the tables
+ * of their levels */
+#define BLEND_PIXEL(i) (ta[sa[i]] + tb[sb[i]])
+
+/* blended rows, one destination line: as scalerow16/24/32() */
+SCALEROW_INLINE void blendrow16(UBYTE *d, const UBYTE *sa, const UBYTE *sb, ULONG ax, ULONG step,
+                                int n, const ULONG *ta, const ULONG *tb, int swap)
+{
+    ULONG v;
+
+    if (n > 0 && ((ULONG)d & 2) != 0) {
+        v = BLEND_PIXEL(ax >> 16);
+        SCALEROW_STORE16(d, swap ? swap16((UWORD)v) : v);
+        d += 2;
+        ax += step;
+        n--;
+    }
+    while (n >= 2) {
+        ULONG p;
+
+        p = BLEND_PIXEL(ax >> 16);
+        ax += step;
+        v = BLEND_PIXEL(ax >> 16);
+        ax += step;
+        if (swap) {
+            p = swap16((UWORD)p);
+            v = swap16((UWORD)v);
+        }
+        /* big endian: the first pixel is the high word */
+        SCALEROW_STORE32(d, (p << 16) | v);
+        d += 4;
+        n -= 2;
+    }
+    if (n > 0) {
+        v = BLEND_PIXEL(ax >> 16);
+        SCALEROW_STORE16(d, swap ? swap16((UWORD)v) : v);
+    }
+}
+
+SCALEROW_INLINE void blendrow24(UBYTE *d, const UBYTE *sa, const UBYTE *sb, ULONG ax, ULONG step,
+                                int n, const ULONG *ta, const ULONG *tb)
+{
+    while (n > 0 && ((ULONG)d & 3) != 0) {
+        ULONG c = BLEND_PIXEL(ax >> 16);
+
+        SCALEROW_STORE8(d, c >> 16);
+        SCALEROW_STORE8(d + 1, c >> 8);
+        SCALEROW_STORE8(d + 2, c);
+        d += 3;
+        ax += step;
+        n--;
+    }
+    while (n >= 4) {
+        ULONG a, b, c, e;
+
+        a = BLEND_PIXEL(ax >> 16);
+        ax += step;
+        b = BLEND_PIXEL(ax >> 16);
+        ax += step;
+        c = BLEND_PIXEL(ax >> 16);
+        ax += step;
+        e = BLEND_PIXEL(ax >> 16);
+        ax += step;
+        /* a0 a1 a2 b0 | b1 b2 c0 c1 | c2 e0 e1 e2 */
+        SCALEROW_STORE32(d, (a << 8) | (b >> 16));
+        SCALEROW_STORE32(d + 4, (b << 16) | (c >> 8));
+        SCALEROW_STORE32(d + 8, (c << 24) | e);
+        d += 12;
+        n -= 4;
+    }
+    while (n-- > 0) {
+        ULONG c = BLEND_PIXEL(ax >> 16);
+
+        SCALEROW_STORE8(d, c >> 16);
+        SCALEROW_STORE8(d + 1, c >> 8);
+        SCALEROW_STORE8(d + 2, c);
+        d += 3;
+        ax += step;
+    }
+}
+
+SCALEROW_INLINE void blendrow32(UBYTE *d, const UBYTE *sa, const UBYTE *sb, ULONG ax, ULONG step,
+                                int n, const ULONG *ta, const ULONG *tb, ULONG alpha)
+{
+    while (n-- > 0) {
+        SCALEROW_STORE32(d, BLEND_PIXEL(ax >> 16) | alpha);
+        d += 4;
+        ax += step;
+    }
+}
+
+/* cliprect_hook() mixing 2 source rows per line (line_row[], line_la[],
+ * line_lb[]), one line at a time */
+static ULONG cliprect_hook_blend(register struct Hook *hook __asm("a0"),
+                                 register struct RastPort *rp __asm("a2"),
+                                 register struct cliprect_msg *msg __asm("a1"))
+{
+    const scale_params_t *p = (const scale_params_t *)hook->h_Data;
+    UBYTE *base = NULL;
+    ULONG bpr = 0;
+    APTR lock;
+    int w = msg->bounds.MaxX - msg->bounds.MinX + 1;
+    int h = msg->bounds.MaxY - msg->bounds.MinY + 1;
+    LONG win_x = msg->bounds.MinX;
+    LONG win_y = msg->bounds.MinY;
+    ULONG ax0;
+    UBYTE *line;
+    const UWORD *row;
+    const UBYTE *la, *lb;
+    int y;
+
+    if (w <= 0 || h <= 0) {
+        return 0;
+    }
+    if (msg->layer != NULL) {
+        win_x -= msg->layer->bounds.MinX;
+        win_y -= msg->layer->bounds.MinY;
+    }
+    ax0 = (ULONG)(win_x - p->dst_x) * p->step_x;
+    row = line_row + (win_y - p->dst_y);
+    la = line_la + (win_y - p->dst_y);
+    lb = line_lb + (win_y - p->dst_y);
+
+    lock = LockBitMapTags(rp->BitMap,
+                          LBMI_BASEADDRESS, (ULONG)&base,
+                          LBMI_BYTESPERROW, (ULONG)&bpr,
+                          TAG_DONE);
+    if (lock == NULL) {
+        return 0;
+    }
+    line = base + (ULONG)msg->bounds.MinY * bpr + (ULONG)msg->bounds.MinX * (ULONG)dst_bpp;
+
+    for (y = 0; y < h; y++) {
+        const UBYTE *sa = p->src + (ULONG)row[y] * p->src_pitch;
+        /* no next row part: level 0, all zero (the next row may not exist) */
+        const UBYTE *sb = lb[y] != 0 ? sa + p->src_pitch : sa;
+        const ULONG *ta = blend_tab[la[y]];
+        const ULONG *tb = blend_tab[lb[y]];
+
+        switch (dst_bpp) {
+            case 2:
+                if (blend_swap) {
+                    blendrow16(line, sa, sb, ax0, p->step_x, w, ta, tb, 1);
+                } else {
+                    blendrow16(line, sa, sb, ax0, p->step_x, w, ta, tb, 0);
+                }
+                break;
+            case 3:
+                blendrow24(line, sa, sb, ax0, p->step_x, w, ta, tb);
+                break;
+            default:
+                blendrow32(line, sa, sb, ax0, p->step_x, w, ta, tb, blend_alpha);
+                break;
+        }
+        line += bpr;
+    }
+    UnLockBitMap(lock);
+    return 0;
+}
+#endif /* CGXSCALE_SCANLINES_BILINEAR_ARCHIVE */
+
 void cgxscale_draw(struct RastPort *rp, const UBYTE *src, ULONG src_pitch,
                    int src_x, int src_y, int src_w, int src_h,
                    int dst_x, int dst_y, int dst_w, int dst_h,
@@ -468,7 +739,7 @@ void cgxscale_draw(struct RastPort *rp, const UBYTE *src, ULONG src_pitch,
 
     memset(&hook, 0, sizeof hook);
     hook.h_Entry = (ULONG (*)())cliprect_hook;
-    if (scanlines_on && SCANLINE_FITS(src_h, dst_h)) {
+    if (scanlines_mode == CGXSCALE_SCANLINES_SIMPLE && SCANLINE_FITS(src_h, dst_h)) {
         if (!shade_valid) {
             build_shade_tables();
         }
@@ -477,6 +748,17 @@ void cgxscale_draw(struct RastPort *rp, const UBYTE *src, ULONG src_pitch,
         }
         hook.h_Entry = (ULONG (*)())cliprect_hook_scanlines;
     }
+#ifdef CGXSCALE_SCANLINES_BILINEAR_ARCHIVE
+    else if (scanlines_mode == CGXSCALE_SCANLINES_BILINEAR && SCANLINE_FITS(src_h, dst_h)) {
+        if (!blend_valid) {
+            build_blend_tables();
+        }
+        if (line_blend_step != p.step_y || line_blend_h != dst_h || line_blend_src_h != src_h) {
+            build_line_blend(p.step_y, dst_h, src_h);
+        }
+        hook.h_Entry = (ULONG (*)())cliprect_hook_blend;
+    }
+#endif /* CGXSCALE_SCANLINES_BILINEAR_ARCHIVE */
     hook.h_Data = &p;
 
     rect.MinX = (WORD)upd_x0;

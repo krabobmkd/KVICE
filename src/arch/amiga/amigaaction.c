@@ -106,6 +106,8 @@ BOOL amiga_autostart_file(const char *path)
         log_error(LOG_DEFAULT, "cannot autostart `%s'.", path);
         return FALSE;
     }
+    /* an assembled program: its labels in the monitor */
+    amiga_monitor_autoload_labels(path, 1);
     return TRUE;
 }
 

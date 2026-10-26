@@ -135,6 +135,11 @@ rawfile_info_t *rawfile_open(const char *file_name, const char *path,
     return info;
 }
 
+char *rawfile_get_host_name(rawfile_info_t *info)
+{
+    return util_join_paths(info->path, info->name, NULL);
+}
+
 void rawfile_destroy(rawfile_info_t *info)
 {
     if (info != NULL) {

@@ -60,6 +60,11 @@
 
 #include "fsdevice-open.h"
 
+#ifdef AMIGA_COMPILE
+#include "amigamonitor.h"
+#include "rawfile.h"
+#endif
+
 #ifdef DEBUG_DRIVEOPEN
 #define DBG(x)  printf x
 #else
@@ -380,6 +385,16 @@ static int fsdevice_open_file(vdrive_t *vdrive, unsigned int secondary,
         bufinfo[secondary].fileio_info = finfo;
         fsdevice_error(vdrive, CBMDOS_IPE_OK);
 
+#ifdef AMIGA_COMPILE
+        if (secondary <= 1 && finfo->rawfile != NULL) {
+            /* LOAD of a program (,8 or ,8,1): the labels of its .sym
+               file, if any */
+            char *host = rawfile_get_host_name(finfo->rawfile);
+
+            amiga_monitor_autoload_labels(host, 0);
+            lib_free(host);
+        }
+#endif
         if (bufinfo[secondary].mode == Relative) {
             fsdevice_relative_switch_record(vdrive, &bufinfo[secondary], 0, 0);
         }
