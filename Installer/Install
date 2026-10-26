@@ -162,6 +162,11 @@
     (infos)
 )
 (copyfiles
+    (source "monitor.guide")
+    (dest #dest)
+    (infos)
+)
+(copyfiles
     (source "KVICE.readme")
     (dest #dest)
     (infos)

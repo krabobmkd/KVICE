@@ -83,7 +83,7 @@ static const char *default_strings[] = {
     "None",
 
     /* MSG_MENU_SNAPSHOT */
-    "Snapshot",
+    "Monitor",
     /* MSG_SNAPSHOT_LOAD */
     "Load snapshot...",
     /* MSG_SNAPSHOT_SAVE */
@@ -93,10 +93,10 @@ static const char *default_strings[] = {
     "KVICE Settings",
     /* MSG_SETTINGS_SAVE */
     "Save",
-    /* MSG_SETTINGS_USE */
+    /* MSG_SETTINGS_USE: not used any more (changes apply at once), slot kept */
     "Use",
-    /* MSG_SETTINGS_CANCEL */
-    "Cancel",
+    /* MSG_SETTINGS_CLOSE */
+    "Close",
     /* MSG_CATEGORY_INPUT */
     "Input",
     /* MSG_CATEGORY_KEYBOARD */
@@ -438,7 +438,45 @@ static const char *default_strings[] = {
     /* MSG_PALETTE_MIKE_PAL */
     "Mike (PAL)",
     /* MSG_PALETTE_MIKE_NTSC */
-    "Mike (NTSC)"
+    "Mike (NTSC)",
+    /* MSG_SCANLINES */
+    "Try scanlines",
+    /* MSG_MONITOR_DOTS */
+    "Monitor...",
+    /* MSG_MON_TITLE */
+    "Monitor",
+    /* MSG_MON_BREAK */
+    "Break (Shift+F5)",
+    /* MSG_MON_RUN */
+    "Run (F5)",
+    /* MSG_MON_STEP */
+    "Step (Shift+F10)",
+    /* MSG_MON_NEXT */
+    "Step over (F10)",
+    /* MSG_MON_RUNNING */
+    "Running...",
+    /* MSG_MON_ADDRESS */
+    "Address",
+    /* MSG_MON_INSTRUCTION */
+    "Instruction",
+    /* MSG_MON_MEMORY */
+    "Memory",
+    /* MSG_MON_BREAKPOINTS */
+    "Breakpoints",
+    /* MSG_MON_ADD */
+    "Add",
+    /* MSG_MON_REMOVE */
+    "Remove",
+    /* MSG_MON_HITS */
+    "Hits",
+    /* MSG_MON_BAD_ADDRESS */
+    "Invalid address (hexadecimal, 0000 to FFFF)",
+    /* MSG_MON_REGISTER */
+    "Register",
+    /* MSG_MON_VALUE */
+    "Value",
+    /* MSG_MON_OTHER_CPU */
+    "Stopped on a drive CPU: not shown here, it goes on"
 };
 
 /* compile-time check: one default string per MSG_* id */

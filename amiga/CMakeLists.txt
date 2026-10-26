@@ -124,6 +124,8 @@ list(APPEND VICE_COMMON_SRC
 	${VICE_SRC}/arch/amiga/amigabasic.c
 	${VICE_SRC}/arch/amiga/amigamenu.c
 	${VICE_SRC}/arch/amiga/amigamui.c
+	${VICE_SRC}/arch/amiga/amigamonitor.c
+	${VICE_SRC}/arch/amiga/amigamonchips.c
 	${VICE_SRC}/arch/amiga/amigakeys.c
 	${VICE_SRC}/arch/amiga/amigafile.c
 	${VICE_SRC}/arch/amiga/amiga_cgxscale.c

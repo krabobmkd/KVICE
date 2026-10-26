@@ -1,0 +1,276 @@
+@DATABASE monitor.guide
+@$VER: monitor.guide 1.0 (25.10.2026)
+@AUTHOR krabobmkd
+@(C) 2026 krabobmkd
+@WORDWRAP
+@NODE MAIN "KVICE - The Monitor window"
+
+@{b}KVICE - The Monitor window@{ub}
+The machine code monitor of x64, xplus4 and xvic: stop the emulated CPU, look at it, run it one instruction at a time.
+
+------------------------------------------------------------------------------
+
+  @{" Opening the monitor   " LINK OPEN}      Menu, keys, when it opens by itself
+  @{" Running and stopped   " LINK STATES}    The three states of the CPU
+  @{" Buttons and keys      " LINK BUTTONS}   Break, Run, Step, Step over
+  @{" CPU state line        " LINK REGISTERS} PC, A, X, Y, SP, io00, FL, LIN, CYC
+  @{" Status flags          " LINK FLAGS}     NV-BDIZC bit by bit
+  @{" Disassembly           " LINK DISASM}    The code around PC
+  @{" Memory                " LINK MEMORY}    The hexadecimal memory view
+  @{" Video and sound chips " LINK CHIPS}     VIC-II and SID, TED, VIC
+  @{" Breakpoints           " LINK BREAKPOINTS} Stop the CPU at an address
+  @{" Tips                  " LINK TIPS}      A first session, and good to know
+
+------------------------------------------------------------------------------
+
+The window is a front end of the VICE monitor: stepping, breakpoints and the reading of the registers are VICE's own, the window shows them.
+@ENDNODE
+
+@NODE OPEN "Opening the monitor"
+@{b}Opening the monitor@{ub}
+
+Menu @{b}Monitor > Monitor...@{ub} or @{b}Amiga+M@{ub} in the emulator window opens the Monitor window. It does not stop the emulation: the CPU keeps running until you press Break (or Shift+F5), or until a breakpoint is reached.
+
+The window also opens by itself when the CPU stops while it is closed:@{lindent 2}
+@{b}a breakpoint is reached@{ub}: see @{"Breakpoints" LINK BREAKPOINTS}.
+@{b}the CPU executes a JAM opcode@{ub}: an illegal opcode that locks the 6502 for good, usually a crashed program running into data. The window opens stopped on the JAM instruction, the status line shows "JAM at $xxxx". Look at the code before it and at SP to find where the program went wrong. Run cannot unlock it: the machine stays frozen until a reset (Reset in the machine menu).@{lindent 0}
+
+A JAM of the drive CPU (the 1541) does not open the window, which only shows the computer CPU: the drive stays locked until a reset, and vice.log tells where it jammed.
+
+The window can stay open while the emulation runs. Closing it while the CPU is stopped lets the emulation go on: nothing would be left to give it the Run command.
+
+In fullscreen the window opens on the Workbench screen, so the emulated screen is hidden while you step. The window mode of the emulator (Display > Window) is better to debug.
+@ENDNODE
+
+@NODE STATES "Running and stopped"
+@{b}Running and stopped@{ub}
+
+The window shows one of three states, and only the buttons that make sense in a state can be used:
+
+@{b}Running@{ub}@{lindent 2}
+The CPU state line shows "Running...", the disassembly is empty. The memory view, the chip lists and the breakpoints keep the values of the last refresh. Only Break can be used.@{lindent 0}
+
+@{b}Stopped in the monitor@{ub}@{lindent 2}
+After Break, a breakpoint or a step: the CPU is stopped between two instructions, all the panels show its state. Run, Step and Step over can be used.@{lindent 0}
+
+@{b}Paused@{ub}@{lindent 2}
+The emulator Pause (Amiga+P) also stops the CPU between two instructions: the window shows its state too. Run ends the pause, Break and Step go from the pause into the monitor at the same instruction (a Step then runs the next one).@{lindent 0}
+
+All the panels are refreshed each time the CPU stops: Break, breakpoint, Step, Step over, Pause.
+@ENDNODE
+
+@NODE BUTTONS "Buttons and keys"
+@{b}Buttons and keys@{ub}
+
+The keys work when the Monitor window is the active window. They are the usual keys of the debuggers on other systems, except that Amiga keyboards stop at F10: Step is Shift+F10 where other systems use F11.
+
+@{b}Break@{ub} (Shift+F5)@{lindent 2}
+stops the running CPU at the next instruction.@{lindent 0}
+
+@{b}Run@{ub} (F5)@{lindent 2}
+leaves the monitor, the emulation goes on at full speed until the next breakpoint or Break.@{lindent 0}
+
+@{b}Step@{ub} (Shift+F10)@{lindent 2}
+runs one instruction and stops again. On a JSR it goes into the subroutine.@{lindent 0}
+
+@{b}Step over@{ub} (F10)@{lindent 2}
+runs one instruction, but a JSR runs the whole subroutine and stops after it, at the instruction under the JSR.@{lindent 0}
+
+Under the panels, the status line shows the last message of the VICE monitor: what stopped the CPU, an invalid address typed...
+@ENDNODE
+
+@NODE REGISTERS "CPU state line"
+@{b}CPU state line@{ub}
+
+The two lines at the top of the window are the state of the CPU (a 6510 in the C64, a 7501 or 8501 in the Plus/4, a 6502 in the VIC-20):
+
+  PC $C000  A $00  X $00  Y $00  SP $F3  io00 $2F37
+  FL $22  NV-BDIZC 00100010  LIN 256  CYC 63
+
+Each item is a name and its value. A value with $ is hexadecimal: $FF is 255, two digits are a byte (8 bits), four digits are 16 bits. LIN and CYC are decimal.
+
+@{b}PC@{ub} Program Counter, 16 bits@{lindent 2}
+the address of the next instruction to execute. It is the bold line of the disassembly.@{lindent 0}
+
+@{b}A@{ub} Accumulator, 8 bits@{lindent 2}
+the main register of the CPU: the additions, subtractions, logic operations and most of the loads and stores go through it.@{lindent 0}
+
+@{b}X@{ub} and @{b}Y@{ub} Index registers, 8 bits@{lindent 2}
+counters and offsets: LDA $0400,X reads the byte at $0400 plus X. INX, DEY... count with them in loops.@{lindent 0}
+
+@{b}SP@{ub} Stack Pointer, 8 bits@{lindent 2}
+the stack is always in page 1, $0100-$01FF: SP $F3 means the next byte pushed goes to $01F3. A push (PHA, PHP, JSR, an interrupt) writes then decrements SP, a pull (PLA, PLP, RTS, RTI) increments then reads. JSR pushes the return address, so SP shows how deep in subroutines the program is.@{lindent 0}
+
+@{b}io00@{ub} The CPU port, $0000 and $0001@{lindent 2}
+the 6510 has an I/O port at the first two addresses of the memory, shown as one 16 bit value in memory order: in $2F37, $2F is the byte at $0000 and $37 the byte at $0001.@{lindent 4}
+@{b}$0000@{ub}, data direction: a bit at 1 makes the same bit of $0001 an output, at 0 an input. Usually $2F.@{lindent 4}
+@{b}$0001@{ub}, the port: on the C64 its bits 0 to 2 choose what the CPU sees in memory:@{lindent 6}
+bit 0 LORAM: 1 BASIC ROM at $A000-$BFFF
+bit 1 HIRAM: 1 KERNAL ROM at $E000-$FFFF
+bit 2 CHAREN: 1 I/O at $D000-$DFFF, 0 character ROM there
+bit 3: cassette write, bit 4: cassette button (0 pressed), bit 5: cassette motor (0 on)@{lindent 4}
+$37 is the normal BASIC setup, $35 removes BASIC and KERNAL to use the RAM under them (many games and demos), $34 is RAM everywhere. When this value changes while stepping, the program switches the memory banks.@{lindent 2}
+On the Plus/4, the port of the 7501/8501 drives the cassette and the serial bus, not the memory banks. The 6502 of the VIC-20 has no port: there io00 is only the RAM at $0000 and $0001.@{lindent 0}
+
+@{b}FL@{ub} Flags, 8 bits@{lindent 2}
+the status register of the CPU (named P in the 6502 books), in hexadecimal. NV-BDIZC is the same byte bit by bit: see @{"Status flags" LINK FLAGS}.@{lindent 0}
+
+@{b}LIN@{ub} Raster line@{lindent 2}
+not a CPU register: the line the video chip draws when the CPU is stopped. 0 to 311 on a PAL C64, 0 to 262 on NTSC, the text screen being on lines 51 to 250. It is the counter a program reads in $D012, and the one a raster interrupt waits for.@{lindent 0}
+
+@{b}CYC@{ub} Cycle in the line@{lindent 2}
+the CPU cycle in that line: 0 to 62 on a PAL C64 (a line is 63 cycles, 64 or 65 on NTSC). The CPU and the video chip share the memory bus cycle by cycle, so LIN and CYC tell when an instruction runs: a split screen or a color bar writes a register at an exact line and cycle.@{lindent 2}
+While stepping, CYC can move by more than the cycles of an instruction: on the "bad lines" (every 8th line of the text screen) and for each sprite shown, the VIC-II takes cycles from the CPU.@{lindent 2}
+On the Plus/4 LIN and CYC come from the TED, on the VIC-20 from the VIC, with their own numbers of lines and cycles.@{lindent 0}
+@ENDNODE
+
+@NODE FLAGS "Status flags"
+@{b}Status flags@{ub}
+
+NV-BDIZC are the 8 bits of FL, from bit 7 to bit 0, and the 8 digits after it are their values in the same order. Most instructions change some of them, the branch instructions test them.
+
+@{b}N@{ub} Negative, bit 7@{lindent 2}
+1 when the last result has its bit 7 set (negative as a signed number). Tested by BMI, BPL.@{lindent 0}
+
+@{b}V@{ub} Overflow, bit 6@{lindent 2}
+1 when an ADC or SBC overflows as signed numbers. BIT copies the bit 6 of the memory here. Tested by BVS, BVC.@{lindent 0}
+
+@{b}-@{ub} bit 5@{lindent 2}
+not used, always 1.@{lindent 0}
+
+@{b}B@{ub} Break, bit 4@{lindent 2}
+only in the copy of the flags pushed on the stack: 1 for BRK and PHP, 0 for an IRQ or NMI. An interrupt routine reads it to know whether BRK called it.@{lindent 0}
+
+@{b}D@{ub} Decimal, bit 3@{lindent 2}
+1 after SED: ADC and SBC count in BCD (decimal). CLD clears it.@{lindent 0}
+
+@{b}I@{ub} Interrupt disable, bit 2@{lindent 2}
+1 after SEI and when an interrupt starts: the IRQs wait (not the NMI). CLI clears it, RTI gives back the value before the interrupt.@{lindent 0}
+
+@{b}Z@{ub} Zero, bit 1@{lindent 2}
+1 when the last result is 0. Tested by BEQ, BNE.@{lindent 0}
+
+@{b}C@{ub} Carry, bit 0@{lindent 2}
+the carry of ADC, the "no borrow" of SBC and CMP, the bit shifted out by ASL, LSR, ROL, ROR. Tested by BCS, BCC.@{lindent 0}
+
+Examples: after LDA #$00, Z is 1 and N is 0, so BEQ branches. After CMP #$10, C is 1 when A is $10 or more, Z is 1 when A is $10: that is how the programs compare numbers. FL $22 (00100010) is Z set, and the unused bit 5. After SEI it is $26 (00100110).
+@ENDNODE
+
+@NODE DISASM "Disassembly"
+@{b}Disassembly@{ub}
+
+The left panel is the code around PC, one instruction per line:
+
+@{b}Address@{ub}@{lindent 2}
+the address of the instruction, in hexadecimal.@{lindent 0}
+
+@{b}Instruction@{ub}@{lindent 2}
+its mnemonic and operand, as in the 6502 books: LDA #$00 loads the value $00, STA $D020 stores to the address $D020, LDA ($FB),Y reads at the address found in $FB-$FC plus Y. A * before the mnemonic is an undocumented opcode.@{lindent 0}
+
+The line of PC, the next instruction to run, is in bold. The lines above it are a guess: the 6502 instructions are 1 to 3 bytes long, so starting from an earlier address can fall in the middle of an instruction. The monitor keeps the start that falls exactly on PC, which is almost always the real code, but data just before the code can show as strange instructions.
+
+The bytes are read as the CPU sees them, with the current memory banks (see io00 in @{"CPU state line" LINK REGISTERS}).
+@ENDNODE
+
+@NODE MEMORY "Memory"
+@{b}Memory@{ub}
+
+The right panel shows 128 bytes of memory, 16 lines of 8 bytes:
+
+  C000  A9 00 8D 20 D0 60 00 00  ... ..`..
+
+Each line is its address, the 8 bytes in hexadecimal, and the same bytes as text: the printable ASCII characters, a dot for the others. Commodore text is PETSCII and the screen uses screen codes, so the text column is only a hint.
+
+@{b}Address field@{ub}@{lindent 2}
+type an address and press Return: C000, $C000 or 0xC000 (hexadecimal, 0000 to FFFF). An invalid address shows a message in the status line.@{lindent 0}
+
+@{b}< and >@{ub}@{lindent 2}
+the previous and next 128 bytes.@{lindent 0}
+
+The memory is read as the CPU sees it, with the current memory banks: with the normal C64 setup, $A000-$BFFF shows the BASIC ROM, not the RAM under it.
+
+Reading here has no side effect: the I/O registers ($D000-$DFFF on the C64) are read without acknowledging an interrupt or changing a chip, as if the monitor was not there.
+
+The view is refreshed each time the CPU stops, and when you change the address. While the emulation runs, it shows the memory as it was at the last refresh.
+@ENDNODE
+
+@NODE CHIPS "Video and sound chips"
+@{b}Video and sound chips@{ub}
+
+At the bottom of the window, left of the breakpoints, two lists show the registers of the video chip and of the sound chip of the machine, decoded. Each row has three columns:
+
+@{b}Register@{ub}@{lindent 2}
+what the row is.@{lindent 0}
+
+@{b}Address@{ub}@{lindent 2}
+the register address, or two addresses as D000-1 for a value on two registers. Empty when the row is computed from other registers or from the emulation.@{lindent 0}
+
+@{b}Value@{ub}@{lindent 2}
+the value, in hexadecimal and decoded: the names of the bits set, a color name, a frequency in Hz...@{lindent 0}
+
+They are refreshed with the other panels, and reading them has no side effect.
+
+@{b}C64: VIC-II@{ub}@{lindent 2}
+@{b}Raster line@{ub}: the line being drawn ($D012 and bit 7 of $D011).
+@{b}Control 1@{ub}, @{b}Control 2@{ub}: $D011 and $D016, with the bits set (DEN screen on, BMM bitmap, ECM extended color, RSEL 25 rows, MCM multicolor, CSEL 40 columns) and the scroll values YSCR, XSCR.
+@{b}Mode@{ub}: text or bitmap, multicolor, extended color.
+@{b}VIC bank@{ub}: the 16 KB of memory the VIC-II sees, chosen by $DD00.
+@{b}Memory@{ub}, @{b}Screen@{ub}, @{b}Charset@{ub} or @{b}Bitmap@{ub}: $D018 and the addresses it gives in the VIC bank. "ROM" when the charset is the character ROM (seen by the VIC-II at $1000-$1FFF and $9000-$9FFF).
+@{b}Border@{ub}, @{b}Background@{ub}: the colors, with their names.
+@{b}IRQ enable@{ub}, @{b}IRQ flags@{ub}: $D01A and $D019 (RST raster, SBC sprite-background collision, SSC sprite-sprite collision, LP light pen).
+@{b}Sprites on@{ub}, @{b}Spr multicol@{ub}, @{b}Spr X expand@{ub}, @{b}Spr Y expand@{ub}, @{b}Spr behind@{ub}: one position per sprite, sprite 0 first: its number when its bit is set, - when it is not. "-1234567" is sprites 1 to 7, not sprite 0.
+@{b}Sprite 0@{ub} to @{b}Sprite 7@{ub}: for each sprite on, its position X and Y, the address of its 64 bytes of data (from its pointer at the end of the screen) and its color.@{lindent 0}
+
+@{b}C64: SID@{ub}@{lindent 2}
+The SID registers can only be written, a program cannot read them back. The list shows the state of the emulated SID: the registers as last written, and the envelopes from the emulation.
+@{b}V1@{ub} to @{b}V3 freq@{ub}: the frequency register and the note it plays, in Hz.
+@{b}pulse@{ub}: the pulse width, in percent of the wave.
+@{b}control@{ub}: the bits set: NOI noise, PUL pulse, SAW sawtooth, TRI triangle, TEST, RING ring modulation, SYNC, GATE (the note is held).
+@{b}ADSR@{ub}: attack, decay, sustain, release, 0 to F each.
+@{b}envelope@{ub}: the volume of the voice now, $00 to $FF, and its phase: attack, decay, sustain, release, idle. It only moves while the sound is on: the emulation computes the envelopes with the sound.
+@{b}Cutoff@{ub}, @{b}Resonance@{ub}, @{b}Mode/volume@{ub}: the filter (its cutoff, resonance and the voices it filters, LP BP HP its modes, 3OFF voice 3 muted) and the main volume.@{lindent 0}
+
+@{b}Plus/4: TED@{ub}@{lindent 2}
+The TED is the video and the sound chip of the Plus/4, C16, C116: raster line, control registers, mode, attributes, screen, charset or bitmap addresses, the five colors (hue and luminance), the interrupt registers and the cursor position. In the TED sound list: the two voices with their frequency in Hz, on or off, noise, and the volume.@{lindent 0}
+
+@{b}VIC-20: VIC@{ub}@{lindent 2}
+raster line, screen origin, columns and rows, screen, color RAM and charset addresses, light pen, paddles, border, background and auxiliary colors. In the VIC sound list: the bass, alto, soprano and noise voices (their value, on or off) and the volume.@{lindent 0}
+@ENDNODE
+
+@NODE BREAKPOINTS "Breakpoints"
+@{b}Breakpoints@{ub}
+
+A breakpoint stops the CPU when it is about to execute the instruction at an address. The list shows the breakpoints: their number, address, and how many times they were reached (Hits).
+
+@{b}Add@{ub}@{lindent 2}
+type the address in the field under the list (C000, $C000 or 0xC000) and press Add or Return.@{lindent 0}
+
+@{b}Remove@{ub}@{lindent 2}
+removes the breakpoint selected in the list.@{lindent 0}
+
+Breakpoints can be added and removed while the emulation runs. When one is reached, the CPU stops before the instruction at its address, and the Monitor window opens if it is closed. Run goes on from there.
+
+An address followed by - is a breakpoint disabled with a command of the VICE monitor: it is kept, but does not stop the CPU.
+
+While at least one breakpoint exists, the emulation checks the address of each instruction, and it is slower. Remove them all to get the full speed back.
+@ENDNODE
+
+@NODE TIPS "Tips"
+@{b}Tips@{ub}
+
+@{b}A first session on the C64@{ub}@{lindent 2}
+1. Open the monitor (Amiga+M), add a breakpoint at FFD2: the KERNAL routine that prints a character.
+2. In the emulator, type PRINT "A" and Return: the CPU stops, the bold line is at FFD2, A holds the code of the character to print ($41 for the letter A, $0D for a Return). Press F5 to stop at the next character.
+3. Press Shift+F10 a few times to follow the routine, look at the registers and the flags change.
+4. Remove the breakpoint and press F5: the emulation runs at full speed again.@{lindent 0}
+
+@{b}Find the screen@{ub}@{lindent 2}
+the VIC-II list gives the address of the screen: type it in the memory address field to see the screen codes of the characters shown (the letter A is 01).@{lindent 0}
+
+@{b}Raster timing@{ub}@{lindent 2}
+put a breakpoint in a raster interrupt routine, then step and watch LIN and CYC to see on which line and cycle each write to the VIC-II happens.@{lindent 0}
+
+@{b}Good to know@{ub}@{lindent 2}
+The window is wide: with small Workbench screens, enlarge it or the long values are cut.
+The SID envelopes only move when the sound is on.
+@ENDNODE

@@ -1289,6 +1289,19 @@ sid_engine_t fastsid_hooks =
 
 /* ---------------------------------------------------------------------*/
 
+/* envelope level (0..255) of a voice and its ADSR mode (0 attack, 1 decay,
+   2 sustain, 3 release, 4 idle), for the Amiga monitor window */
+int fastsid_voice_envelope(struct sound_s *psid, int voice, int *mode)
+{
+    voice_t *pv = &psid->v[voice];
+
+    if (mode != NULL) {
+        *mode = pv->adsrm;
+    }
+    /* 31-bit counter */
+    return (int)(pv->adsr >> 23);
+}
+
 void fastsid_state_read(struct sound_s *psid, struct sid_fastsid_snapshot_state_s *sid_state)
 {
     int i;

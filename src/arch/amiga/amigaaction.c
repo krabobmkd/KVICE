@@ -33,6 +33,7 @@
 #include "screenshot.h"
 #include "kbd.h"
 #include "amigalocale.h"
+#include "amigamonitor.h"
 #include "amigamui.h"
 #include "amigatrace.h"
 #include "amigafile.h"
@@ -787,6 +788,14 @@ static int Checked_PaletteColodore(void) { return amiga_video_get_palette() == A
 static int Checked_PalettePepto(void)    { return amiga_video_get_palette() == AMIGA_PALETTE_PEPTO; }
 static int Checked_PalettePetmate(void)  { return amiga_video_get_palette() == AMIGA_PALETTE_PETMATE; }
 
+static BOOL Action_Scanlines(void)
+{
+    amiga_video_set_scanlines(!amiga_video_get_scanlines());
+    return TRUE;
+}
+
+static int Checked_Scanlines(void) { return amiga_video_get_scanlines() ? 1 : 0; }
+
 /* ------------------------------------------------------------------------- */
 
 /* ------------------------------------------------------------------------- */
@@ -1098,6 +1107,12 @@ static BOOL Action_About(void)
     return TRUE;
 }
 
+static BOOL Action_Monitor(void)
+{
+    amiga_monitor_open();
+    return TRUE;
+}
+
 /* MUST stay in the ACTION_* order */
 static AmigaAction s_actions[AMIGA_ACTION_COUNT] = {
     /* AMIGA_ACTION_AUTOSTART       */ { Action_Autostart,     NULL,                  MSG_AUTOSTART,       NULL },
@@ -1142,7 +1157,9 @@ static AmigaAction s_actions[AMIGA_ACTION_COUNT] = {
     /* AMIGA_ACTION_PALETTE_VICE    */ { Action_PaletteVice,     Checked_PaletteVice,     MSG_PALETTE_VICE,     NULL },
     /* AMIGA_ACTION_PALETTE_COLODORE */ { Action_PaletteColodore, Checked_PaletteColodore, MSG_PALETTE_COLODORE, NULL },
     /* AMIGA_ACTION_PALETTE_PEPTO   */ { Action_PalettePepto,    Checked_PalettePepto,    MSG_PALETTE_PEPTO,    NULL },
-    /* AMIGA_ACTION_PALETTE_PETMATE */ { Action_PalettePetmate,  Checked_PalettePetmate,  MSG_PALETTE_PETMATE,  NULL }
+    /* AMIGA_ACTION_PALETTE_PETMATE */ { Action_PalettePetmate,  Checked_PalettePetmate,  MSG_PALETTE_PETMATE,  NULL },
+    /* AMIGA_ACTION_SCANLINES       */ { Action_Scanlines,       Checked_Scanlines,       MSG_SCANLINES,        NULL },
+    /* AMIGA_ACTION_MONITOR         */ { Action_Monitor,         NULL,                    MSG_MONITOR_DOTS,     NULL }
 };
 
 void AmigaAction_Init(void)
@@ -1172,12 +1189,16 @@ AmigaAction *AmigaAction_Get(ULONG actionID)
 BOOL AmigaAction_Execute(ULONG actionID)
 {
     AmigaAction *a = AmigaAction_Get(actionID);
+    BOOL ret;
 
     if (a == NULL || a->func == NULL) {
         return FALSE;
     }
     AMIGA_TRACE(("action %lu: %s", (unsigned long)actionID, a->name ? a->name : "?"));
-    return a->func();
+    ret = a->func();
+    /* a menu may change what the settings window shows (drive 8 drawer) */
+    amiga_settings_refresh();
+    return ret;
 }
 
 int AmigaAction_IsChecked(ULONG actionID)

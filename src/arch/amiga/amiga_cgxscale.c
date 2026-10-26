@@ -63,9 +63,60 @@ static UWORD clut16[256];               /* 2 bytes per pixel */
 static ULONG clut24[256];               /* 3 bytes per pixel, memory order 0x00aabbcc */
 static ULONG clut32[256];               /* 4 bytes per pixel */
 
+/* "scanlines": darker lines between the source rows, as on a CRT monitor.
+ * Only for 15/16, 24 and 32 bit, and a zoom of 1.5 or more in height,
+ * else the classic drawing. Nothing is computed per pixel:
+ * - SHADE_LEVELS copies of the color table, darker and darker (level 0 is
+ *   the normal one), built once per palette or pixel format,
+ * - the level of each destination line, built once per source and
+ *   destination height (settings, window size).
+ * The rows are then drawn as usual, with the table of their level. */
+#define SHADE_LEVELS 8
+/* intensity of the darkest level, /256 */
+#define SHADE_DARKEST 96
+/* the dark part at the bottom of each source row, 16.16: 3/8 of a row */
+#define SHADE_GAP 0x6000UL
+/* longest destination area, taller ones get the classic drawing */
+#define SHADE_MAX_LINES 4096
+
+static int scanlines_on = 0;
+static int shade_valid = 0;             /* shade tables of this palette */
+static UWORD shade16[SHADE_LEVELS][256];
+static ULONG shade32[SHADE_LEVELS][256]; /* 24 bit (memory order) and 32 bit */
+
+static UBYTE line_level[SHADE_MAX_LINES];
+static ULONG line_level_step = 0;       /* step_y and height they are for */
+static int line_level_h = 0;
+
 static UWORD swap16(UWORD v)
 {
     return (UWORD)((v << 8) | (v >> 8));
+}
+
+/* one color in the destination pixel format (not CLUT) */
+static ULONG pack_color(ULONG r, ULONG g, ULONG b)
+{
+    UWORD rgb15 = (UWORD)(((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3));
+    UWORD bgr15 = (UWORD)(((b >> 3) << 10) | ((g >> 3) << 5) | (r >> 3));
+    UWORD rgb16 = (UWORD)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+    UWORD bgr16 = (UWORD)(((b >> 3) << 11) | ((g >> 2) << 5) | (r >> 3));
+
+    switch (dst_pixfmt) {
+        case PIXFMT_RGB15:   return rgb15;
+        case PIXFMT_BGR15:   return bgr15;
+        case PIXFMT_RGB15PC: return swap16(rgb15);
+        case PIXFMT_BGR15PC: return swap16(bgr15);
+        case PIXFMT_RGB16:   return rgb16;
+        case PIXFMT_BGR16:   return bgr16;
+        case PIXFMT_RGB16PC: return swap16(rgb16);
+        case PIXFMT_BGR16PC: return swap16(bgr16);
+        case PIXFMT_RGB24:   return (r << 16) | (g << 8) | b;
+        case PIXFMT_BGR24:   return (b << 16) | (g << 8) | r;
+        case PIXFMT_ARGB32:  return 0xff000000UL | (r << 16) | (g << 8) | b;
+        case PIXFMT_BGRA32:  return (b << 24) | (g << 16) | (r << 8) | 0xffUL;
+        case PIXFMT_RGBA32:  return (r << 24) | (g << 16) | (b << 8) | 0xffUL;
+        default:             return 0;
+    }
 }
 
 static void build_tables(void)
@@ -76,35 +127,84 @@ static void build_tables(void)
         ULONG r = (src_rgb[i] >> 16) & 0xff;
         ULONG g = (src_rgb[i] >> 8) & 0xff;
         ULONG b = src_rgb[i] & 0xff;
-        UWORD rgb15 = (UWORD)(((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3));
-        UWORD bgr15 = (UWORD)(((b >> 3) << 10) | ((g >> 3) << 5) | (r >> 3));
-        UWORD rgb16 = (UWORD)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
-        UWORD bgr16 = (UWORD)(((b >> 3) << 11) | ((g >> 2) << 5) | (r >> 3));
 
-        switch (dst_pixfmt) {
-            case PIXFMT_LUT8:
+        switch (dst_bpp) {
+            case 1:
                 clut8[i] = (dst_cm != NULL)
                            ? (UBYTE)FindColor(dst_cm, r * 0x01010101UL, g * 0x01010101UL,
                                               b * 0x01010101UL, -1)
                            : (UBYTE)i;
                 break;
-            case PIXFMT_RGB15:   clut16[i] = rgb15; break;
-            case PIXFMT_BGR15:   clut16[i] = bgr15; break;
-            case PIXFMT_RGB15PC: clut16[i] = swap16(rgb15); break;
-            case PIXFMT_BGR15PC: clut16[i] = swap16(bgr15); break;
-            case PIXFMT_RGB16:   clut16[i] = rgb16; break;
-            case PIXFMT_BGR16:   clut16[i] = bgr16; break;
-            case PIXFMT_RGB16PC: clut16[i] = swap16(rgb16); break;
-            case PIXFMT_BGR16PC: clut16[i] = swap16(bgr16); break;
-            case PIXFMT_RGB24: clut24[i] = (r << 16) | (g << 8) | b; break;
-            case PIXFMT_BGR24: clut24[i] = (b << 16) | (g << 8) | r; break;
-            case PIXFMT_ARGB32: clut32[i] = 0xff000000UL | (r << 16) | (g << 8) | b; break;
-            case PIXFMT_BGRA32: clut32[i] = (b << 24) | (g << 16) | (r << 8) | 0xffUL; break;
-            case PIXFMT_RGBA32: clut32[i] = (r << 24) | (g << 16) | (b << 8) | 0xffUL; break;
+            case 2: clut16[i] = (UWORD)pack_color(r, g, b); break;
+            case 3: clut24[i] = pack_color(r, g, b); break;
+            case 4: clut32[i] = pack_color(r, g, b); break;
             default:
                 break;
         }
     }
+    shade_valid = 0;
+}
+
+/* the shade tables, from the source palette: 16 x 16 bit products only
+ * (mulu.w) */
+static void build_shade_tables(void)
+{
+    int lv, i;
+
+    for (lv = 0; lv < SHADE_LEVELS; lv++) {
+        UWORD k = (UWORD)(256 - (lv * (256 - SHADE_DARKEST)) / (SHADE_LEVELS - 1));
+
+        for (i = 0; i < src_count; i++) {
+            UWORD r = (UWORD)((src_rgb[i] >> 16) & 0xff);
+            UWORD g = (UWORD)((src_rgb[i] >> 8) & 0xff);
+            UWORD b = (UWORD)(src_rgb[i] & 0xff);
+            ULONG c = pack_color((ULONG)(UWORD)(r * k) >> 8,
+                                 (ULONG)(UWORD)(g * k) >> 8,
+                                 (ULONG)(UWORD)(b * k) >> 8);
+
+            if (dst_bpp == 2) {
+                shade16[lv][i] = (UWORD)c;
+            } else {
+                shade32[lv][i] = c;
+            }
+        }
+    }
+    shade_valid = 1;
+}
+
+/* the level of each destination line: how much of it covers the dark part
+ * of its source row (SHADE_GAP at the bottom). The part of a line that
+ * goes into the next row is its bright top: not counted. */
+static void build_line_levels(ULONG step_y, int dst_h)
+{
+    ULONG ay = 0;
+    int y;
+
+    for (y = 0; y < dst_h; y++) {
+        ULONG f = ay & 0xffffUL;
+        ULONG e = f + step_y;
+        ULONG g0 = 0x10000UL - SHADE_GAP;
+        ULONG over = 0;
+
+        if (e > 0x10000UL) {
+            e = 0x10000UL;
+        }
+        if (f < g0) {
+            f = g0;
+        }
+        if (e > f) {
+            over = e - f;
+        }
+        line_level[y] = (UBYTE)((over * (SHADE_LEVELS - 1) + step_y / 2) / step_y);
+        ay += step_y;
+    }
+    line_level_step = step_y;
+    line_level_h = dst_h;
+}
+
+void cgxscale_set_scanlines(int on)
+{
+    scanlines_on = on;
 }
 
 BOOL cgxscale_prepare(struct BitMap *bm, struct ColorMap *cm)
@@ -164,6 +264,10 @@ typedef struct scale_params_s {
     int dst_x, dst_y;           /* destination area, rastport coordinates */
     ULONG step_x, step_y;       /* 16.16 source pixels per destination pixel */
 } scale_params_t;
+
+/* the scanline route (cliprect_hook_scanlines()) */
+#define SCANLINE_FITS(src_h, dst_h) \
+    (dst_bpp >= 2 && (dst_h) <= SHADE_MAX_LINES && (ULONG)(dst_h) * 2 >= (ULONG)(src_h) * 3)
 
 /* message of a DoHookClipRects() hook (layers.doc, InstallLayerHook) */
 struct cliprect_msg {
@@ -245,6 +349,86 @@ static ULONG cliprect_hook(register struct Hook *hook __asm("a0"),
     return 0;
 }
 
+/* the scanline rows: same as CGX_ROWS() with the tables of level lv */
+#define SCANLINE_ROWS(nl)                                                               \
+    switch (dst_bpp) {                                                                  \
+        case 2: scalerow16(line, s, ax0, p->step_x, w, shade16[lv], nl, bpr); break;    \
+        case 3: scalerow24(line, s, ax0, p->step_x, w, shade32[lv], nl, bpr); break;    \
+        default: scalerow32(line, s, ax0, p->step_x, w, shade32[lv], nl, bpr); break;   \
+    }
+
+/* lines of the same source row and the same level, written together */
+SCALEROW_INLINE int scanline_lines(const UBYTE *lev, ULONG ay, ULONG step_y, int left, int multi)
+{
+    int nl = scalerow_lines(ay, step_y, left, multi);
+
+    if (nl > 1 && lev[1] != lev[0]) {
+        return 1;
+    }
+    if (nl > 2 && lev[2] != lev[0]) {
+        return 2;
+    }
+    return nl;
+}
+
+/* cliprect_hook() with the shade table of each line (line_level[]) */
+static ULONG cliprect_hook_scanlines(register struct Hook *hook __asm("a0"),
+                                     register struct RastPort *rp __asm("a2"),
+                                     register struct cliprect_msg *msg __asm("a1"))
+{
+    const scale_params_t *p = (const scale_params_t *)hook->h_Data;
+    UBYTE *base = NULL;
+    ULONG bpr = 0;
+    APTR lock;
+    int w = msg->bounds.MaxX - msg->bounds.MinX + 1;
+    int h = msg->bounds.MaxY - msg->bounds.MinY + 1;
+    LONG win_x = msg->bounds.MinX;
+    LONG win_y = msg->bounds.MinY;
+    ULONG ax0, ay;
+    UBYTE *line;
+    const UBYTE *lev;
+    int y, nl, multi;
+
+    if (w <= 0 || h <= 0) {
+        return 0;
+    }
+    if (msg->layer != NULL) {
+        win_x -= msg->layer->bounds.MinX;
+        win_y -= msg->layer->bounds.MinY;
+    }
+    ax0 = (ULONG)(win_x - p->dst_x) * p->step_x;
+    ay = (ULONG)(win_y - p->dst_y) * p->step_y;
+    lev = line_level + (win_y - p->dst_y);
+
+    lock = LockBitMapTags(rp->BitMap,
+                          LBMI_BASEADDRESS, (ULONG)&base,
+                          LBMI_BYTESPERROW, (ULONG)&bpr,
+                          TAG_DONE);
+    if (lock == NULL) {
+        return 0;
+    }
+    line = base + (ULONG)msg->bounds.MinY * bpr + (ULONG)msg->bounds.MinX * (ULONG)dst_bpp;
+    multi = (bpr & 3) == 0;
+
+    for (y = 0; y < h; y += nl) {
+        const UBYTE *s = p->src + (ay >> 16) * p->src_pitch;
+        int lv = lev[y];
+
+        nl = scanline_lines(lev + y, ay, p->step_y, h - y, multi);
+        if (nl == 3) {
+            SCANLINE_ROWS(3)
+        } else if (nl == 2) {
+            SCANLINE_ROWS(2)
+        } else {
+            SCANLINE_ROWS(1)
+        }
+        line += bpr * (ULONG)nl;
+        ay += p->step_y * (ULONG)nl;
+    }
+    UnLockBitMap(lock);
+    return 0;
+}
+
 void cgxscale_draw(struct RastPort *rp, const UBYTE *src, ULONG src_pitch,
                    int src_x, int src_y, int src_w, int src_h,
                    int dst_x, int dst_y, int dst_w, int dst_h,
@@ -284,6 +468,15 @@ void cgxscale_draw(struct RastPort *rp, const UBYTE *src, ULONG src_pitch,
 
     memset(&hook, 0, sizeof hook);
     hook.h_Entry = (ULONG (*)())cliprect_hook;
+    if (scanlines_on && SCANLINE_FITS(src_h, dst_h)) {
+        if (!shade_valid) {
+            build_shade_tables();
+        }
+        if (line_level_step != p.step_y || line_level_h != dst_h) {
+            build_line_levels(p.step_y, dst_h);
+        }
+        hook.h_Entry = (ULONG (*)())cliprect_hook_scanlines;
+    }
     hook.h_Data = &p;
 
     rect.MinX = (WORD)upd_x0;

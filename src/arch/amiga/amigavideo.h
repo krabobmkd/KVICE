@@ -60,6 +60,11 @@ int amiga_video_get_borders(void);
 void amiga_video_set_palette(int palette);
 int amiga_video_get_palette(void);
 
+/* Display > Try scanlines: "AmigaScanlines" resource, used only on 15/16,
+   24, 32 bit screens with a height zoom of 1.5 or more */
+void amiga_video_set_scanlines(int on);
+int amiga_video_get_scanlines(void);
+
 /* "no rom" state: the emulator screen shows a report instead of the
    emulated screen, one line per entry: "label  value", the value in red
    when bad. A NULL label is an empty line. The strings must stay valid

@@ -2,12 +2,14 @@
  * \brief   AmigaOS 3.x port: MUI settings window
  *
  * One window: a category list on the left, a page per category on the right,
- * Save / Use / Cancel at the bottom (MUI prefs style).
+ * Save / Close at the bottom.
  *
  * Each setting is bound to a VICE resource (or to a getter/setter pair), the
  * same idea as the VICE 3.2 Amiga port mui.c ui_to_from_t tables: values are
- * read into the gadgets when the window opens, and written back to the
- * resources on Use or Save. Save also writes the vicerc file.
+ * read into the gadgets when the window opens, and each change is written
+ * back to its resource at once, so the gadgets always show what is in use
+ * (checkmarks and cycles when changed, file paths on Return or after their
+ * "..." requester). Save also writes the vicerc file.
  *
  * The window is not modal: the MUI application signals are part of the main
  * loop Wait() (amigawait.c) and polled at each frame only when they are set
@@ -57,6 +59,7 @@
 #include "amigakeys.h"
 #include "amigafile.h"
 #include "amigalocale.h"
+#include "amigamonitor.h"
 #include "amigamui.h"
 #include "amigatrace.h"
 #include "amiga_screenmode.h"
@@ -102,17 +105,18 @@ MUI_NewObjectB(const char *cl, Tag tags, ...)
 
 /* MUIM_Application_ReturnID values */
 #define RID_SAVE    1
-#define RID_USE     2
-#define RID_CANCEL  3
+#define RID_CLOSE   3
 #define RID_BROWSE  4   /* "..." of the drawer row */
 #define RID_ROM_DEFAULT 5   /* "Set ROM defaults for this model" */
-#define RID_MODEL   7   /* the C64 model cycle changed: its description */
-#define RID_DRIVE_TYPE 8    /* the drive 8 type cycle changed: its ROM file */
+#define RID_FS_MODE 9   /* a screen mode was chosen in the popup */
 #define RID_INPUT_PORTS 20  /* an Input page cycle changed: applied at once */
 #define RID_DRIVE_ROM_EDIT 22 /* the read-only ROM file string was edited */
 #define RID_BROWSE_ROM  10  /* + 0..2: "..." of a ROM file row */
 #define RID_BROWSE_FILE 6   /* "..." of the file row (custom keymap) */
 #define RID_ABOUT_CLOSE 23  /* OK or close gadget of the about window */
+/* + page * MAX_SETTINGS_PER_PAGE + row: that setting changed, applied at
+ * once (after the monitor RIDs) */
+#define RID_SETTING 256
 
 
 /* ------------------------------------------------------------------------- */
@@ -160,6 +164,8 @@ static char drive_rom_info[MAX_PATH_LEN + 40];
 static setting_t *drawer_setting = NULL;
 /* the file row (custom keymap), for the "..." requester */
 static setting_t *file_setting = NULL;
+/* the keymap file cycle: standard or the custom file */
+static setting_t *keymap_setting = NULL;
 
 /* Keyboard page: C64 key -> Amiga key table of the keymap in use */
 #define KEYS_ROWS_MAX 40
@@ -184,7 +190,7 @@ static void rom_default_path(const char *name, char *out, size_t size)
 }
 
 /* Fullscreen page: the screen mode row (only one) and the checkbox that
- * disables it. The mode shown is kept here between the popup and Use. */
+ * disables it. The mode chosen in the popup is applied at once. */
 static setting_t *fs_auto_setting = NULL;
 static setting_t *fs_mode_setting = NULL;
 static Object *fs_mode_text = NULL;
@@ -276,7 +282,7 @@ static int rom_file_ok(const char *path, int size)
     return len == (long)size;
 }
 
-/* resource -> gadget */
+/* resource -> gadget, without notification (a notification applies) */
 static void setting_to_ui(setting_t *s)
 {
     int value = 0;
@@ -293,7 +299,7 @@ static void setting_to_ui(setting_t *s)
     }
     if (s->type == BIND_ROMFILE) {
         rom_display_path(s, s->initial_string, sizeof s->initial_string);
-        set(s->obj, MUIA_String_Contents, (ULONG)s->initial_string);
+        nnset(s->obj, MUIA_String_Contents, (ULONG)s->initial_string);
         return;
     }
     if (s->type == BIND_DRAWER || s->type == BIND_FILE) {
@@ -304,7 +310,7 @@ static void setting_to_ui(setting_t *s)
         }
         strncpy(s->initial_string, str, sizeof s->initial_string - 1);
         s->initial_string[sizeof s->initial_string - 1] = '\0';
-        set(s->obj, MUIA_String_Contents, (ULONG)s->initial_string);
+        nnset(s->obj, MUIA_String_Contents, (ULONG)s->initial_string);
         return;
     }
     if (setting_get_value(s, &value) < 0) {
@@ -313,7 +319,7 @@ static void setting_to_ui(setting_t *s)
     }
     if (s->type == BIND_CHECK) {
         s->initial_index = value ? 1 : 0;
-        set(s->obj, MUIA_Selected, value ? TRUE : FALSE);
+        nnset(s->obj, MUIA_Selected, value ? TRUE : FALSE);
         return;
     }
     for (i = 0; i < s->count; i++) {
@@ -322,7 +328,7 @@ static void setting_to_ui(setting_t *s)
             break;
         }
     }
-    /* unknown value: show the first entry, but do not apply it on Use */
+    /* unknown value: show the first entry, but do not apply it */
     nnset(s->obj, MUIA_Cycle_Active, s->initial_index >= 0 ? s->initial_index : 0);
 }
 
@@ -411,8 +417,8 @@ static void add_amiga_port_entries(setting_t *s, int paddles)
 
 /* Input page: the Amiga port types (mouse port, joystick port) and what
  * drives each C64 control port: none, or the device of an Amiga port. All
- * applied together by input_apply() (any of them changed, Use,
- * Save): the Amiga ports are opened again when their type changed. */
+ * applied together by input_apply() when any of them changed: the Amiga
+ * ports are opened again when their type changed. */
 #define C64_FROM_NONE           0
 #define C64_FROM_MOUSE_PORT     1   /* lowlevel port 0 */
 #define C64_FROM_JOYSTICK_PORT  2   /* lowlevel port 1 */
@@ -519,9 +525,9 @@ static void build_settings(void)
     s->setter = set_c64_port_none;
     add_c64_port_entries(s);
 
-    /* Keyboard: the custom file is applied before the choice (Use). The
-       symbolic / positional mapping is in the Keyboard menu only (at once) */
-    s = new_setting(PAGE_KEYBOARD, BIND_CYCLE, NULL, MSG_KEYMAP);
+    /* Keyboard: a custom file chosen is also selected. The symbolic /
+       positional mapping is in the Keyboard menu only */
+    s = keymap_setting = new_setting(PAGE_KEYBOARD, BIND_CYCLE, NULL, MSG_KEYMAP);
     s->getter = get_keymap_file;
     s->setter = set_keymap_file;
     setting_add_entry(s, LOC(MSG_KEYMAP_STANDARD), KBD_INDEX_POS);
@@ -582,7 +588,6 @@ static void build_settings(void)
     setting_add_entry(s, "4000", DRIVE_TYPE_4000);
     new_setting(PAGE_DRIVE8, BIND_CHECK, "Drive8TrueEmulation", MSG_DRIVE_TRUE_EMULATION);
     new_setting(PAGE_DRIVE8, BIND_CHECK, "AutostartHandleTrueDriveEmulation", MSG_AUTOSTART_FAST_LOAD);
-    /* drawer before the switch: applied in this order on Use */
     drawer_setting = new_setting(PAGE_DRIVE8, BIND_DRAWER, "FSDevice8Dir", MSG_DRIVE8_DRAWER);
     s = new_setting(PAGE_DRIVE8, BIND_CHECK, NULL, MSG_DRIVE8_USE_DRAWER);
     s->getter = amiga_drive8_drawer_get;
@@ -685,6 +690,9 @@ static Object *make_readonly_string(void)
                           TAG_DONE);
 }
 
+/* defined with the application below */
+static Object *mui_app;
+
 /* ASL screen mode popup hooks (MUI Popasl), like AmigaMame LScreenModeReq.
  * No depth: the fullscreen code chooses it (16/32 colors on native modes). */
 static struct TagItem fs_asl_tags[] = {
@@ -715,6 +723,8 @@ static ULONG fs_popasl_stop(register struct Hook *hook __asm("a0"),
     fs_mode_id = smreq->sm_DisplayID;
     AMIGA_TRACE(("screen mode chosen: 0x%08lx", (unsigned long)fs_mode_id));
     fs_show_mode();
+    /* applied from the input loop, not inside the popup */
+    DoMethod(mui_app, MUIM_Application_ReturnID, RID_FS_MODE);
     return 0;
 }
 
@@ -1002,63 +1012,92 @@ static int roms_all_loaded(void)
     return 1;
 }
 
-/* the ROM file rows: a changed file must exist and have the right size,
- * and all of them while ROMs are missing ("no rom" state). Returns 0, or -1
- * after showing which file is wrong (that row is then not applied). */
-static int apply_rom_settings(void)
+/* a ROM file row: a changed file must exist and have the right size, also
+ * an unchanged one when \a check. Returns 0, or -1 after showing that the
+ * file is wrong (it is then not applied). */
+static int rom_row_apply(setting_t *s, int check)
+{
+    STRPTR str = NULL;
+    int changed;
+
+    if (s == NULL || s->obj == NULL) {
+        return 0;
+    }
+    get(s->obj, MUIA_String_Contents, &str);
+    if (str == NULL) {
+        return 0;
+    }
+    changed = strcmp((const char *)str, s->initial_string) != 0;
+    if (!changed && !check) {
+        return 0;
+    }
+    if (!rom_file_ok((const char *)str, s->rom_size)) {
+        ULONG args[2];
+
+        args[0] = (ULONG)LOC(s->label_msg);
+        args[1] = (ULONG)str;
+        MUI_RequestA(mui_app, mui_win, 0, NULL, (char *)LOC(MSG_ERROR_OK),
+                     (char *)LOC(MSG_ERROR_ROM_FILE), args);
+        return -1;
+    }
+    if (!changed) {
+        /* right file, not loaded yet: roms_reload() */
+        return 0;
+    }
+    if (resources_set_string(s->resource, (const char *)str) < 0) {
+        log_error(LOG_DEFAULT, "settings: cannot load the ROM %s.", (const char *)str);
+        return -1;
+    }
+    /* changed and loaded: the new value is the reference now */
+    strncpy(s->initial_string, (const char *)str, sizeof s->initial_string - 1);
+    return 0;
+}
+
+/* "no rom" state: load them all again once every row has a right file, a
+ * file may have been copied where the settings already pointed */
+static void roms_reload(void)
+{
+    int i;
+
+    if (roms_all_loaded()) {
+        return;
+    }
+    for (i = 0; i < ROM_COUNT; i++) {
+        STRPTR str = NULL;
+
+        if (rom_settings[i] == NULL || rom_settings[i]->obj == NULL) {
+            continue;
+        }
+        get(rom_settings[i]->obj, MUIA_String_Contents, &str);
+        if (!rom_file_ok((const char *)str, rom_settings[i]->rom_size)) {
+            return;
+        }
+    }
+    mem_load();
+}
+
+/* all the ROM file rows, also the unchanged ones while ROMs are missing
+ * when \a check. Returns -1 when a file was not accepted. */
+static int apply_rom_settings(int check)
 {
     int i, ret = 0;
-    int check_all = !roms_all_loaded();
+    int check_all = check && !roms_all_loaded();
 
     for (i = 0; i < ROM_COUNT; i++) {
-        setting_t *s = rom_settings[i];
-        STRPTR str = NULL;
-        int changed;
-
-        if (s == NULL || s->obj == NULL) {
-            continue;
-        }
-        get(s->obj, MUIA_String_Contents, &str);
-        if (str == NULL) {
-            continue;
-        }
-        changed = strcmp((const char *)str, s->initial_string) != 0;
-        if (!changed && !check_all) {
-            continue;
-        }
-        if (!rom_file_ok((const char *)str, s->rom_size)) {
-            ULONG args[2];
-
-            args[0] = (ULONG)LOC(s->label_msg);
-            args[1] = (ULONG)str;
-            MUI_RequestA(mui_app, mui_win, 0, NULL, (char *)LOC(MSG_ERROR_OK),
-                         (char *)LOC(MSG_ERROR_ROM_FILE), args);
+        if (rom_row_apply(rom_settings[i], check_all) < 0) {
             ret = -1;
-            continue;
         }
-        if (!changed) {
-            /* right file, not loaded yet: mem_load() below */
-            continue;
-        }
-        if (resources_set_string(s->resource, (const char *)str) < 0) {
-            log_error(LOG_DEFAULT, "settings: cannot load the ROM %s.", (const char *)str);
-            ret = -1;
-            continue;
-        }
-        /* changed and loaded: the new value is the reference now */
-        strncpy(s->initial_string, (const char *)str, sizeof s->initial_string - 1);
     }
-    /* "no rom" state: load them all again, a file may have been copied
-       where the settings already pointed */
-    if (check_all && ret == 0 && !roms_all_loaded()) {
-        mem_load();
+    if (ret == 0) {
+        roms_reload();
     }
     return ret;
 }
 
-/* Returns -1 when a ROM file was not accepted: the window stays open */
 static void drive_watch_update(void);
 static void input_apply(void);
+static void model_info_update(void);
+static void drive_rom_info_update(void);
 
 /* the configuration file keeps the drive types set to "none" only for a
  * missing ROM, and the sound turned off only because ahi.device could not
@@ -1085,63 +1124,119 @@ static int save_resources(void)
     return ret;
 }
 
-static int apply_settings(void)
+static int is_string_setting(const setting_t *s)
 {
-    int page, i, ret;
-
-    /* the files first: a keymap file is then loaded by the keymap choice */
-    for (page = 0; page < PAGE_COUNT; page++) {
-        for (i = 0; i < settings_count[page]; i++) {
-            if (settings[page][i].type == BIND_FILE) {
-                setting_from_ui(&settings[page][i]);
-            }
-        }
-    }
-    for (page = 0; page < PAGE_COUNT; page++) {
-        if (page == PAGE_INPUT) {
-            /* together, below */
-            continue;
-        }
-        for (i = 0; i < settings_count[page]; i++) {
-            if (settings[page][i].type != BIND_ROMFILE
-                    && settings[page][i].type != BIND_FILE) {
-                setting_from_ui(&settings[page][i]);
-            }
-        }
-    }
-    input_apply();
-    ret = apply_rom_settings();
-    /* drive 8 type may have changed */
-    drive_watch_update();
-    /* the keyboard mapping is also in a menu */
-    amiga_video_sync_menu();
-    /* the keymap may have changed (file, or the built-in one) */
-    keys_list_fill();
-    return ret;
+    return s->type == BIND_DRAWER || s->type == BIND_FILE || s->type == BIND_ROMFILE;
 }
 
-static void model_info_update(void);
-static void drive_rom_info_update(void);
-
-static void settings_to_ui(void)
+/* the gadgets show the resources: all but the file paths (one may be in
+ * edition), or all with \a strings */
+static void settings_values_to_ui(int strings)
 {
     int page, i;
 
     for (page = 0; page < PAGE_COUNT; page++) {
         for (i = 0; i < settings_count[page]; i++) {
-            setting_to_ui(&settings[page][i]);
+            if (strings || !is_string_setting(&settings[page][i])) {
+                setting_to_ui(&settings[page][i]);
+            }
         }
     }
     keys_list_fill();
     /* the cycles were set without notification */
     model_info_update();
     drive_rom_info_update();
-    /* the notification only follows changes: initial state here */
+    /* the notification only follows changes: the state here */
     if (fs_auto_setting != NULL && fs_mode_setting != NULL) {
         ULONG automatic = FALSE;
 
         get(fs_auto_setting->obj, MUIA_Selected, &automatic);
         set(fs_mode_setting->obj, MUIA_Disabled, automatic ? TRUE : FALSE);
+    }
+}
+
+static void settings_to_ui(void)
+{
+    settings_values_to_ui(1);
+}
+
+/* after a change: what depends on it, and the gadgets show what is really
+ * in use (a setting may change others, or be refused) */
+static void settings_applied(void)
+{
+    /* drive 8 type may have changed */
+    drive_watch_update();
+    /* the keyboard mapping and the drive 8 drawer are also in menus */
+    amiga_video_sync_menu();
+    settings_values_to_ui(0);
+}
+
+/* a file path row (drawer, keymap file) changed: applied, then shown as
+ * the resource reads */
+static void string_setting_apply(setting_t *s)
+{
+    STRPTR str = NULL;
+    int changed;
+
+    get(s->obj, MUIA_String_Contents, &str);
+    changed = str != NULL && strcmp((const char *)str, s->initial_string) != 0;
+    setting_from_ui(s);
+    setting_to_ui(s);
+    if (changed && s == file_setting && keymap_setting != NULL
+            && get_keymap_file() != KBD_INDEX_USERPOS) {
+        /* a custom keymap file chosen: it is used */
+        setting_set_value(keymap_setting, KBD_INDEX_USERPOS);
+    }
+}
+
+/* one setting changed in the window: applied at once */
+static void setting_apply(setting_t *s)
+{
+    if (s->type == BIND_ROMFILE) {
+        rom_row_apply(s, !roms_all_loaded());
+        roms_reload();
+    } else if (s->type == BIND_DRAWER || s->type == BIND_FILE) {
+        string_setting_apply(s);
+    } else {
+        /* a drawer or keymap file typed without Return comes first: the
+           switch that uses it may be this one */
+        if (drawer_setting != NULL) {
+            string_setting_apply(drawer_setting);
+        }
+        if (file_setting != NULL) {
+            string_setting_apply(file_setting);
+        }
+        setting_from_ui(s);
+    }
+    settings_applied();
+}
+
+/* the file paths typed but not validated by Return, when the window is
+ * closed or saved. Returns -1 when a ROM file was not accepted. */
+static int apply_pending(int check_roms)
+{
+    int page, i, ret;
+
+    for (page = 0; page < PAGE_COUNT; page++) {
+        for (i = 0; i < settings_count[page]; i++) {
+            setting_t *s = &settings[page][i];
+
+            if (s->type == BIND_DRAWER || s->type == BIND_FILE) {
+                string_setting_apply(s);
+            }
+        }
+    }
+    ret = apply_rom_settings(check_roms);
+    settings_applied();
+    return ret;
+}
+
+/** \brief  The menus changed settings: the open window shows them
+ */
+void amiga_settings_refresh(void)
+{
+    if (mui_app != NULL && mui_win_open) {
+        settings_values_to_ui(0);
     }
 }
 
@@ -1202,7 +1297,7 @@ static Object *make_about_window(Object *bt_ok)
 static int create_app(void)
 {
     Object *list, *pages;
-    Object *bt_save, *bt_use, *bt_cancel, *bt_about_ok;
+    Object *bt_save, *bt_close, *bt_about_ok;
     Object *page_objs[PAGE_COUNT];
     Object *list_obj = NULL;
     int page;
@@ -1244,8 +1339,7 @@ static int create_app(void)
                           TAG_DONE);
 
     bt_save = make_button(LOC(MSG_SETTINGS_SAVE));
-    bt_use = make_button(LOC(MSG_SETTINGS_USE));
-    bt_cancel = make_button(LOC(MSG_SETTINGS_CANCEL));
+    bt_close = make_button(LOC(MSG_SETTINGS_CLOSE));
 
     mui_win = MUI_NewObjectB(MUIC_Window,
             MUIA_Window_Title, (ULONG)LOC(MSG_SETTINGS_TITLE),
@@ -1261,9 +1355,7 @@ static int create_app(void)
                     MUIA_Group_SameSize, TRUE,
                     MUIA_Group_Child, (ULONG)bt_save,
                     MUIA_Group_Child, (ULONG)make_space(),
-                    MUIA_Group_Child, (ULONG)bt_use,
-                    MUIA_Group_Child, (ULONG)make_space(),
-                    MUIA_Group_Child, (ULONG)bt_cancel,
+                    MUIA_Group_Child, (ULONG)bt_close,
                     TAG_DONE),
                 TAG_DONE),
             TAG_DONE);
@@ -1297,12 +1389,10 @@ static int create_app(void)
 
     DoMethod(bt_save, MUIM_Notify, MUIA_Pressed, FALSE,
              (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_SAVE);
-    DoMethod(bt_use, MUIM_Notify, MUIA_Pressed, FALSE,
-             (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_USE);
-    DoMethod(bt_cancel, MUIM_Notify, MUIA_Pressed, FALSE,
-             (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_CANCEL);
+    DoMethod(bt_close, MUIM_Notify, MUIA_Pressed, FALSE,
+             (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_CLOSE);
     DoMethod(mui_win, MUIM_Notify, MUIA_Window_CloseRequest, TRUE,
-             (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_CANCEL);
+             (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_CLOSE);
     if (mui_about_win != NULL) {
         DoMethod(bt_about_ok, MUIM_Notify, MUIA_Pressed, FALSE,
                  (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_ABOUT_CLOSE);
@@ -1333,13 +1423,32 @@ static int create_app(void)
         DoMethod(rom_default_button, MUIM_Notify, MUIA_Pressed, FALSE,
                  (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_ROM_DEFAULT);
     }
-    if (model_setting != NULL && model_setting->obj != NULL) {
-        DoMethod(model_setting->obj, MUIM_Notify, MUIA_Cycle_Active, MUIV_EveryTime,
-                 (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_MODEL);
-    }
-    if (drive_type_setting != NULL && drive_type_setting->obj != NULL) {
-        DoMethod(drive_type_setting->obj, MUIM_Notify, MUIA_Cycle_Active, MUIV_EveryTime,
-                 (ULONG)mui_app, 2, MUIM_Application_ReturnID, RID_DRIVE_TYPE);
+    /* each change applied at once: checkmarks and cycles when changed,
+       file paths on Return (the "..." requesters apply too) */
+    for (page = 0; page < PAGE_COUNT; page++) {
+        int i;
+
+        if (page == PAGE_INPUT) {
+            /* together, RID_INPUT_PORTS below */
+            continue;
+        }
+        for (i = 0; i < settings_count[page]; i++) {
+            setting_t *s = &settings[page][i];
+            ULONG rid = RID_SETTING + page * MAX_SETTINGS_PER_PAGE + i;
+            ULONG attr;
+
+            if (s->obj == NULL) {
+                continue;
+            }
+            switch (s->type) {
+                case BIND_CHECK:      attr = MUIA_Selected; break;
+                case BIND_CYCLE:      attr = MUIA_Cycle_Active; break;
+                case BIND_SCREENMODE: continue;     /* RID_FS_MODE */
+                default:              attr = MUIA_String_Acknowledge; break;
+            }
+            DoMethod(s->obj, MUIM_Notify, attr, MUIV_EveryTime,
+                     (ULONG)mui_app, 2, MUIM_Application_ReturnID, rid);
+        }
     }
     if (drive_rom_text != NULL) {
         DoMethod(drive_rom_text, MUIM_Notify, MUIA_String_Contents, MUIV_EveryTime,
@@ -1359,16 +1468,39 @@ static int create_app(void)
     return 0;
 }
 
-static void close_window(void)
+/* 1 while one of the windows of the application is open */
+static int any_window_open(void)
 {
-    set(mui_win, MUIA_Window_Open, FALSE);
-    mui_win_open = 0;
-    if (!mui_about_open) {
+    return mui_win_open || mui_about_open || amiga_monitor_is_open();
+}
+
+/** \brief  A window of the application was closed
+ */
+void amiga_mui_window_closed(void)
+{
+    if (!any_window_open()) {
         /* opened from the fullscreen: back to it */
         amiga_video_requester_end();
         /* closed windows: MUI must not be polled nor waited for anymore */
         mui_sigs = 0;
     }
+}
+
+/** \brief  The MUI application, created on first use (NULL without MUI)
+ */
+Object *amiga_mui_app(void)
+{
+    if (mui_app == NULL && create_app() != 0) {
+        return NULL;
+    }
+    return mui_app;
+}
+
+static void close_window(void)
+{
+    set(mui_win, MUIA_Window_Open, FALSE);
+    mui_win_open = 0;
+    amiga_mui_window_closed();
     AMIGA_TRACE(("settings window closed"));
 }
 
@@ -1376,10 +1508,7 @@ static void close_about(void)
 {
     set(mui_about_win, MUIA_Window_Open, FALSE);
     mui_about_open = 0;
-    if (!mui_win_open) {
-        amiga_video_requester_end();
-        mui_sigs = 0;
-    }
+    amiga_mui_window_closed();
 }
 
 /* "..." of the drawer row: ASL drawer requester on the settings window */
@@ -1400,6 +1529,7 @@ static void browse_drawer(void)
     if (path != NULL) {
         set(drawer_setting->obj, MUIA_String_Contents, (ULONG)path);
         lib_free(path);
+        setting_apply(drawer_setting);
     }
 }
 
@@ -1419,6 +1549,7 @@ static void browse_rom(int index)
     if (path != NULL) {
         set(rom_settings[index]->obj, MUIA_String_Contents, (ULONG)path);
         lib_free(path);
+        setting_apply(rom_settings[index]);
     }
 }
 
@@ -1438,11 +1569,11 @@ static void browse_file(void)
     if (path != NULL) {
         set(file_setting->obj, MUIA_String_Contents, (ULONG)path);
         lib_free(path);
+        setting_apply(file_setting);
     }
 }
 
-/* the line under the model cycle: video standard and SID of the model
- * chosen in it (not applied yet) */
+/* the line under the model cycle: video standard and SID of the model */
 static void model_info_update(void)
 {
     ULONG v = 0;
@@ -1630,8 +1761,8 @@ static void drive_rom_info_update(void)
 }
 
 /* "Set ROM defaults for this model": the ROM rows show the files of the
- * model chosen in the cycle, in the default drawer (applied on Use/Save,
- * checked like a chosen file) */
+ * model chosen in the cycle, in the default drawer, applied at once
+ * (checked like a chosen file) */
 static void rom_model_defaults(void)
 {
     const char *names[AMIGA_MACHINE_ROMS_MAX];
@@ -1658,6 +1789,8 @@ static void rom_model_defaults(void)
         rom_default_path(names[i], path, sizeof path);
         set(rom_settings[i]->obj, MUIA_String_Contents, (ULONG)path);
     }
+    apply_rom_settings(1);
+    settings_applied();
 }
 
 /** \brief  Open the settings window (non-modal, the emulation goes on)
@@ -1713,14 +1846,14 @@ void amiga_mui_handle_events(void)
 {
     LONG rid;
 
-    if (mui_app == NULL || (!mui_win_open && !mui_about_open)) {
+    if (mui_app == NULL || !any_window_open()) {
         return;
     }
     do {
         rid = (LONG)DoMethod(mui_app, MUIM_Application_NewInput, (ULONG)&mui_sigs);
         switch (rid) {
             case RID_SAVE:
-                if (apply_settings() < 0) {
+                if (apply_pending(1) < 0) {
                     /* a ROM file to fix: the window stays open */
                     break;
                 }
@@ -1728,16 +1861,15 @@ void amiga_mui_handle_events(void)
                     log_error(LOG_DEFAULT, "settings: cannot save the configuration file.");
                 }
                 close_window();
-                return;
-            case RID_USE:
-                if (apply_settings() < 0) {
-                    break;
+                if (!any_window_open()) {
+                    return;
                 }
+                break;
+            case RID_CLOSE:
+                /* a wrong ROM file typed was told and is not applied */
+                apply_pending(0);
                 close_window();
-                return;
-            case RID_CANCEL:
-                close_window();
-                if (!mui_about_open) {
+                if (!any_window_open()) {
                     return;
                 }
                 break;
@@ -1748,10 +1880,13 @@ void amiga_mui_handle_events(void)
                 if (mui_about_open) {
                     close_about();
                 }
+                if (amiga_monitor_is_open()) {
+                    amiga_monitor_handle_rid(RID_MON_CLOSE);
+                }
                 return;
             case RID_ABOUT_CLOSE:
                 close_about();
-                if (!mui_win_open) {
+                if (!any_window_open()) {
                     return;
                 }
                 break;
@@ -1761,11 +1896,10 @@ void amiga_mui_handle_events(void)
             case RID_ROM_DEFAULT:
                 rom_model_defaults();
                 break;
-            case RID_MODEL:
-                model_info_update();
-                break;
-            case RID_DRIVE_TYPE:
-                drive_rom_info_update();
+            case RID_FS_MODE:
+                if (fs_mode_setting != NULL) {
+                    setting_apply(fs_mode_setting);
+                }
                 break;
             case RID_DRIVE_ROM_EDIT:
                 /* read only: Del, Backspace or paste undone */
@@ -1791,6 +1925,20 @@ void amiga_mui_handle_events(void)
                 browse_rom((int)(rid - RID_BROWSE_ROM));
                 break;
             default:
+                if (rid >= RID_SETTING
+                        && rid < RID_SETTING + PAGE_COUNT * MAX_SETTINGS_PER_PAGE) {
+                    int page = (int)(rid - RID_SETTING) / MAX_SETTINGS_PER_PAGE;
+                    int i = (int)(rid - RID_SETTING) % MAX_SETTINGS_PER_PAGE;
+
+                    if (i < settings_count[page]) {
+                        setting_apply(&settings[page][i]);
+                    }
+                } else if (rid >= RID_MON_FIRST && rid <= RID_MON_LAST) {
+                    amiga_monitor_handle_rid((ULONG)rid);
+                    if (!any_window_open()) {
+                        return;
+                    }
+                }
                 break;
         }
     } while (rid != 0);
@@ -1809,8 +1957,9 @@ void amiga_mui_close_all(void)
             set(mui_about_win, MUIA_Window_Open, FALSE);
             mui_about_open = 0;
         }
-        /* disposes the window and all gadgets too */
+        /* disposes the windows and all gadgets too */
         MUI_DisposeObject(mui_app);
+        amiga_monitor_dispose();
         mui_app = NULL;
         mui_win = NULL;
         mui_about_win = NULL;

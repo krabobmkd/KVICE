@@ -15,6 +15,7 @@ Commodore 64, Plus/4 and VIC-20 emulators for AmigaOS 3.x
   @{" Requirements          " LINK REQUIREMENTS}  What it needs to run
   @{" File formats          " LINK FORMATS}   .d64, .prg, .crt, .t64/.tap, .vsf
   @{" Menus                 " LINK MENUS}     What the menus do
+  @{" Monitor               " LINK monitor.guide/MAIN}   Debug: registers, step, breakpoints
   @{" BASIC programs        " LINK BASIC}     .prg and .bas, EmojiGear, quick guides
   @{" Fork Effort           " LINK FORK}      What KVICE adds to VICE 3.10
   @{" Developer Effort      " LINK DEVEL}     Speed work, for developers who help
@@ -163,8 +164,13 @@ the Colodore method applied to the VIC chip: softer dark colors, light pastel on
 @{b}Mike (PAL), Mike (NTSC)@{ub}@{lindent 6}
 the palettes from the VIC-20 community, for the European (PAL) and American (NTSC) machines.
 @{lindent 0}
-@{b}Snapshot@{ub}@{lindent 2}
-Load and save the whole machine state
+@{b}Monitor@{ub}@{lindent 2}
+@{b}Monitor...@{ub} (Amiga+M)@{lindent 4}
+opens the machine code monitor window, without stopping the emulation: CPU registers, disassembly from PC with Break, Run, Step and Step over, a hexadecimal memory view, the video and sound chip registers, and breakpoints to add or remove by address. It also opens by itself when a breakpoint is reached, or when a crashed program locks the CPU with a JAM opcode.
+When the monitor window is active: F5 run, Shift+F5 break, F10 step over (a JSR runs at once), Shift+F10 step one instruction.
+The whole window is explained in its own guide: @{"monitor.guide" LINK monitor.guide/MAIN}, installed next to this one.@{lindent 2}
+@{b}Load snapshot, Save snapshot@{ub}@{lindent 4}
+load and save the whole machine state
 @{lindent 0}
 @{b}Input@{ub}@{lindent 2}
 @{b}Keyboard@{ub}@{lindent 4}
@@ -249,6 +255,7 @@ Amiga+F switches between the window and a fullscreen at any time. The fullscreen
 @{b}Realtime settings@{ub}
 
 The settings window can be opened and used while the emulator runs: the emulation goes on behind it.
+Each change applies at once, and the window always shows what is in use: checkboxes and cycles when you change them, file paths when you press Return or choose them with "...". Save keeps the settings for the next start, Close just closes the window.
 @ENDNODE
 
 @NODE DEVEL "Developer Effort from original VICE"

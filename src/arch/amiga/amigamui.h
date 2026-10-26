@@ -27,9 +27,12 @@
 #define VICE_AMIGAMUI_H
 
 #include <exec/types.h>
+#include <intuition/classusr.h>
 
 /* open the settings window (non-modal) */
 void amiga_settings_open(void);
+/* the menus changed settings: the open settings window shows them */
+void amiga_settings_refresh(void);
 /* signals to add to the main loop Wait(), 0 when MUI is idle */
 //ULONG amiga_mui_signal_mask(void);
 /* process MUI input, when one of amiga_mui_signal_mask() is set */
@@ -39,6 +42,12 @@ void amiga_about_open(void);
 /* control ports 1 and 2 exchange their Amiga ports (and device type:
    joystick, paddles), the settings Input page shows it if it exists */
 void amiga_input_switch_ports(void);
+/* the MUI application, created on first use (NULL without MUI): the other
+   windows (monitor) are added to it */
+Object *amiga_mui_app(void);
+/* a window of the application was closed: stops polling MUI when none is
+   left open */
+void amiga_mui_window_closed(void);
 /* free MUI resources, safe to call more than once */
 void amiga_mui_close_all(void);
 /* "no rom" state: when ROMs are missing, show "(no rom)", open the settings

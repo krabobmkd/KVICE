@@ -226,6 +226,9 @@ static int border_mode = AMIGA_BORDERS_FULL;
 static int palette_choice = AMIGA_PALETTE_VICE;
 /* chosen in the Display menu: saved when quitting */
 static int palette_menu_changed = 0;
+/* "AmigaScanlines", Display > Try scanlines: saved when quitting */
+static int scanlines = 0;
+static int scanlines_menu_changed = 0;
 static int display_scale = 1;
 
 /* to redraw everything after a resize or an exposure */
@@ -303,6 +306,19 @@ static int set_palette_choice(int val, void *param)
     return 0;
 }
 
+static void amiga_redraw_all(void);
+
+static int set_scanlines(int val, void *param)
+{
+    val = (val != 0);
+    if (val != scanlines) {
+        scanlines = val;
+        cgxscale_set_scanlines(val);
+        amiga_redraw_all();
+    }
+    return 0;
+}
+
 static const resource_int_t resources_int_palette[] =
 {
     { "AmigaPalette", AMIGA_PALETTE_VICE, RES_EVENT_NO, NULL,
@@ -326,6 +342,8 @@ static const resource_int_t resources_int[] =
       &fs_mode_id, set_fs_mode_id, NULL },
     { "AmigaFullscreenMenu", 0, RES_EVENT_NO, NULL,
       &fs_menu, set_fs_menu, NULL },
+    { "AmigaScanlines", 0, RES_EVENT_NO, NULL,
+      &scanlines, set_scanlines, NULL },
     RESOURCE_INT_LIST_END
 };
 
@@ -581,6 +599,22 @@ void amiga_video_set_palette(int palette)
 int amiga_video_get_palette(void)
 {
     return palette_choice;
+}
+
+/** \brief  Display > Try scanlines: CRT like darker lines between the rows,
+ *          when the screen allows it (amiga_cgxscale.c), else no change
+ */
+void amiga_video_set_scanlines(int on)
+{
+    if ((on != 0) != scanlines) {
+        scanlines_menu_changed = 1;
+    }
+    resources_set_int("AmigaScanlines", on);
+}
+
+int amiga_video_get_scanlines(void)
+{
+    return scanlines;
 }
 
 /** \brief  Compute the shown part of the canvas from the border mode
@@ -2164,8 +2198,9 @@ static char *amiga_vicerc_name(void)
 }
 
 /* a line amiga_save_quit_settings() writes again: the geometry ones when
- * \a geometry, the palette one when \a palette */
-static int is_quit_settings_line(const char *line, int geometry, int palette)
+ * \a geometry, the palette one when \a palette, the scanlines one when
+ * \a scan */
+static int is_quit_settings_line(const char *line, int geometry, int palette, int scan)
 {
     static const char *const names[] = {
         "AmigaWindowLeft=", "AmigaWindowTop=", "AmigaWindowWidth=", "AmigaWindowHeight="
@@ -2178,6 +2213,9 @@ static int is_quit_settings_line(const char *line, int geometry, int palette)
                 return 1;
             }
         }
+    }
+    if (scan && strncmp(line, "AmigaScanlines=", 15) == 0) {
+        return 1;
     }
     return palette && strncmp(line, "AmigaPalette=", 13) == 0;
 }
@@ -2197,14 +2235,15 @@ static void amiga_save_quit_settings(void)
     FILE *f;
     char section[64];
     char geometry[180];
-    int save_geometry, save_palette;
+    int save_geometry, save_palette, save_scan;
     int in_section = 0;
     int written = 0;
     char *line, *next;
 
     save_geometry = window_geometry_changed && window_inner_w > 0 && window_inner_h > 0;
     save_palette = palette_menu_changed && amiga_machine.palettes != NULL;
-    if (!save_geometry && !save_palette) {
+    save_scan = scanlines_menu_changed;
+    if (!save_geometry && !save_palette && !save_scan) {
         return;
     }
     fname = amiga_vicerc_name();
@@ -2222,6 +2261,10 @@ static void amiga_save_quit_settings(void)
         /* also the default one: resources_save() leaves it out */
         snprintf(geometry + strlen(geometry), sizeof geometry - strlen(geometry),
                  "AmigaPalette=%d\n", palette_choice);
+    }
+    if (save_scan) {
+        snprintf(geometry + strlen(geometry), sizeof geometry - strlen(geometry),
+                 "AmigaScanlines=%d\n", scanlines);
     }
 
     /* the whole old file in memory */
@@ -2269,7 +2312,7 @@ static void amiga_save_quit_settings(void)
                 }
                 continue;
             }
-            if (in_section && is_quit_settings_line(line, save_geometry, save_palette)) {
+            if (in_section && is_quit_settings_line(line, save_geometry, save_palette, save_scan)) {
                 continue;
             }
             fwrite(line, 1, n, f);
@@ -2286,6 +2329,7 @@ static void amiga_save_quit_settings(void)
     lib_free(fname);
     window_geometry_changed = 0;
     palette_menu_changed = 0;
+    scanlines_menu_changed = 0;
 }
 
 /** \brief Perform any frontend-specific uninitialization. */

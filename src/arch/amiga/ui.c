@@ -34,6 +34,7 @@
 #include "amigajoy.h"
 #include "amigaaction.h"
 #include "amigalocale.h"
+#include "amigamonitor.h"
 #include "amigawait.h"
 #include "sound.h"
 
@@ -151,6 +152,13 @@ char *ui_get_file(const char *format, ...)
 void ui_init_with_args(int *argc, char **argv)
 {
     log_verbose(LOG_DEFAULT, "Initialising amiga ui with args");
+
+    /* a CPU JAM opens the monitor window, stopped on the JAM instruction,
+     * instead of freezing the machine silently (the VICE default). Here the
+     * factory defaults are set and vicerc is not loaded yet: a JAMAction of
+     * vicerc still wins, and it is only saved when it is not this one */
+    resources_set_default_int("JAMAction", MACHINE_JAM_ACTION_MONITOR);
+    resources_set_int("JAMAction", MACHINE_JAM_ACTION_MONITOR);
 }
 
 
@@ -208,8 +216,8 @@ ui_jam_action_t ui_jam_dialog(const char *format, ...)
 
     lib_free(buffer);
 
-    /* the headless UI ignores this */
-    return MACHINE_JAM_ACTION_QUIT; /* quit emulator */
+    /* JAMAction "dialog": no dialog, the monitor window shows the reason */
+    return UI_JAM_MONITOR;
 }
 
 static int save_resources_on_exit;
@@ -348,10 +356,13 @@ static void pause_trap(uint16_t addr, void *data)
     vsync_suspend_speed_eval();
     sound_suspend();
     amiga_video_show_pause(1);
+    /* the CPU state in the monitor window */
+    amiga_monitor_refresh();
 
     while (ui_pause_loop_iteration()) {
     }
     amiga_video_show_pause(0);
+    amiga_monitor_refresh();
     AMIGA_TRACE(("resumed"));
 }
 

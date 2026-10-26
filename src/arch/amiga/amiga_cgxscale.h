@@ -10,6 +10,7 @@
  * - per pixel format: a table of the 256 colors already in the screen pixel
  *   format, so drawing is "lookup + store" for 1, 2, 3 or 4 bytes per pixel.
  *   CLUT (8 bit) screens get the nearest existing pens with FindColor().
+ * - optional scanlines: per line shaded color tables, no per pixel cost.
  */
 
 /*
@@ -48,6 +49,11 @@ BOOL cgxscale_prepare(struct BitMap *bm, struct ColorMap *cm);
 
 /* palette of the source pixels, 0x00RRGGBB per entry */
 void cgxscale_set_palette(const ULONG *rgb, int count);
+
+/* "Try scanlines": darker lines between the source rows (CRT look), only
+ * used for 15/16, 24, 32 bit bitmaps and a height zoom of 1.5 or more.
+ * The caller redraws. */
+void cgxscale_set_scanlines(int on);
 
 /* Draw source area (src_x, src_y, src_w, src_h) of the 8 bit buffer
  * \a src (bytes per row \a src_pitch), scaled to the destination area

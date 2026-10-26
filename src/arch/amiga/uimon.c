@@ -1,5 +1,5 @@
 /** \file   uimon.c
- * \brief   Headless UI monitor stuff
+ * \brief   Amiga UI monitor stuff: the MUI monitor window (amigamonitor.c)
  *
  * \author  Fabrizio Gennari <fabrizio.ge@tiscali.it>
  */
@@ -29,6 +29,7 @@
 
 #include <stdio.h>
 
+#include "amigamonitor.h"
 #include "console.h"
 #include "log.h"
 #include "uimon.h"
@@ -45,22 +46,21 @@ console_t *uimon_window_resume(void)
 {
     /* printf("%s\n", __func__); */
 
-    /* TODO: get actual values from the console the program runs in? */
-    static console_t console_log = { 1024, 1024, 0, 0, NULL };
+    /* the window stays open while the emulation runs */
+    static console_t console_log = { 80, 25, 1, 0, NULL };
 
     return &console_log;
 }
 
 void uimon_window_suspend(void)
 {
-    /* printf("%s\n", __func__); */
+    /* the emulation goes on: the window shows it */
+    amiga_monitor_refresh();
 }
 
 int uimon_out(const char *buffer)
 {
-    /* printf("%s\n", __func__); */
-
-    log_message(LOG_DEFAULT, "Monitor: %s", buffer);
+    amiga_monitor_out(buffer);
 
     return 0;
 }
@@ -103,7 +103,8 @@ int uimon_scrcode_upper_out(const char *buffer, int num)
 
 void uimon_window_close(void)
 {
-    /* printf("%s\n", __func__); */
+    /* kept open, as when suspended */
+    amiga_monitor_refresh();
 }
 
 void uimon_notify_change(void)
@@ -118,7 +119,6 @@ void uimon_set_interface(struct monitor_interface_s **interf, int i)
 
 char *uimon_get_in(char **ppchCommandLine, const char *prompt)
 {
-    /* printf("%s\n", __func__); */
-
-    return NULL;
+    /* from the buttons of the monitor window */
+    return amiga_monitor_get_command();
 }

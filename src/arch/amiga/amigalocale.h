@@ -70,8 +70,8 @@ enum {
     /* Settings window */
     MSG_SETTINGS_TITLE,
     MSG_SETTINGS_SAVE,
-    MSG_SETTINGS_USE,
-    MSG_SETTINGS_CANCEL,
+    MSG_SETTINGS_USE,   /* not used any more, slot kept */
+    MSG_SETTINGS_CLOSE,
     MSG_CATEGORY_INPUT,
     MSG_CATEGORY_KEYBOARD,
     MSG_CATEGORY_SOUND,
@@ -275,6 +275,27 @@ enum {
     MSG_PORTS_SWITCHED,
     MSG_PALETTE_MIKE_PAL,
     MSG_PALETTE_MIKE_NTSC,
+    /* Display menu: Try scanlines */
+    MSG_SCANLINES,
+    /* Monitor window */
+    MSG_MONITOR_DOTS,
+    MSG_MON_TITLE,
+    MSG_MON_BREAK,
+    MSG_MON_RUN,
+    MSG_MON_STEP,
+    MSG_MON_NEXT,
+    MSG_MON_RUNNING,
+    MSG_MON_ADDRESS,
+    MSG_MON_INSTRUCTION,
+    MSG_MON_MEMORY,
+    MSG_MON_BREAKPOINTS,
+    MSG_MON_ADD,
+    MSG_MON_REMOVE,
+    MSG_MON_HITS,
+    MSG_MON_BAD_ADDRESS,
+    MSG_MON_REGISTER,
+    MSG_MON_VALUE,
+    MSG_MON_OTHER_CPU,
 
     /* Must be last */
     MSG_COUNT

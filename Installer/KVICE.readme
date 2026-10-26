@@ -4,22 +4,26 @@ Uploader:     krabob@free.fr
 Type:         misc/emu
 Version:      3.10.2
 Architecture: m68k-amigaos >= 3.1
-Requires:     OS3.1, 68060+, fast Amiga, MUI; optional: AHI, AmiSSLv5, RTG
+Requires:     OS3.1, 68060+, MUI
 
 ---------------------------------------------------------------------------
 
 KVICE 3.10 r2
 
  What's new since r1 ?
- - 5 to 10% speed optimized
- - Can change between 4 C64 palettes in real time.
- - Input panel rewritten , mouse can emulate paddles.
- - You can switch how C64 joyports are connected,
-  with menu and Amiga+J shortcut.
-  Useful when some games use Port1 and other Port 2.
+ 
+ New features:
+ - Can change between 4 C64 palettes in real time, on popular demand. 
+ - Some experimental "scanlines" display mode, need twice the vertical resolution.
+ - You can switch joyports 1 & 2 in real time.
+ - 
+
  - a few improvements (display "pause" when paused,...)
- - Some Amiga file path affair could prevent loading files
- in some cases, corrected.
+ 
+ Corrections:
+ - 5 to 10% speed optimized 
+ - Input panel rewritten , mouse can emulate paddles, changes applied at once.
+ - Some file path bugs that could prevent loading is corrected.
 
 ---------------------------------------------------------------------------
 

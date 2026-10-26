@@ -35,5 +35,7 @@ extern sid_engine_t fastsid_hooks;
 
 void fastsid_state_read(struct sound_s *psid, struct sid_fastsid_snapshot_state_s *sid_state);
 void fastsid_state_write(struct sound_s *psid, struct sid_fastsid_snapshot_state_s *sid_state);
+/* envelope level (0..255) of a voice and its ADSR mode, 0 attack .. 4 idle */
+int fastsid_voice_envelope(struct sound_s *psid, int voice, int *mode);
 
 #endif
