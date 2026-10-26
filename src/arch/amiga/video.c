@@ -314,6 +314,10 @@ static int set_scanlines(int val, void *param)
     if (val != scanlines) {
         scanlines = val;
         cgxscale_set_scanlines(val);
+        if (fullscreen) {
+            /* the fullscreen is x2 with scanlines: another mode, layout */
+            fullscreen_reopen = 1;
+        }
         amiga_redraw_all();
     }
     return 0;
@@ -903,9 +907,10 @@ static void amiga_update_fs_border(const draw_buffer_t *db)
     SetRGB32(&fs_screen->ViewPort, 0, rgb[0], rgb[1], rgb[2]);
 }
 
-/* fullscreen drawing area: 1:1 centered, each direction scaled down only
- * when it does not fit (no line lost to a width that does not fit). Not
- * scaled on the WriteLUTPixelArray() route. */
+/* fullscreen drawing area: 1:1 centered, or 2:1 with the scanlines on the
+ * graphics card route (they need the height zoom), each direction scaled
+ * down only when it does not fit (no line lost to a width that does not
+ * fit). Not scaled on the WriteLUTPixelArray() route. */
 static void amiga_fullscreen_layout(void)
 {
     /* with the menus: the backdrop window below the title bar, its layer
@@ -923,6 +928,10 @@ static void amiga_fullscreen_layout(void)
     if (use_rtg) {
         /* not scaled: the draw buffer pixels */
         bw = (int)src_width;
+    } else if (use_cgxscale && scanlines) {
+        /* as the 2x2 window size */
+        bw *= 2;
+        bh *= 2;
     }
     w = (bw < sw) ? bw : sw;
     h = (bh < sh) ? bh : sh;
@@ -1052,9 +1061,16 @@ static int amiga_open_fullscreen(void)
     if (fs_menu) {
         bar = (GfxBase->DefaultFont != NULL ? GfxBase->DefaultFont->tf_YSize : 8) + 3;
     }
+    mode_id = INVALID_ID;
     if (manual) {
         mode_id = (ULONG)fs_mode_id;
-    } else {
+    } else if (scanlines) {
+        /* the scanlines: twice the emulated screen, in 16 or 32 bit (not
+         * on native or 8 bit screens) */
+        mode_id = amiga_screenmode_auto_hicolor((int)base_width * 2,
+                                                (int)base_height * 2 + bar, &depth);
+    }
+    if (mode_id == INVALID_ID) {
         /* with the menus: the emulated screen plus the bar */
         mode_id = amiga_screenmode_auto((int)base_width, (int)base_height + bar, colors, &depth);
     }

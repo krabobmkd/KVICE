@@ -2,7 +2,7 @@ Short:        C64, Plus/4, VIC-20 emulators
 Author:       krabobmkd
 Uploader:     krabob@free.fr
 Type:         misc/emu
-Version:      3.10.2
+Version:      2.0
 Architecture: m68k-amigaos >= 3.1
 Requires:     OS3.1, 68060+, MUI
 
@@ -33,7 +33,9 @@ KVICE 3.10 release r2
    no more misleading "Use" button.
  - Some file path bugs that could prevent loading is corrected.
 
- Thanks to the people that suggested the palette, joyport and scanlines evolutions.
+ Thanks to the people that suggested the palette, joyport and scanline evolutions,
+ so the commodore emulator of my dreams also becomes the emulator of your dreams,
+ so we dream together.
  
 ---------------------------------------------------------------------------
 

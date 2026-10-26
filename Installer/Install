@@ -26,8 +26,8 @@
 ;
 
 (set #app-name    "KVICE")
-(set #app-version "3.10 r1")
-(set #app-default "Work:")
+(set #app-version "3.10 r2")
+(set #app-default "Sys:Utilities")
 
 ; ---------------------------------------------------------------------------
 ; Welcome
@@ -344,7 +344,7 @@
             (prompt
                 (cat
                     "Do you want to install assembler programs\n"
-                    "examples for WLA-DX 7?"
+                    "examples for WLA-DX 7 Assembler ?"
                 )
             )
             (help

@@ -432,7 +432,7 @@ static const char *default_strings[] = {
     /* MSG_MENU_INPUT */
     "Input",
     /* MSG_SWITCH_PORTS */
-    "Switch ports",
+    "Switch joy ports",
     /* MSG_PORTS_SWITCHED */
     "Control ports 1 and 2 switched",
     /* MSG_PALETTE_MIKE_PAL */

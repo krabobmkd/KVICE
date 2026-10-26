@@ -140,6 +140,25 @@ ULONG amiga_screenmode_auto(int width, int height, int colors_needed, int *depth
     return INVALID_ID;
 }
 
+ULONG amiga_screenmode_auto_hicolor(int width, int height, int *depth)
+{
+    static const int rtg_depths[] = { 16, 32 };
+    ULONG id;
+    int i;
+
+    if (CyberGfxBase == NULL) {
+        return INVALID_ID;
+    }
+    for (i = 0; i < 2; i++) {
+        id = rtg_best_mode((ULONG)width, (ULONG)height, (ULONG)rtg_depths[i]);
+        if (id != INVALID_ID) {
+            *depth = rtg_depths[i];
+            return id;
+        }
+    }
+    return INVALID_ID;
+}
+
 int amiga_screenmode_is_rtg(ULONG mode_id)
 {
     return CyberGfxBase != NULL && mode_id != INVALID_ID && IsCyberModeID(mode_id);

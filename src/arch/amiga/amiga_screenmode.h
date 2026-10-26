@@ -32,6 +32,9 @@
  * then 16 and 32 bit), else a native mode: 32 or 16 colors when
  * colors_needed <= 16, else 256/32/16. Returns INVALID_ID if nothing fits. */
 ULONG amiga_screenmode_auto(int width, int height, int colors_needed, int *depth);
+/* an RTG 16 or 32 bit mode of at least width x height (the scanlines need
+   them), INVALID_ID if none */
+ULONG amiga_screenmode_auto_hicolor(int width, int height, int *depth);
 
 /* 1 for a cybergraphics (RTG) mode */
 int amiga_screenmode_is_rtg(ULONG mode_id);
