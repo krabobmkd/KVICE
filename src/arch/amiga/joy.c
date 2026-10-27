@@ -62,8 +62,10 @@
 #include "cmdline.h"
 #include "joyport.h"
 #include "joystick.h"
+#include "keyboard.h"
 #include "lib.h"
 #include "log.h"
+#include "machine.h"
 #include "resources.h"
 
 /* opened here when needed: lowlevel.library is optional */
@@ -123,6 +125,8 @@ typedef struct amiga_joy_priv_s {
      * the paddle positions, 0..MOUSE_PADDLE_MAX */
     int mouse_last[2];
     int mouse_pos[2];
+    /* SPACE held by the blue button ("AmigaJoy<n>Bt2Space") */
+    int space_down;
 } amiga_joy_priv_t;
 
 static log_t amiga_joy_log = LOG_DEFAULT;
@@ -150,7 +154,32 @@ static int set_port_type(int val, void *param)
     return 0;
 }
 
+/* "AmigaJoy1Bt2Space", "AmigaJoy2Bt2Space": the blue button of the
+ * controller of emulated control port 1 / 2 presses SPACE (games that want
+ * SPACE: smart bomb, start...) instead of the 2nd fire */
+static int bt2_space[2] = { 0, 0 };
+
+static int set_bt2_space(int val, void *param)
+{
+    bt2_space[vice_ptr_to_int(param)] = val ? 1 : 0;
+    return 0;
+}
+
+void amiga_joy_set_bt2_space(int port, int on)
+{
+    resources_set_int_sprintf("AmigaJoy%dBt2Space", on ? 1 : 0, port);
+}
+
+int amiga_joy_get_bt2_space(int port)
+{
+    return (port == 1 || port == 2) ? bt2_space[port - 1] : 0;
+}
+
 static const resource_int_t resources_int[] = {
+    { "AmigaJoy1Bt2Space", 0, RES_EVENT_NO, NULL,
+      &bt2_space[0], set_bt2_space, (void *)0 },
+    { "AmigaJoy2Bt2Space", 0, RES_EVENT_NO, NULL,
+      &bt2_space[1], set_bt2_space, (void *)1 },
     { "AmigaJoyPort0", AMIGA_JOY_TYPE_NONE, RES_EVENT_NO, NULL,
       &amiga_port_type[0], set_port_type, (void *)0 },
     { "AmigaJoyPort1", AMIGA_JOY_TYPE_JOYSTICK, RES_EVENT_NO, NULL,
@@ -198,8 +227,28 @@ static bool amiga_joy_open(joystick_device_t *joydev)
     return true;
 }
 
+/* the blue button presses SPACE for a control port of this device */
+static int bt2_does_space(const joystick_device_t *joydev)
+{
+    int p = joydev->joyport;
+    int p2 = joydev->joyport2;
+
+    return (p >= JOYPORT_1 && p <= JOYPORT_2 && bt2_space[p - JOYPORT_1])
+           || (p2 >= JOYPORT_1 && p2 <= JOYPORT_2 && bt2_space[p2 - JOYPORT_1]);
+}
+
+/* SPACE in the keyboard matrix: row 0 on the VIC-20, 7 elsewhere */
+static void space_key(amiga_joy_priv_t *priv, int down)
+{
+    if (down != priv->space_down) {
+        keyboard_set_keyarr_any(machine_class == VICE_MACHINE_VIC20 ? 0 : 7, 4, down);
+        priv->space_down = down;
+    }
+}
+
 static void amiga_joy_poll_lowlevel(joystick_device_t *joydev, amiga_joy_priv_t *priv)
 {
+    int space;
     ULONG state;
     ULONG type;
     int32_t hat = JOYSTICK_DIRECTION_NONE;
@@ -229,8 +278,21 @@ static void amiga_joy_poll_lowlevel(joystick_device_t *joydev, amiga_joy_priv_t 
     }
     joy_hat_event(joydev->hats[0], hat);
 
+    space = bt2_does_space(joydev);
     for (i = 0; i < LL_NUM_BUTTONS && i < (unsigned int)joydev->num_buttons; i++) {
-        joy_button_event(joydev->buttons[i], (state & ll_buttons[i].mask) ? 1 : 0);
+        int pressed = (state & ll_buttons[i].mask) ? 1 : 0;
+
+        if (i == 1 && space) {
+            /* blue: SPACE, not the 2nd fire */
+            joy_button_event(joydev->buttons[i], 0);
+            space_key(priv, pressed);
+        } else {
+            joy_button_event(joydev->buttons[i], pressed);
+        }
+    }
+    if (!space) {
+        /* turned off while held */
+        space_key(priv, 0);
     }
 }
 
@@ -317,6 +379,8 @@ static void amiga_joy_close(joystick_device_t *joydev)
 
 static void amiga_joy_priv_free(void *priv)
 {
+    /* no SPACE left held by a device gone (ports reconfigured) */
+    space_key(priv, 0);
     lib_free(priv);
 }
 
@@ -412,6 +476,7 @@ static void register_device(int port, int type)
     priv->index = joystick_device_count();
     priv->mouse_last[0] = priv->mouse_last[1] = -1;
     priv->mouse_pos[0] = priv->mouse_pos[1] = MOUSE_PADDLE_MAX / 2;
+    priv->space_down = 0;
     joydev->priv = priv;
     joydev->disable_sort = true;
 

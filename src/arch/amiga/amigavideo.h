@@ -65,6 +65,10 @@ int amiga_video_get_palette(void);
 void amiga_video_set_scanlines(int on);
 int amiga_video_get_scanlines(void);
 
+/* Display > Floppy LEDs: "AmigaLeds" resource, on by default */
+void amiga_video_set_leds(int on);
+int amiga_video_get_leds(void);
+
 /* "no rom" state: the emulator screen shows a report instead of the
    emulated screen, one line per entry: "label  value", the value in red
    when bad. A NULL label is an empty line. The strings must stay valid

@@ -2,13 +2,27 @@ Short:        C64, Plus/4, VIC-20 emulators
 Author:       krabobmkd
 Uploader:     krabob@free.fr
 Type:         misc/emu
-Version:      2.0
+Version:      3.0
 Architecture: m68k-amigaos >= 3.1
 Requires:     OS3.1, 68060+, MUI
 
 ---------------------------------------------------------------------------
 
-KVICE 3.10 release r2
+KVICE release r3
+
+ What's new since r2 ?
+
+ Sorry but terrible bugs were (again) found in the Floppy "Drive 8" panel settings,
+ just after r2 release. Now this looks very corrected:
+ 
+ - Disabling "True drive emulation" actually used to enter an ineffective state,
+ now disabled is the default and most d64 game/app/demo boot instantly in that mode.
+ That said: some games (eidolon.d64,...) and score saving, and saving at all
+  will need "True drive emulation"
+ - Leds were added to watch floppy activity and tape activity when real
+ device emulation is on. Can be removed on option. 
+ - added an option so joystick second button acts like "space bar", 
+ so you can send bombs with it playing "Commando".
 
  What's new since r1 ?
  
@@ -104,6 +118,12 @@ OK BUT THEN WHAT ?
  You may install ROMs, that are not part of this project, from
  "C64 Forever" CD from Cloanto, or from anyone who claims to have the 
  rights to sell you this, at the moment you read this.
+
+ This is blogged on Mastodon account @VictoriaFerryRetroGeek@piaille.fr
+ Want an Amiga mastodon client ? Check FriendSh3ep:
+ https://github.com/krabobmkd/FriendSh3ep/releases
+ https://www.youtube.com/watch?v=J_v4kxDJINw
+
 
 LICENSE
 

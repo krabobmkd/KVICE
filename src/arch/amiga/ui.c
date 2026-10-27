@@ -159,6 +159,14 @@ void ui_init_with_args(int *argc, char **argv)
      * vicerc still wins, and it is only saved when it is not this one */
     resources_set_default_int("JAMAction", MACHINE_JAM_ACTION_MONITOR);
     resources_set_int("JAMAction", MACHINE_JAM_ACTION_MONITOR);
+
+    /* drive 8 virtual device (kernal traps), off in VICE: without it, true
+     * drive emulation off leaves nothing on the bus to read a disk image
+     * (LOAD hangs on "SEARCHING FOR"), and "autostart without true drive
+     * emulation" turns it on at the last moment, under a booting drive.
+     * The traps are ignored for a drive under true emulation. */
+    resources_set_default_int("TrapDevice8", 1);
+    resources_set_int("TrapDevice8", 1);
 }
 
 

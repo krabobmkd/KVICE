@@ -70,6 +70,7 @@
 #include "drivetypes.h"
 #include "iecbus.h"
 #include "iecrom.h"
+#include "attach.h"
 #include "keyboard.h"
 #include "keymap.h"
 #include "joyport.h"
@@ -336,6 +337,7 @@ static void setting_to_ui(setting_t *s)
 static void setting_from_ui(setting_t *s)
 {
     ULONG v = 0;
+    int current = 0;
 
     if (s->type == BIND_SCREENMODE) {
         if (fs_mode_id != fs_initial_mode_id) {
@@ -354,17 +356,22 @@ static void setting_from_ui(setting_t *s)
         }
         return;
     }
+    /* compared to the value in use, not to the one shown: the emulator
+       may have changed it meanwhile (the autostart switches the true drive
+       emulation) */
+    if (setting_get_value(s, &current) < 0) {
+        return;
+    }
     if (s->type == BIND_CHECK) {
         get(s->obj, MUIA_Selected, &v);
-        if ((int)(v ? 1 : 0) != s->initial_index) {
+        if ((int)(v ? 1 : 0) != (current ? 1 : 0)) {
             setting_set_value(s, v ? 1 : 0);
         }
         return;
     }
     get(s->obj, MUIA_Cycle_Active, &v);
-    /* unknown value: the first entry is shown, apply only a real choice */
-    if ((int)v < s->count
-            && (int)v != (s->initial_index >= 0 ? s->initial_index : 0)) {
+    /* only called for a choice in the cycle */
+    if ((int)v < s->count && s->values[v] != current) {
         setting_set_value(s, s->values[v]);
     }
 }
@@ -468,6 +475,9 @@ static int get_drive8_type(void)
 
 static void set_drive8_type(int type)
 {
+    const char *disk;
+    char *disk_copy = NULL;
+
     if (type != DRIVE_TYPE_NONE && iecrom_check_loaded((unsigned int)type) < 0) {
         int current = DRIVE_TYPE_NONE;
 
@@ -481,9 +491,57 @@ static void set_drive8_type(int type)
         log_warning(LOG_DEFAULT, "settings: no ROM for drive 8 type %d, kept until its ROM is found.", type);
         return;
     }
+    /* VICE detaches the disk images when the type changes: the disk stays
+       in the drive */
+    disk = file_system_get_disk_name(8, 0);
+    if (disk != NULL && *disk != '\0') {
+        disk_copy = lib_strdup(disk);
+    }
     if (resources_set_int("Drive8Type", type) < 0) {
         log_error(LOG_DEFAULT, "settings: cannot set drive 8 type %d.", type);
     }
+    if (disk_copy != NULL) {
+        disk = file_system_get_disk_name(8, 0);
+        if (type != DRIVE_TYPE_NONE && (disk == NULL || *disk == '\0')
+                && file_system_attach_disk(8, 0, disk_copy) < 0) {
+            log_warning(LOG_DEFAULT, "settings: cannot attach `%s' again to drive 8.", disk_copy);
+        }
+        lib_free(disk_copy);
+    }
+}
+
+/* what makes the drive 8 hardware: changed under a running drive, the
+   C64 and the drive would no longer understand each other (a fast loader
+   waiting for a drive gone, kernal traps for a real drive...) */
+typedef struct drive8_state_s {
+    int type;
+    int tde;
+    int drawer;
+} drive8_state_t;
+
+static void drive8_state_get(drive8_state_t *st)
+{
+    st->type = get_drive8_type();
+    st->tde = 0;
+    resources_get_int("Drive8TrueEmulation", &st->tde);
+    st->drawer = amiga_drive8_drawer_get();
+}
+
+/* the drive 8 hardware changed: machine and drive start again together */
+static void drive8_reset_if_changed(const drive8_state_t *before)
+{
+    drive8_state_t after;
+
+    drive8_state_get(&after);
+    if (after.type == before->type && after.tde == before->tde
+            && after.drawer == before->drawer) {
+        return;
+    }
+    log_message(LOG_DEFAULT, "settings: drive 8 changed, reset.");
+    machine_trigger_reset(MACHINE_RESET_MODE_RESET_CPU);
+    /* also without "IECReset" (the machine reset then leaves the drives) */
+    drive_cpu_trigger_reset(0);
+    amiga_video_show_message(LOC(MSG_DRIVE8_CHANGED_RESET), 150, AMIGA_MESSAGE_INFO);
 }
 
 /* keymap file: the standard positional one or a custom one. Both VICE
@@ -964,6 +1022,7 @@ static Object *make_page(int page)
     }
     if (page == PAGE_DRIVE8) {
         DoMethod(group, OM_ADDMEMBER, (ULONG)make_text(LOC(MSG_DRIVE8_DRAWER_NOTE)));
+        DoMethod(group, OM_ADDMEMBER, (ULONG)make_text(LOC(MSG_DRIVE8_WRITE_NOTE)));
     }
     if (page == PAGE_KEYBOARD) {
         Object *view = make_keys_list();
@@ -1192,6 +1251,9 @@ static void string_setting_apply(setting_t *s)
 /* one setting changed in the window: applied at once */
 static void setting_apply(setting_t *s)
 {
+    drive8_state_t drive8;
+
+    drive8_state_get(&drive8);
     if (s->type == BIND_ROMFILE) {
         rom_row_apply(s, !roms_all_loaded());
         roms_reload();
@@ -1208,6 +1270,7 @@ static void setting_apply(setting_t *s)
         }
         setting_from_ui(s);
     }
+    drive8_reset_if_changed(&drive8);
     settings_applied();
 }
 
@@ -1801,6 +1864,8 @@ void amiga_settings_open(void)
         return;
     }
     if (mui_win_open) {
+        /* from the fullscreen: its screen too */
+        amiga_video_requester_begin();
         DoMethod(mui_win, MUIM_Window_ToFront);
         return;
     }

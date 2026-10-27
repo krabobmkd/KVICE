@@ -132,6 +132,7 @@ enum {
     MSG_DRIVE8_DRAWER,
     MSG_BROWSE,
     MSG_DRIVE8_DRAWER_NOTE,
+    MSG_DRIVE8_WRITE_NOTE,
 
     /* Settings: Fullscreen page */
     MSG_FS_AUTO_MODE,
@@ -171,7 +172,6 @@ enum {
     MSG_DRIVE8_NO_ROM_USED,
 
     /* Keyboard: menu, mapping choice */
-    MSG_MENU_KEYBOARD,
     MSG_KEYBOARD_SYMBOLIC,
     MSG_KEYBOARD_POSITIONAL,
     MSG_KEYBOARD_NOTE,
@@ -272,11 +272,14 @@ enum {
     MSG_AMIGA_PORT_MOUSE,
     MSG_MENU_INPUT,
     MSG_SWITCH_PORTS,
+    MSG_J1_BT2_SPACE,
+    MSG_J2_BT2_SPACE,
     MSG_PORTS_SWITCHED,
     MSG_PALETTE_MIKE_PAL,
     MSG_PALETTE_MIKE_NTSC,
     /* Display menu: Scanlines */
     MSG_SCANLINES,
+    MSG_LEDS,
     /* Monitor window */
     MSG_MONITOR_DOTS,
     MSG_MON_TITLE,
@@ -301,6 +304,11 @@ enum {
     MSG_MON_LABELS_LOADED,
     MSG_MON_LABELS_ERROR,
     MSG_MON_SYMBOLS_UPDATED,
+
+    /* drive and tape LEDs (window title bar): "F", "T" */
+    MSG_LEDS_FLOPPY,
+    MSG_LEDS_TAPE,
+    MSG_DRIVE8_CHANGED_RESET,
 
     /* Must be last */
     MSG_COUNT

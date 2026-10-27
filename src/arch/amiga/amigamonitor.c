@@ -1085,6 +1085,8 @@ void amiga_monitor_open(void)
         return;
     }
     if (mon_open) {
+        /* from the fullscreen: its screen too */
+        amiga_video_requester_begin();
         DoMethod(mon_win, MUIM_Window_ToFront);
         return;
     }

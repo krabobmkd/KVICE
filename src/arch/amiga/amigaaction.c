@@ -38,6 +38,7 @@
 #include "amigatrace.h"
 #include "amigafile.h"
 #include "amigavideo.h"
+#include "amigajoy.h"
 #include "attach.h"
 #include "autostart.h"
 #include "cartridge.h"
@@ -798,6 +799,14 @@ static BOOL Action_Scanlines(void)
 
 static int Checked_Scanlines(void) { return amiga_video_get_scanlines() ? 1 : 0; }
 
+static BOOL Action_Leds(void)
+{
+    amiga_video_set_leds(!amiga_video_get_leds());
+    return TRUE;
+}
+
+static int Checked_Leds(void) { return amiga_video_get_leds() ? 1 : 0; }
+
 /* ------------------------------------------------------------------------- */
 
 /* ------------------------------------------------------------------------- */
@@ -807,6 +816,22 @@ static BOOL Action_KeyboardSymbolic(void) { amiga_kbd_set_symbolic(1); return TR
 static BOOL Action_KeyboardPositional(void) { amiga_kbd_set_symbolic(0); return TRUE; }
 static int Checked_KeyboardSymbolic(void) { return amiga_kbd_get_symbolic() ? 1 : 0; }
 static int Checked_KeyboardPositional(void) { return amiga_kbd_get_symbolic() ? 0 : 1; }
+
+/* Input menu: the blue button of a control port presses SPACE */
+static BOOL Action_J1Bt2Space(void)
+{
+    amiga_joy_set_bt2_space(1, !amiga_joy_get_bt2_space(1));
+    return TRUE;
+}
+
+static BOOL Action_J2Bt2Space(void)
+{
+    amiga_joy_set_bt2_space(2, !amiga_joy_get_bt2_space(2));
+    return TRUE;
+}
+
+static int Checked_J1Bt2Space(void) { return amiga_joy_get_bt2_space(1); }
+static int Checked_J2Bt2Space(void) { return amiga_joy_get_bt2_space(2); }
 
 /* Input menu: control ports 1 and 2 exchange their Amiga ports */
 static BOOL Action_SwitchPorts(void)
@@ -1140,6 +1165,8 @@ static AmigaAction s_actions[AMIGA_ACTION_COUNT] = {
     /* AMIGA_ACTION_KEYBOARD_SYMBOLIC   */ { Action_KeyboardSymbolic,   Checked_KeyboardSymbolic,   MSG_KEYBOARD_SYMBOLIC,   NULL },
     /* AMIGA_ACTION_KEYBOARD_POSITIONAL */ { Action_KeyboardPositional, Checked_KeyboardPositional, MSG_KEYBOARD_POSITIONAL, NULL },
     /* AMIGA_ACTION_SWITCH_PORTS    */ { Action_SwitchPorts,   NULL,                  MSG_SWITCH_PORTS,    NULL },
+    /* AMIGA_ACTION_J1_BT2_SPACE    */ { Action_J1Bt2Space,    Checked_J1Bt2Space,    MSG_J1_BT2_SPACE,    NULL },
+    /* AMIGA_ACTION_J2_BT2_SPACE    */ { Action_J2Bt2Space,    Checked_J2Bt2Space,    MSG_J2_BT2_SPACE,    NULL },
     /* AMIGA_ACTION_CREATE_DISK8    */ { Action_CreateDisk8,   NULL,                  MSG_CREATE_DISK8,    NULL },
     /* AMIGA_ACTION_EXTRACT_DISK8   */ { Action_ExtractDisk8,  NULL,                  MSG_EXTRACT_DISK8,   NULL },
     /* AMIGA_ACTION_SAVE_BASIC      */ { Action_SaveBasic,     NULL,                  MSG_SAVE_BASIC,      NULL },
@@ -1161,6 +1188,7 @@ static AmigaAction s_actions[AMIGA_ACTION_COUNT] = {
     /* AMIGA_ACTION_PALETTE_PEPTO   */ { Action_PalettePepto,    Checked_PalettePepto,    MSG_PALETTE_PEPTO,    NULL },
     /* AMIGA_ACTION_PALETTE_PETMATE */ { Action_PalettePetmate,  Checked_PalettePetmate,  MSG_PALETTE_PETMATE,  NULL },
     /* AMIGA_ACTION_SCANLINES       */ { Action_Scanlines,       Checked_Scanlines,       MSG_SCANLINES,        NULL },
+    /* AMIGA_ACTION_LEDS            */ { Action_Leds,            Checked_Leds,            MSG_LEDS,             NULL },
     /* AMIGA_ACTION_MONITOR         */ { Action_Monitor,         NULL,                    MSG_MONITOR_DOTS,     NULL }
 };
 

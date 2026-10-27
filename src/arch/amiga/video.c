@@ -45,6 +45,7 @@
 #include <proto/intuition.h>
 #include <proto/graphics.h>
 #include <proto/layers.h>
+#include <proto/dos.h>
 #include <proto/cybergraphics.h>
 #include <graphics/view.h>
 #include <graphics/gfxbase.h>
@@ -81,6 +82,7 @@
 #include "amiga_planarscale.h"
 #include "amiga_scalerow.h"
 #include "amiga_screenmode.h"
+#include "amigaleds.h"
 
 /* optional: NULL when there is no RTG system (plain AGA/ECS Amiga) */
 struct Library *CyberGfxBase = NULL;
@@ -139,6 +141,8 @@ static int fs_mode_id = (int)INVALID_ID;
 static int fs_menu = 0;
 /* the current fullscreen has the menus */
 static int fs_menu_active = 0;
+/* the fullscreen is a public screen, amiga_machine.pubscreen_name */
+static int fs_public = 0;
 
 /* native 16/32 color fullscreen: 4 or 5 bitplanes, 0 otherwise */
 static int fs_planes = 0;
@@ -205,6 +209,7 @@ static amiga_message_kind_t osd_kind = AMIGA_MESSAGE_ERROR;
 static int osd_pause = 0;
 
 static void amiga_draw_message(void);
+static void amiga_draw_leds(void);
 static LONG amiga_message_pen(struct Screen *screen, amiga_message_kind_t kind);
 
 static void amiga_report_release_pen(void);
@@ -229,7 +234,22 @@ static int palette_menu_changed = 0;
 /* "AmigaScanlines", Display > Scanlines: saved when quitting */
 static int scanlines = 0;
 static int scanlines_menu_changed = 0;
+/* "AmigaLeds", Display > Floppy LEDs: saved when quitting */
+static int leds_shown = 1;
+static int leds_menu_changed = 0;
 static int display_scale = 1;
+
+/* fullscreen LEDs: bottom right corner of the screen, in the rastport and
+ * pens offset of the screen kind. Drawn again when their state changes or
+ * when the emulated screen may have covered them. */
+static struct RastPort *fs_led_rp = NULL;
+static WORD fs_led_right = 0;
+static WORD fs_led_bottom = 0;
+static WORD fs_led_w = 0;
+static WORD fs_led_h = 0;
+static UWORD fs_led_pen_base = 0;
+static ULONG fs_leds_drawn = 0;
+static int fs_leds_covered = 1;
 
 /* to redraw everything after a resize or an exposure */
 static video_canvas_t *amiga_canvas = NULL;
@@ -323,6 +343,37 @@ static int set_scanlines(int val, void *param)
     return 0;
 }
 
+static void amiga_fullscreen_layout(void);
+
+/* the title bar gadget in the window; in fullscreen, drawn after the next
+ * refresh, or erased with a new layout */
+static int set_leds(int val, void *param)
+{
+    val = (val != 0);
+    if (val == leds_shown) {
+        return 0;
+    }
+    leds_shown = val;
+    if (amiga_window == NULL) {
+        return 0;
+    }
+    if (!fullscreen) {
+        if (val) {
+            amiga_leds_window_open(amiga_window);
+        } else {
+            amiga_leds_window_close(amiga_window);
+            /* the title bar under the gadget */
+            RefreshWindowFrame(amiga_window);
+        }
+    } else if (val) {
+        fs_leds_covered = 1;
+    } else {
+        amiga_fullscreen_layout();
+        amiga_redraw_all();
+    }
+    return 0;
+}
+
 static const resource_int_t resources_int_palette[] =
 {
     { "AmigaPalette", AMIGA_PALETTE_VICE, RES_EVENT_NO, NULL,
@@ -348,6 +399,8 @@ static const resource_int_t resources_int[] =
       &fs_menu, set_fs_menu, NULL },
     { "AmigaScanlines", 0, RES_EVENT_NO, NULL,
       &scanlines, set_scanlines, NULL },
+    { "AmigaLeds", 1, RES_EVENT_NO, NULL,
+      &leds_shown, set_leds, NULL },
     RESOURCE_INT_LIST_END
 };
 
@@ -416,6 +469,7 @@ static void amiga_close_window(void)
     /* the pen belongs to the screen of the window */
     amiga_report_release_pen();
     amiga_remove_app_window();
+    amiga_leds_window_close(amiga_window);
     AmigaMenu_Close(amiga_window);
     if (amiga_window != NULL) {
         if (!fullscreen) {
@@ -428,6 +482,7 @@ static void amiga_close_window(void)
     draw_rp = NULL;
     draw_width = 0;
     draw_height = 0;
+    fs_led_rp = NULL;
 }
 
 static void amiga_close_fullscreen(void)
@@ -442,6 +497,17 @@ static void amiga_close_fullscreen(void)
     if (fs_pointer != NULL) {
         FreeVec(fs_pointer);
         fs_pointer = NULL;
+    }
+    if (fs_public) {
+        /* no new visitor (screen grabber...); one still there may need a
+         * moment to let go of the screen */
+        int tries;
+
+        for (tries = 0; tries < 50
+                && (PubScreenStatus(fs_screen, PSNF_PRIVATE) & PSNF_PRIVATE) == 0; tries++) {
+            Delay(2);
+        }
+        fs_public = 0;
     }
     if (!CloseScreen(fs_screen)) {
         /* a foreign window is still open on it: nothing more can be done */
@@ -621,6 +687,22 @@ int amiga_video_get_scanlines(void)
     return scanlines;
 }
 
+/** \brief  Display > Floppy LEDs: drive and tape LEDs in the window title
+ *          bar, or at the bottom right of the fullscreen
+ */
+void amiga_video_set_leds(int on)
+{
+    if ((on != 0) != leds_shown) {
+        leds_menu_changed = 1;
+    }
+    resources_set_int("AmigaLeds", on);
+}
+
+int amiga_video_get_leds(void)
+{
+    return leds_shown;
+}
+
 /** \brief  Compute the shown part of the canvas from the border mode
  *
  * Uses the VICE geometry, so PAL and NTSC borders differ as they should.
@@ -787,6 +869,9 @@ static void amiga_open_window(unsigned int width, unsigned int height)
 
     AmigaMenu_Create(amiga_window);
     amiga_add_app_window();
+    if (leds_shown) {
+        amiga_leds_window_open(amiga_window);
+    }
 
     currentUIWaitBit = (1UL << amiga_window->UserPort->mp_SigBit);
     if(app_port) currentUIWaitBit |= (1UL << app_port->mp_SigBit);
@@ -963,6 +1048,17 @@ static void amiga_fullscreen_layout(void)
     } else {
         draw_rp = srp;
     }
+    /* the LEDs: in the screen corner, emulated screen or not. 32 colors:
+     * all the planes, the emulator colors are pens 16-31 */
+    fs_led_rp = (fs_planes == 5) ? srp : draw_rp;
+    fs_led_pen_base = (fs_planes == 5) ? 16 : 0;
+    /* a few pixels, plus their 1 pixel frame: 3x3 on 320x256, 6x3 on
+     * 640x256, 6x5 on 640x512 */
+    fs_led_w = (WORD)(sw / 128 + 1);
+    fs_led_h = (WORD)(sh / 128 + 1);
+    fs_led_right = (WORD)(sw - 1 - fs_led_w / 2);
+    fs_led_bottom = (WORD)(sh - 1 - fs_led_h / 2);
+    fs_leds_covered = 1;
     AMIGA_TRACE(("fullscreen %dx%d, drawing %dx%d at %d,%d", sw, sh, w, h, draw_x, draw_y));
 }
 
@@ -1053,6 +1149,8 @@ static int amiga_open_fullscreen(void)
     int colors = (palette_entries > 0) ? (int)palette_entries : 16;
     char name[64];
     ULONG *colors32;
+    ULONG screen_error = 0;
+    const char *pubname = amiga_machine.pubscreen_name;
 
     /* the title bar height, before the screen exists: the screen font
      * height + 3 (BarHeight + 1 after the opening) */
@@ -1100,22 +1198,37 @@ static int amiga_open_fullscreen(void)
         amiga_fs_menu_pens(1UL << (depth > 8 ? 8 : depth));
     }
 
-    fs_screen = OpenScreenTags(NULL,
-            SA_DisplayID, mode_id,
-            SA_Width, sw,
-            SA_Height, sh,
-            SA_Depth, depth,
-            /* palette from the start, no flash */
-            (colors32 != NULL ? SA_Colors32 : TAG_IGNORE), (ULONG)colors32,
-            SA_Title, (ULONG)amiga_machine.window_title,
-            /* the menus need the title bar */
-            SA_ShowTitle, fs_menu ? TRUE : FALSE,
-            SA_Quiet, fs_menu ? FALSE : TRUE,
-            /* bar and menus readable with the emulator palette: black on
-             * light grey (C64 colors 0 and 15) */
-            (fs_menu ? SA_Pens : TAG_IGNORE), (ULONG)fs_menu_pens,
-            SA_Type, CUSTOMSCREEN,
-            TAG_DONE);
+    /* public, for the screen grabbers (opened private, made public below);
+     * the name taken by another emulator: a plain custom screen */
+    for (;;) {
+        fs_screen = OpenScreenTags(NULL,
+                SA_DisplayID, mode_id,
+                SA_Width, sw,
+                SA_Height, sh,
+                SA_Depth, depth,
+                /* palette from the start, no flash */
+                (colors32 != NULL ? SA_Colors32 : TAG_IGNORE), (ULONG)colors32,
+                SA_Title, (ULONG)amiga_machine.window_title,
+                /* the menus need the title bar */
+                SA_ShowTitle, fs_menu ? TRUE : FALSE,
+                SA_Quiet, fs_menu ? FALSE : TRUE,
+                /* bar and menus readable with the emulator palette: black on
+                 * light grey (C64 colors 0 and 15) */
+                (fs_menu ? SA_Pens : TAG_IGNORE), (ULONG)fs_menu_pens,
+                SA_Type, pubname != NULL ? PUBLICSCREEN : CUSTOMSCREEN,
+                (pubname != NULL ? SA_PubName : TAG_IGNORE), (ULONG)pubname,
+                SA_ErrorCode, (ULONG)&screen_error,
+                TAG_DONE);
+        if (fs_screen != NULL || pubname == NULL || screen_error != OSERR_PUBNOTUNIQUE) {
+            break;
+        }
+        log_warning(amiga_video_log, "fullscreen: public screen name %s in use.", pubname);
+        pubname = NULL;
+    }
+    if (fs_screen != NULL && pubname != NULL) {
+        PubScreenStatus(fs_screen, 0);
+        fs_public = 1;
+    }
     if (fs_screen == NULL) {
         log_error(amiga_video_log, "cannot open the fullscreen mode %s (%dx%d, %d bits).",
                   name, sw, sh, depth);
@@ -1149,6 +1262,10 @@ static int amiga_open_fullscreen(void)
             TAG_DONE);
     if (amiga_window == NULL) {
         log_error(amiga_video_log, "cannot open the fullscreen input window.");
+        if (fs_public) {
+            PubScreenStatus(fs_screen, PSNF_PRIVATE);
+            fs_public = 0;
+        }
         CloseScreen(fs_screen);
         fs_screen = NULL;
         fs_planes = 0;
@@ -1243,6 +1360,11 @@ int amiga_video_is_fullscreen(void)
 #define AMIGA_RAWKEY_L 0x28
 #define AMIGA_RAWKEY_W 0x11
 #define AMIGA_RAWKEY_J 0x26
+#define AMIGA_RAWKEY_S 0x21
+#define AMIGA_RAWKEY_D 0x22
+#define AMIGA_RAWKEY_T 0x14
+#define AMIGA_RAWKEY_C 0x33
+#define AMIGA_RAWKEY_M 0x37
 
 /* the letter of an Amiga+key shortcut. Like Intuition does for the menu
  * shortcuts, it is the character of the Amiga keymap (AZERTY, QWERTZ...),
@@ -1264,6 +1386,11 @@ static int amiga_shortcut_char(UWORD code)
         case AMIGA_RAWKEY_L: return 'l';
         case AMIGA_RAWKEY_W: return 'w';
         case AMIGA_RAWKEY_J: return 'j';
+        case AMIGA_RAWKEY_S: return 's';
+        case AMIGA_RAWKEY_D: return 'd';
+        case AMIGA_RAWKEY_T: return 't';
+        case AMIGA_RAWKEY_C: return 'c';
+        case AMIGA_RAWKEY_M: return 'm';
         default: return -1;
     }
 }
@@ -1296,6 +1423,23 @@ static int amiga_fullscreen_shortcut(UWORD code)
             break;
         case 'j':
             action = AMIGA_ACTION_SWITCH_PORTS;
+            break;
+        /* on the Workbench screen, as with F9 */
+        case 's':
+            action = AMIGA_ACTION_SETTINGS;
+            break;
+        case 'm':
+            action = AMIGA_ACTION_MONITOR;
+            break;
+        /* their file requesters show in front of the fullscreen */
+        case 'd':
+            action = AMIGA_ACTION_ATTACH_DISK8;
+            break;
+        case 't':
+            action = AMIGA_ACTION_ATTACH_TAPE;
+            break;
+        case 'c':
+            action = AMIGA_ACTION_ATTACH_CART;
             break;
         default:
             return 0;
@@ -1651,6 +1795,7 @@ static void amiga_draw_rect(const draw_buffer_t *db, unsigned int xs, unsigned i
     int bt = draw_y;
     int rx0, ry0, rx1, ry1;
 
+    fs_leds_covered = 1;
     if (sx0 < crop_x) {
         sx0 = crop_x;
     }
@@ -1856,10 +2001,34 @@ static void video_canvas_refresh_(struct video_canvas_s *canvas,
         amiga_draw_changed(db, xs, ys, w, h);
         amiga_draw_message();
         UnlockLayer(layer);
+        /* through Intuition, which locks the layer itself */
+        amiga_leds_poll();
+        amiga_leds_window_update(amiga_window);
     } else {
         amiga_draw_changed(db, xs, ys, w, h);
         amiga_draw_message();
+        amiga_draw_leds();
     }
+}
+
+/* fullscreen: the LEDs over what was just drawn, when needed */
+static void amiga_draw_leds(void)
+{
+    ULONG state = amiga_leds_poll();
+    LONG pens[AMIGA_LED_PENS];
+    int i;
+
+    if (!leds_shown || fs_led_rp == NULL || fs_led_w <= 0 || palette_entries == 0
+            || (state == fs_leds_drawn && !fs_leds_covered)) {
+        return;
+    }
+    /* the nearest emulator colors, the screen palette */
+    for (i = 0; i < AMIGA_LED_PENS; i++) {
+        pens[i] = fs_led_pen_base + amiga_nearest_pen(amiga_led_rgb[i], palette_entries);
+    }
+    amiga_leds_draw_fullscreen(fs_led_rp, fs_led_right, fs_led_bottom, fs_led_w, fs_led_h, pens);
+    fs_leds_drawn = state;
+    fs_leds_covered = 0;
 }
 
 void amiga_video_sync_menu(void)
@@ -2215,8 +2384,9 @@ static char *amiga_vicerc_name(void)
 
 /* a line amiga_save_quit_settings() writes again: the geometry ones when
  * \a geometry, the palette one when \a palette, the scanlines one when
- * \a scan */
-static int is_quit_settings_line(const char *line, int geometry, int palette, int scan)
+ * \a scan, the LEDs one when \a leds */
+static int is_quit_settings_line(const char *line, int geometry, int palette, int scan,
+                                 int leds)
 {
     static const char *const names[] = {
         "AmigaWindowLeft=", "AmigaWindowTop=", "AmigaWindowWidth=", "AmigaWindowHeight="
@@ -2231,6 +2401,9 @@ static int is_quit_settings_line(const char *line, int geometry, int palette, in
         }
     }
     if (scan && strncmp(line, "AmigaScanlines=", 15) == 0) {
+        return 1;
+    }
+    if (leds && strncmp(line, "AmigaLeds=", 10) == 0) {
         return 1;
     }
     return palette && strncmp(line, "AmigaPalette=", 13) == 0;
@@ -2250,8 +2423,8 @@ static void amiga_save_quit_settings(void)
     size_t old_len = 0;
     FILE *f;
     char section[64];
-    char geometry[180];
-    int save_geometry, save_palette, save_scan;
+    char geometry[256];
+    int save_geometry, save_palette, save_scan, save_leds;
     int in_section = 0;
     int written = 0;
     char *line, *next;
@@ -2259,7 +2432,8 @@ static void amiga_save_quit_settings(void)
     save_geometry = window_geometry_changed && window_inner_w > 0 && window_inner_h > 0;
     save_palette = palette_menu_changed && amiga_machine.palettes != NULL;
     save_scan = scanlines_menu_changed;
-    if (!save_geometry && !save_palette && !save_scan) {
+    save_leds = leds_menu_changed;
+    if (!save_geometry && !save_palette && !save_scan && !save_leds) {
         return;
     }
     fname = amiga_vicerc_name();
@@ -2281,6 +2455,11 @@ static void amiga_save_quit_settings(void)
     if (save_scan) {
         snprintf(geometry + strlen(geometry), sizeof geometry - strlen(geometry),
                  "AmigaScanlines=%d\n", scanlines);
+    }
+    if (save_leds) {
+        /* also the default one: resources_save() leaves it out */
+        snprintf(geometry + strlen(geometry), sizeof geometry - strlen(geometry),
+                 "AmigaLeds=%d\n", leds_shown);
     }
 
     /* the whole old file in memory */
@@ -2328,7 +2507,8 @@ static void amiga_save_quit_settings(void)
                 }
                 continue;
             }
-            if (in_section && is_quit_settings_line(line, save_geometry, save_palette, save_scan)) {
+            if (in_section && is_quit_settings_line(line, save_geometry, save_palette, save_scan,
+                                                     save_leds)) {
                 continue;
             }
             fwrite(line, 1, n, f);
@@ -2346,6 +2526,7 @@ static void amiga_save_quit_settings(void)
     window_geometry_changed = 0;
     palette_menu_changed = 0;
     scanlines_menu_changed = 0;
+    leds_menu_changed = 0;
 }
 
 /** \brief Perform any frontend-specific uninitialization. */

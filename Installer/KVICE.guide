@@ -86,7 +86,8 @@ The Commodore machines loaded their programs from cartridges, tapes or 5"1/4 flo
 Because of this, the Commodore emulators work with these file types:
 
 @{b}.d64@{ub}  disk image@{lindent 2}
-The image of one side of a floppy disk (170 KB). You need a drive 8 enabled in the settings, with its ROM available in DRIVES/. The 1541-II has the better emulation, so it is the default drive.
+The image of one side of a floppy disk (170 KB). By default, drive 8 reads it without true drive emulation (virtual drive): loading is at once, and no drive ROM is needed.
+@{b}True drive emulation is needed by some .d64 games, like Eidolon, and to save scores or game positions.@{ub} Turn it on in the settings, Drive 8 page: it needs the ROM of the drive model in DRIVES/. The 1541-II has the better emulation, so it is the default drive.
 For the C64 DOS, a .d64 contains a list of .prg program files and .seq data files.
 
 Drives are connected in a chain on the "IEC serial bus", the first device being number 8: with 2 floppy drives, they would be 8 and 9.
@@ -146,7 +147,7 @@ attach, detach@{lindent 2}
 @{b}About..., Settings..., Pause, Quit@{ub}
 @{lindent 0}
 @{b}Display@{ub}@{lindent 2}
-Window / fullscreen, window size, borders, scanlines, screenshot (IFF).
+Window / fullscreen, window size, borders, scanlines, floppy leds, screenshot (IFF).
 x64 and xvic also have a @{b}Palette@{ub} submenu. The C64 has a fixed set of 16 colors, but no one agrees on their exact RGB values, as each TV and each VIC-II chip revision shows them a bit differently. Choose between four references; the choice is kept in the settings when quitting.@{lindent 4}
 @{b}VICE@{ub} (default)@{lindent 6}
 the palette of the VICE emulator, calculated from a model of the VIC-II video signal.@{lindent 4}
@@ -164,6 +165,7 @@ the Colodore method applied to the VIC chip: softer dark colors, light pastel on
 @{b}Mike (PAL), Mike (NTSC)@{ub}@{lindent 6}
 the palettes from the VIC-20 community, for the European (PAL) and American (NTSC) machines.@{lindent 2}
 @{b}Scanlines@{ub} gives the emulated screen the look of a CRT monitor, with darker lines between the rows of pixels, almost as fast as the classic drawing. It is used on RTG screens of 15, 16, 24 or 32 bits, when the window or fullscreen is at least 1.5 times the height of the emulated screen; elsewhere the drawing stays the classic one. In fullscreen, scanlines show the emulated screen twice bigger (as the 2x2 window size): the automatic screen mode is then a 16 or 32 bit RTG mode of twice the size, and a mode chosen in the settings gets the screen scaled x2, reduced if it does not fit. The choice is kept in the settings when quitting.
+@{b}Floppy leds@{ub} shows the drive 8 and tape LEDs: in the window title bar, left of its gadgets ("F": drive on in green, disk activity in red, drive CPU jammed in yellow; "T": tape motor in red), and in fullscreen as small rectangles at the bottom right of the screen. On by default, the choice is kept in the settings when quitting.
 @{lindent 0}
 @{b}Monitor@{ub}@{lindent 2}
 @{b}Monitor...@{ub} (Amiga+M)@{lindent 4}
@@ -174,16 +176,18 @@ The whole window is explained in its own guide: @{"monitor.guide" LINK monitor.g
 load and save the whole machine state
 @{lindent 0}
 @{b}Input@{ub}@{lindent 2}
-@{b}Keyboard@{ub}@{lindent 4}
+@{b}Symbolic keyboard, Positional keyboard@{ub}@{lindent 4}
 two ways to map the keys, which can be switched on the fly:
-- Symbolic: uses the keymap of your Amiga locale configuration to map the keys: useful for the BASIC.
-- Positional: for games and emulated tools that are very keyboard based: the C64 key positions are closer to your Amiga keyboard positions. The key correspondences are shown in the Keyboard settings panel.@{lindent 2}
+- Symbolic keyboard: uses the keymap of your Amiga locale configuration to map the keys: useful for the BASIC.
+- Positional keyboard: for games and emulated tools that are very keyboard based: the C64 key positions are closer to your Amiga keyboard positions. The key correspondences are shown in the Keyboard settings panel.@{lindent 2}
 @{b}Switch joy ports@{ub} (Amiga+J)@{lindent 4}
 exchanges what drives control port 1 and control port 2, as set in "C64 ports mapping" of the Input settings: the Amiga port of each one, and its kind of controller (joystick, or paddles).
 Most C64 games read the joystick in port 2, but some read port 1, and some two player games give each player a port: when the joystick seems dead in a game, press Amiga+J and try again, no need to open the settings.
 It also works in fullscreen without menu, and while the settings window is open: its Input page shows the new mapping at once. A message on the emulator screen confirms the switch. To keep it for the next start, press Save in the settings window.
 To not think about it at all, you can also map the same Amiga port to both control ports: it then drives the two at the same time.
-The VIC-20 has only one control port: port 2 there exists only with a userport joystick adapter.
+The VIC-20 has only one control port: port 2 there exists only with a userport joystick adapter.@{lindent 2}
+@{b}J1 Bt2 does space, J2 Bt2 does space@{ub}@{lindent 4}
+the second (blue) button of the joystick or CD32 pad that drives control port 1, or 2, presses the SPACE key of the emulated keyboard instead of being a second fire: for the games that use SPACE (smart bomb, start, next level...). Off by default, kept with Save in the settings window.
 @ENDNODE
 
 @NODE BASIC "BASIC programs"
@@ -251,7 +255,7 @@ A new fast drawing routine scales the emulated screen to any window size, and ad
 
 @{b}Fullscreen switch@{ub}
 
-Amiga+F switches between the window and a fullscreen at any time. The fullscreen keeps the screen title bar and the menus, or not, as chosen in the settings.
+Amiga+F switches between the window and a fullscreen at any time. The fullscreen keeps the screen title bar and the menus, or not, as chosen in the settings. Without the menus, their Amiga+key shortcuts still work (A, D, T, C, R, S, P, Q, M, L, W, J), and F9 opens the settings: the settings, monitor and file requesters show on the Workbench screen, brought in front.
 
 @{b}Realtime settings@{ub}
 
@@ -290,6 +294,7 @@ So we searched optimization strategies, measured each one, and kept what gives s
 - Own scalers: chunky for native screens (WriteChunkyPixels), direct drawing for each RTG pixel format.
 @{lindent 0}
 @{b}Drives@{ub}@{lindent 2}
+- Drive 8 starts without true drive emulation (virtual drive): disks load at once, with no second 6502 to run. Games that save scores or positions with their own drive code need true drive emulation on (Settings, Drive 8).
 - Autostart loads disks without true drive emulation by default: no second 6502 to run while loading.
 @{lindent 0}
 @{b}Tools to measure@{ub}@{lindent 2}

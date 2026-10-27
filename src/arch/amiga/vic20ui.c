@@ -250,6 +250,7 @@ static const char kvice_verstag[] __attribute__((used)) = KVICE_VERSTAG("xvic");
 const amiga_machine_t amiga_machine = {
     "KVICE xvic",
     "xvic",
+    "CommodoreVIC20",
     "VIC-20",
     "VIC20",
     2,          /* pixel width: the VIC pixels are wide, VICE does not double them */

@@ -35,8 +35,8 @@
 #include <exec/types.h>
 
 /* release of the fork, after the VICE version it is based on (VERSION,
-   from version.h): "KVICE 3.10 r2" */
-#define KVICE_RELEASE "r2"
+   from version.h): "KVICE 3.10 rx" */
+#define KVICE_RELEASE "r3"
 
 /* AmigaOS "Version" command tag of each emulator, KVICE_VERSTAG("x64"):
    "$VER: x64 3.10 r2 68030". The CPU is the one the build targets
@@ -92,6 +92,7 @@ typedef struct amiga_machine_symkey_s {
 typedef struct amiga_machine_s {
     const char *title;          /* requester, MUI and about title */
     const char *window_title;   /* emulator window and fullscreen screen title */
+    const char *pubscreen_name; /* fullscreen public screen name (screen grabbers) */
     const char *menu_title;     /* first menu */
     const char *data_drawer;    /* machine drawer: "C64", "PLUS4"... */
     /* shown width of an emulated pixel, in screen pixels: the scalers

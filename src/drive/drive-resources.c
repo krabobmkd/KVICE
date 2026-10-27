@@ -236,10 +236,20 @@ static int drive_resources_type(int val, void *param)
             if (drive->true_emulation) {
                 unit->enable = 1;
                 drive_enable(diskunit_context[dnr]);
+#ifndef AMIGA_COMPILE
                 /* 1551 drive does not use the IEC bus */
                 machine_bus_status_drivetype_set(dnr + 8, drive_check_bus(type,
                                                                           IEC_BUS_IEC));
+#endif
             }
+#ifdef AMIGA_COMPILE
+            /* the drive type on the IEC bus, true drive emulation on or not:
+               set only with it on, a drive started without it (the Amiga
+               default) was never on the bus once turned on later: "DEVICE
+               NOT PRESENT". The 1551 drive does not use the IEC bus. */
+            machine_bus_status_drivetype_set(dnr + 8, drive_check_bus(type,
+                                                                      IEC_BUS_IEC));
+#endif
             drive_enable_update_ui(diskunit_context[dnr]);
             driverom_initialize_traps(diskunit_context[dnr]);
             machine_drive_idling_method(dnr);
@@ -458,6 +468,12 @@ int drive_resources_init(void)
         res_drive[5].name = lib_msprintf("Drive%iTrueEmulation", dnr + 8);
         res_drive[5].value_ptr = &(drive0->true_emulation);
         res_drive[5].param = vice_uint_to_ptr(dnr);
+#ifdef AMIGA_COMPILE
+        /* drive 8 starts without true drive emulation: the virtual drive
+           (kernal traps, TrapDevice8 on in arch/amiga/ui.c) loads at once
+           and costs no CPU. Without vicerc entry only: it then wins. */
+        res_drive[5].factory_value = (dnr == 0) ? 0 : 1;
+#endif
 
         if (has_iec) {
             res_drive_rtc[0].name = lib_msprintf("Drive%iRTCSave", dnr + 8);

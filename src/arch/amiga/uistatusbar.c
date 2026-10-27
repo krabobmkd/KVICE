@@ -53,6 +53,7 @@
 
 #include "uiapi.h"
 #include "uistatusbar.h"
+#include "amigaleds.h"
 
 
 /** \brief Statusbar API function to register an elapsed time.
@@ -171,7 +172,9 @@ void ui_display_tape_counter(int port, int counter)
  */
 void ui_display_tape_motor_status(int port, int motor)
 {
-    /* printf("%s\n", __func__); */
+    if (port == 0) {
+        amiga_leds_set(AMIGA_LED_TAPE_MOTOR, motor);
+    }
 }
 
 
@@ -214,7 +217,9 @@ void ui_display_drive_led(unsigned int drive_number,
                           unsigned int pwm1,
                           unsigned int led_pwm2)
 {
-    /* printf("%s\n", __func__); */
+    if (drive_number == 0 && drive_base == 0) {
+        amiga_leds_set(AMIGA_LED_DRIVE_ACT, pwm1 > 0);
+    }
 }
 
 
@@ -263,7 +268,10 @@ void ui_display_drive_track(unsigned int drive_number,
  */
 void ui_enable_drive_status(ui_drive_enable_t state, int *drive_led_color)
 {
-    /* printf("%s\n", __func__); */
+    amiga_leds_set(AMIGA_LED_DRIVE_ON, (state & UI_DRIVE_ENABLE_0) != 0);
+    if (!(state & UI_DRIVE_ENABLE_0)) {
+        amiga_leds_set(AMIGA_LED_DRIVE_ACT, 0);
+    }
 }
 
 

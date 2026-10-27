@@ -71,6 +71,12 @@ extern int traps_enabled_device[MAX_DEVICES]; /* FIXME */
 #define UNLISTEN        0x3f    /* LISTEN with dev=31 correct?*/
 #define UNTALK          0x5f    /* TALK with dev=31 correct?*/
 
+#ifdef AMIGA_COMPILE
+/* the drive LEDs of the Amiga UI (arch/amiga/amigaleds.c): the virtual
+   drive has no LED of its own */
+void amiga_leds_virtual_activity(unsigned int device);
+#endif
+
 /* Address of serial TMP register.  */
 static uint16_t tmp_in;
 
@@ -228,6 +234,9 @@ int serial_trap_send(void)
 
     iecdata = mem_read(BSOUR); /* BSOUR - character for serial bus */
 
+#ifdef AMIGA_COMPILE
+    amiga_leds_virtual_activity(TrapDevice & DEVNR_MASK);
+#endif
     serial_iec_bus_write(TrapDevice, TrapSecondary, iecdata, serial_set_st);
 
     maincpu_set_carry(0);
@@ -255,6 +264,9 @@ int serial_trap_receive(void)
     if (TrapSecondary == 0) {
         send_listen_talk_secondary(SECONDARY + 0);
     }
+#ifdef AMIGA_COMPILE
+    amiga_leds_virtual_activity(TrapDevice & DEVNR_MASK);
+#endif
     data = serial_iec_bus_read(TrapDevice, TrapSecondary, serial_set_st);
 
     mem_store(tmp_in, data);

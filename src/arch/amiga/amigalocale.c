@@ -202,6 +202,10 @@ static const char *default_strings[] = {
     "...",
     /* MSG_DRIVE8_DRAWER_NOTE */
     "Reading a drawer turns true drive emulation off.",
+    /* MSG_DRIVE8_WRITE_NOTE: the virtual drive does LOAD, SAVE, block
+       commands, but cannot run code sent to the drive (M-E) */
+    "Only true drive emulation can write to disk with the drive code\n"
+    "of a game: needed to save scores or game positions.",
 
     /* MSG_FS_AUTO_MODE */
     "Automatic screen mode:",
@@ -262,15 +266,13 @@ static const char *default_strings[] = {
     /* MSG_DRIVE8_NO_ROM_USED */
     "Drive 8 ROM not found: no disk drive",
 
-    /* MSG_MENU_KEYBOARD */
-    "Keyboard",
     /* MSG_KEYBOARD_SYMBOLIC */
-    "Symbolic",
+    "Symbolic keyboard",
     /* MSG_KEYBOARD_POSITIONAL */
-    "Positional",
+    "Positional keyboard",
     /* MSG_KEYBOARD_NOTE */
-    "Input menu, Keyboard, Symbolic:\n the keys type the characters of the Amiga keymap.\n"
-    "Positional: the C64 key positions (keymap file), for games.\n"
+    "Input menu, Symbolic keyboard:\n the keys type the characters of the Amiga keymap.\n"
+    "Positional keyboard: the C64 key positions (keymap file), for games.\n"
     "Symbolic only takes the special keys from the keymap file\n"
     "(Shift, C=, CTRL, Run/Stop, Clr/Home, Restore, F-keys...).",
     /* MSG_REPORT_BUILTIN: keymap file not found, the built-in one is used */
@@ -433,6 +435,10 @@ static const char *default_strings[] = {
     "Input",
     /* MSG_SWITCH_PORTS */
     "Switch joy ports",
+    /* MSG_J1_BT2_SPACE */
+    "J1 Bt2 does space",
+    /* MSG_J2_BT2_SPACE */
+    "J2 Bt2 does space",
     /* MSG_PORTS_SWITCHED */
     "Control ports 1 and 2 switched",
     /* MSG_PALETTE_MIKE_PAL */
@@ -441,6 +447,8 @@ static const char *default_strings[] = {
     "Mike (NTSC)",
     /* MSG_SCANLINES */
     "Scanlines",
+    /* MSG_LEDS */
+    "Floppy leds",
     /* MSG_MONITOR_DOTS */
     "Monitor...",
     /* MSG_MON_TITLE */
@@ -486,7 +494,14 @@ static const char *default_strings[] = {
     /* MSG_MON_LABELS_ERROR: %s is the file */
     "Cannot read the labels of %s",
     /* MSG_MON_SYMBOLS_UPDATED: %d labels */
-    "Monitor symbols updated: %d labels"
+    "Monitor symbols updated: %d labels",
+
+    /* MSG_LEDS_FLOPPY */
+    "F",
+    /* MSG_LEDS_TAPE */
+    "T",
+    /* MSG_DRIVE8_CHANGED_RESET */
+    "Drive 8 changed: reset"
 };
 
 /* compile-time check: one default string per MSG_* id */

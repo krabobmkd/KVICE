@@ -190,6 +190,7 @@ static const char kvice_verstag[] __attribute__((used)) = KVICE_VERSTAG("xplus4"
 const amiga_machine_t amiga_machine = {
     "KVICE xplus4",
     "xplus4",
+    "CommodorePlus4",
     "Plus/4",
     "PLUS4",
     1,          /* pixel width */

@@ -258,6 +258,7 @@ static const char kvice_verstag[] __attribute__((used)) = KVICE_VERSTAG("x64");
 const amiga_machine_t amiga_machine = {
     "KVICE x64",
     "x64",
+    "Commodore64",
     "C64",
     "C64",
     1,          /* pixel width */

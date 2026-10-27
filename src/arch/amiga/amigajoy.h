@@ -35,4 +35,9 @@ int amiga_joy_device_index(int port);
 int amiga_joy_device_port(int index);
 int amiga_joy_port_is_analog(int port);
 
+/* Input menu "J<n> Bt2 does space": the blue button of the controller of
+ * emulated control port \a port (1 or 2) presses SPACE */
+void amiga_joy_set_bt2_space(int port, int on);
+int amiga_joy_get_bt2_space(int port);
+
 #endif
